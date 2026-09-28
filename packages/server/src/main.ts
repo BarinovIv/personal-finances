@@ -6,7 +6,7 @@ import { router, startup } from "./app"
 import { appConfigFromEnv } from "./config"
 import { dbFile } from "./db"
 
-const HttpLive = Layer.unwrapEffect(
+const HttpLive = Layer.unwrapScoped(
   Effect.gen(function* () {
     yield* startup
     const port = yield* Config.port("PORT").pipe(Config.withDefault(8080))

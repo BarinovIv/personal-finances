@@ -5,6 +5,7 @@ import { Effect, Option, Schema } from "effect"
 import { apiError, withSession } from "./auth"
 import { Db } from "./db"
 import { getRecord, putIfNewer, recordsSince } from "./records"
+import { generateRecurring } from "./recurring"
 
 /** Сколько записей отдавать за один обмен. */
 export const PAGE_SIZE = 1000
@@ -20,13 +21,17 @@ const sync = withSession(() =>
       Effect.gen(function* () {
         // отклонённые правки проиграли более поздним: клиенту нужна победившая версия
         const winners: Array<SyncRecord> = []
+        let templatesChanged = false
         for (const change of changes) {
           const accepted = yield* putIfNewer(change)
+          if (accepted && change.collection === "recurring") templatesChanged = true
           if (!accepted) {
             const stored = yield* getRecord(change.collection, change.id)
             if (stored) winners.push(stored)
           }
         }
+        // новая или возобновлённая регулярная операция сразу догоняет наступившие даты
+        if (templatesChanged) yield* generateRecurring
         const page = yield* recordsSince(cursor, PAGE_SIZE)
         const seen = new Set(page.records.map((r) => `${r.collection}:${r.id}`))
         return {

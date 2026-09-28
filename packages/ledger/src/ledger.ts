@@ -24,6 +24,17 @@ import {
 } from "./operations"
 import type { PeriodMode } from "./periods"
 import { Records } from "./records"
+import {
+  addRecurring,
+  endRecurring,
+  listRecurring,
+  pauseRecurring,
+  resumeRecurring,
+  updateRecurring,
+  type RecurringInput,
+  type RecurringResult,
+  type RecurringView
+} from "./recurring"
 import { dashboardMode, readSettings, setDashboardMode, setPaydays, type Settings } from "./settings"
 import type { LedgerStore } from "./store"
 import type { CategoryView, DayGroup, OperationView } from "./views"
@@ -86,6 +97,15 @@ export interface Ledger {
   /** Последний выбранный на этом устройстве режим дашборда. */
   dashboardMode(): PeriodMode
   setDashboardMode(mode: PeriodMode): Promise<void>
+  /** Регулярные операции: сначала действующие. */
+  recurring(): ReadonlyArray<RecurringView>
+  addRecurring(input: RecurringInput): Promise<RecurringResult>
+  /** Правка шаблона не меняет уже созданные операции. */
+  updateRecurring(id: string, patch: Partial<Omit<RecurringInput, "kind">>): Promise<RecurringResult>
+  pauseRecurring(id: string): Promise<RecurringResult>
+  /** Снова действует с сегодняшнего дня. */
+  resumeRecurring(id: string): Promise<RecurringResult>
+  endRecurring(id: string): Promise<RecurringResult>
   settings(): Settings
   /** Дни зарплаты — числа месяца; синхронизируются. */
   setPaydays(days: ReadonlyArray<number>): Promise<{ ok: boolean }>
@@ -131,6 +151,12 @@ export const openLedger = async (options: LedgerOptions): Promise<Ledger> => {
     dashboard: (query) => buildDashboard(ctx, query),
     dashboardMode: () => dashboardMode(ctx),
     setDashboardMode: (mode) => setDashboardMode(ctx, mode),
+    recurring: () => listRecurring(ctx),
+    addRecurring: (input) => addRecurring(ctx, input),
+    updateRecurring: (id, patch) => updateRecurring(ctx, id, patch),
+    pauseRecurring: (id) => pauseRecurring(ctx, id),
+    resumeRecurring: (id) => resumeRecurring(ctx, id),
+    endRecurring: (id) => endRecurring(ctx, id),
     settings: () => readSettings(ctx),
     setPaydays: (days) => setPaydays(ctx, days),
     pendingChanges: () => records.pending(),
