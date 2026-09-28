@@ -14,7 +14,9 @@ import {
   type RefundsInfo,
   type UpdateResult
 } from "./operations"
+import type { PeriodMode } from "./periods"
 import { Records } from "./records"
+import { dashboardMode, readSettings, setDashboardMode, setPaydays, type Settings } from "./settings"
 import type { LedgerStore } from "./store"
 import type { CategoryView, DayGroup, OperationView } from "./views"
 
@@ -61,6 +63,12 @@ export interface Ledger {
   addRefund(expenseId: string, options?: { amount?: number; date?: IsoDate }): Promise<RefundResult>
   /** Итоги периода; всё считается на устройстве. */
   dashboard(query: DashboardQuery): Dashboard
+  /** Последний выбранный на этом устройстве режим дашборда. */
+  dashboardMode(): PeriodMode
+  setDashboardMode(mode: PeriodMode): Promise<void>
+  settings(): Settings
+  /** Дни зарплаты — числа месяца; синхронизируются. */
+  setPaydays(days: ReadonlyArray<number>): Promise<{ ok: boolean }>
   /** Изменения, которые ещё не ушли на сервер. */
   pendingChanges(): ReadonlyArray<SyncRecord>
   readonly sync: LedgerSyncPort
@@ -97,6 +105,10 @@ export const openLedger = async (options: LedgerOptions): Promise<Ledger> => {
     refunds: (id) => refundsOf(ctx, id),
     addRefund: (id, options) => addRefund(ctx, id, options),
     dashboard: (query) => buildDashboard(ctx, query),
+    dashboardMode: () => dashboardMode(ctx),
+    setDashboardMode: (mode) => setDashboardMode(ctx, mode),
+    settings: () => readSettings(ctx),
+    setPaydays: (days) => setPaydays(ctx, days),
     pendingChanges: () => records.pending(),
     sync: {
       pending: () => records.pending(),

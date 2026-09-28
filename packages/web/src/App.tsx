@@ -52,7 +52,7 @@ const Main = ({ services, onSignedOut }: { services: AppServices; onSignedOut: (
       {op ? (
         <OperationScreen ledger={ledger} id={decodeURIComponent(op[1]!)} />
       ) : tab === "dashboard" ? (
-        <DashboardScreen ledger={ledger} mode="month" />
+        <DashboardScreen ledger={ledger} />
       ) : tab === "settings" ? (
         <SettingsScreen ledger={ledger} sync={sync} auth={auth} onSignedOut={onSignedOut} />
       ) : (

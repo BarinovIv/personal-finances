@@ -68,7 +68,8 @@ export class LedgerContext {
   /** Дни зарплаты из настроек; по умолчанию 5 и 20. */
   paydays(): ReadonlyArray<number> {
     const settings = this.records.get("settings", SETTINGS_ID)
-    return settings && !settings.deleted && settings.data.paydays.length > 0 ? settings.data.paydays : DEFAULT_PAYDAYS
+    const days = settings && !settings.deleted ? settings.data.paydays : []
+    return days.length > 0 ? [...days].sort((a, b) => a - b) : DEFAULT_PAYDAYS
   }
 
   /** История подстановок — только живые расходы и доходы. */
