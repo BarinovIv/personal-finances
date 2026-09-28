@@ -45,7 +45,8 @@ export const EntryScreen = ({ ledger }: { ledger: Ledger }) => {
       return
     }
     const op = result.operation
-    setFlash(`Добавлено: ${op.description} · ${op.category.name}`)
+    const taught = preview.categorySource === "manual"
+    setFlash(taught ? `Запомнил: «${op.description}» → ${op.category.name}` : `Добавлено: ${op.description} · ${op.category.name}`)
     reset()
   }
 
@@ -132,6 +133,7 @@ export const EntryScreen = ({ ledger }: { ledger: Ledger }) => {
                 setError(null)
               }}
             />
+            {needPick && <div class="hint">Выбор запомнится — в следующий раз подставлю сам.</div>}
           </div>
         )}
         {error && <div class="hint error">{error}</div>}

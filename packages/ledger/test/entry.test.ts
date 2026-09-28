@@ -82,7 +82,7 @@ describe("ввод операции строкой", () => {
 
   it("категория другого вида не подходит", async () => {
     const { ledger } = await makeLedger()
-    expect(ledger.preview("+премия 5000", { categoryId: categoryId(ledger, "Кафе") }).problems).toEqual(["no-category"])
+    expect(ledger.preview("+абвгд 5000", { categoryId: categoryId(ledger, "Кафе") }).problems).toEqual(["no-category"])
   })
 
   it("у операции есть время последней правки и признак удаления", async () => {
