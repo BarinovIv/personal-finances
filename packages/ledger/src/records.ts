@@ -1,0 +1,143 @@
+import {
+  recordKey,
+  type CategoryData,
+  type Collection,
+  type OperationData,
+  type RecurringData,
+  type SettingsData,
+  type SyncRecord
+} from "@fin/domain"
+import type { LedgerStore } from "./store"
+
+interface DataOf {
+  operations: OperationData
+  categories: CategoryData
+  recurring: RecurringData
+  settings: SettingsData
+}
+
+export type RecordOf<C extends Collection> = SyncRecord<C, DataOf[C]>
+
+/**
+ * Все записи журнала в памяти и очередь изменений для синхронизации.
+ * Каждая локальная правка получает время не раньше предыдущей, поэтому «последняя правка» однозначна.
+ */
+export class Records {
+  private readonly byKey = new Map<string, SyncRecord>()
+  private readonly outbox = new Set<string>()
+  private readonly listeners = new Set<() => void>()
+  private lastStamp = 0
+  private saving: Promise<void> = Promise.resolve()
+  /** Растёт при каждом изменении — для кэширования расчётов. */
+  version = 0
+
+  constructor(
+    private readonly store: LedgerStore,
+    private readonly now: () => number,
+    records: ReadonlyArray<unknown>,
+    outbox: ReadonlyArray<string>
+  ) {
+    for (const record of records as ReadonlyArray<SyncRecord>) {
+      this.byKey.set(recordKey(record.collection, record.id), record)
+      this.lastStamp = Math.max(this.lastStamp, record.updatedAt)
+    }
+    for (const key of outbox) this.outbox.add(key)
+  }
+
+  /** Время для новой правки: текущее, но строго позже предыдущей правки на этом устройстве. */
+  stamp(): number {
+    this.lastStamp = Math.max(this.now(), this.lastStamp + 1)
+    return this.lastStamp
+  }
+
+  get<C extends Collection>(collection: C, id: string): RecordOf<C> | undefined {
+    return this.byKey.get(recordKey(collection, id)) as RecordOf<C> | undefined
+  }
+
+  all<C extends Collection>(collection: C): Array<RecordOf<C>> {
+    const out: Array<RecordOf<C>> = []
+    for (const record of this.byKey.values()) if (record.collection === collection) out.push(record as RecordOf<C>)
+    return out
+  }
+
+  /** Живые (не удалённые) записи. */
+  live<C extends Collection>(collection: C): Array<RecordOf<C>> {
+    return this.all(collection).filter((r) => !r.deleted)
+  }
+
+  /** Локальные правки: одна отметка времени на всю пачку, в очередь на отправку. */
+  write(
+    changes: ReadonlyArray<{ collection: Collection; id: string; data: unknown; deleted?: boolean }>,
+    updatedAt: number = this.stamp()
+  ): Promise<void> {
+    if (changes.length === 0) return this.saving
+    const records = changes.map(
+      (c): SyncRecord => ({ collection: c.collection, id: c.id, updatedAt, deleted: c.deleted ?? false, data: c.data })
+    )
+    const keys = records.map((r) => recordKey(r.collection, r.id))
+    records.forEach((r, i) => this.byKey.set(keys[i]!, r))
+    keys.forEach((k) => this.outbox.add(k))
+    return this.persist({ records: records.map((value, i) => ({ key: keys[i]!, value })), outboxAdd: keys })
+  }
+
+  /** Записи с сервера: принимаются, если не старше локальных (ADR-0001). */
+  applyRemote(records: ReadonlyArray<SyncRecord>): Promise<void> {
+    const accepted: Array<{ key: string; value: SyncRecord }> = []
+    for (const record of records) {
+      const key = recordKey(record.collection, record.id)
+      const local = this.byKey.get(key)
+      if (local && local.updatedAt > record.updatedAt) continue
+      if (local && sameRecord(local, record)) continue
+      this.byKey.set(key, record)
+      this.lastStamp = Math.max(this.lastStamp, record.updatedAt)
+      accepted.push({ key, value: record })
+    }
+    if (accepted.length === 0) return this.saving
+    return this.persist({ records: accepted })
+  }
+
+  pending(): Array<SyncRecord> {
+    return [...this.outbox].map((k) => this.byKey.get(k)).filter((r): r is SyncRecord => r !== undefined)
+  }
+
+  /** Сервер принял эти версии: убираем их из очереди, если после отправки их не правили. */
+  acknowledge(records: ReadonlyArray<SyncRecord>): Promise<void> {
+    const done: Array<string> = []
+    for (const sent of records) {
+      const key = recordKey(sent.collection, sent.id)
+      const local = this.byKey.get(key)
+      if (this.outbox.has(key) && (!local || local.updatedAt <= sent.updatedAt)) {
+        this.outbox.delete(key)
+        done.push(key)
+      }
+    }
+    if (done.length === 0) return this.saving
+    return this.persist({ outboxRemove: done }, false)
+  }
+
+  saveMeta(meta: Record<string, unknown>): Promise<void> {
+    return this.persist({ meta }, false)
+  }
+
+  subscribe(listener: () => void): () => void {
+    this.listeners.add(listener)
+    return () => this.listeners.delete(listener)
+  }
+
+  /** Дождаться, пока все правки лягут в хранилище. */
+  flushed(): Promise<void> {
+    return this.saving
+  }
+
+  private persist(change: Parameters<LedgerStore["save"]>[0], changed = true): Promise<void> {
+    if (changed) {
+      this.version++
+      for (const listener of this.listeners) listener()
+    }
+    this.saving = this.saving.catch(() => {}).then(() => this.store.save(change))
+    return this.saving
+  }
+}
+
+const sameRecord = (a: SyncRecord, b: SyncRecord) =>
+  a.updatedAt === b.updatedAt && a.deleted === b.deleted && JSON.stringify(a.data) === JSON.stringify(b.data)
