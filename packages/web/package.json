@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
-    "dev": "vite"
+    "dev": "vite",
+    "icons": "node scripts/icons.mjs"
   },
   "dependencies": {
     "@fin/domain": "*",
