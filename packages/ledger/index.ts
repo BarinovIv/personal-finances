@@ -1,4 +1,5 @@
 export type { CategorySource } from "./src/categorize"
+export type { CategoryProblem, DeleteCategoryProblem } from "./src/category-admin"
 export type { Comparison, Dashboard, DashboardCategory, DashboardQuery, TrendBar } from "./src/dashboard"
 export type { Period, PeriodMode } from "./src/periods"
 export type { EntryChoice, EntryPreview, EntryPreviewProblem, SubmitResult } from "./src/entry"

@@ -1,4 +1,12 @@
 import { APP_TIME_ZONE, type CategoryKind, type IsoDate, type SyncRecord } from "@fin/domain"
+import {
+  addCategory,
+  categoryUsage,
+  deleteCategory,
+  renameCategory,
+  type CategoryProblem,
+  type DeleteCategoryProblem
+} from "./category-admin"
 import { LedgerContext } from "./context"
 import { buildDashboard, type Dashboard, type DashboardQuery } from "./dashboard"
 import { listDays } from "./days"
@@ -46,6 +54,18 @@ export interface Ledger {
   /** Сегодняшняя дата по Москве. */
   today(): IsoDate
   categories(kind: CategoryKind): ReadonlyArray<CategoryView>
+  addCategory(
+    kind: CategoryKind,
+    name: string
+  ): Promise<{ ok: true; category: CategoryView } | { ok: false; problem: CategoryProblem }>
+  renameCategory(id: string, name: string): Promise<{ ok: true } | { ok: false; problem: CategoryProblem }>
+  /** Сколько операций и регулярных операций в категории. */
+  categoryUsage(id: string): number
+  /** Непустая категория удаляется только с переносом операций в `moveTo`. */
+  deleteCategory(
+    id: string,
+    options?: { moveTo?: string }
+  ): Promise<{ ok: true } | { ok: false; problem: DeleteCategoryProblem }>
   /** Что получится из строки ввода — показывается под строкой. */
   preview(line: string, choice?: EntryChoice): EntryPreview
   /** Сохранить строку ввода как операцию. */
@@ -92,6 +112,10 @@ export const openLedger = async (options: LedgerOptions): Promise<Ledger> => {
   return {
     today: () => ctx.today(),
     categories: (kind) => [...ctx.categories().values()].filter((c) => c.kind === kind),
+    addCategory: (kind, name) => addCategory(ctx, kind, name),
+    renameCategory: (id, name) => renameCategory(ctx, id, name),
+    categoryUsage: (id) => categoryUsage(ctx, id),
+    deleteCategory: (id, options) => deleteCategory(ctx, id, options),
     preview: (line, choice) => previewEntry(ctx, line, choice),
     submit: (line, choice) => submitEntry(ctx, line, choice),
     days: () => listDays(ctx),
