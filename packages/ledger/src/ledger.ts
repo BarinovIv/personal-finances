@@ -8,6 +8,7 @@ import {
   type DeleteCategoryProblem
 } from "./category-admin"
 import { LedgerContext } from "./context"
+import { exportCsv } from "./csv"
 import { buildDashboard, type Dashboard, type DashboardQuery } from "./dashboard"
 import { listDays } from "./days"
 import { previewEntry, submitEntry, type EntryChoice, type EntryPreview, type SubmitResult } from "./entry"
@@ -109,6 +110,8 @@ export interface Ledger {
   settings(): Settings
   /** Дни зарплаты — числа месяца; синхронизируются. */
   setPaydays(days: ReadonlyArray<number>): Promise<{ ok: boolean }>
+  /** Все операции в CSV для Excel (UTF-8 с BOM, «;», десятичная запятая). */
+  exportCsv(): string
   /** Изменения, которые ещё не ушли на сервер. */
   pendingChanges(): ReadonlyArray<SyncRecord>
   readonly sync: LedgerSyncPort
@@ -159,6 +162,7 @@ export const openLedger = async (options: LedgerOptions): Promise<Ledger> => {
     endRecurring: (id) => endRecurring(ctx, id),
     settings: () => readSettings(ctx),
     setPaydays: (days) => setPaydays(ctx, days),
+    exportCsv: () => exportCsv(ctx),
     pendingChanges: () => records.pending(),
     sync: {
       pending: () => records.pending(),

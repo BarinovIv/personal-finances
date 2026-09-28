@@ -1032,10 +1032,10 @@ a {
 .inline-form {
   display: flex;
   gap: 8px;
-  align-items: center;
+  align-items: flex-end;
 }
 
-.inline-form .text-input {
+.inline-form > .text-input {
   flex: 1;
   min-width: 0;
 }
