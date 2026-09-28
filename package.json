@@ -1,0 +1,30 @@
+{
+  "name": "personal-finances",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "check": "npm run typecheck && npm run test && npm run boundaries",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "boundaries": "depcruise packages --config .dependency-cruiser.cjs",
+    "build": "npm run build -w @fin/web",
+    "start": "npm run build && npm run serve",
+    "serve": "tsx packages/server/main.ts",
+    "dev": "tsx watch packages/server/main.ts"
+  },
+  "devDependencies": {
+    "@effect/vitest": "^0.30.0",
+    "@types/node": "^24.0.0",
+    "dependency-cruiser": "^18.4.0",
+    "fake-indexeddb": "^6.2.5",
+    "tsx": "^4.23.15",
+    "typescript": "~5.9.3",
+    "vitest": "^3.2.7"
+  }
+}

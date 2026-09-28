@@ -1,0 +1,15 @@
+{
+  "name": "@fin/server",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "dependencies": {
+    "@effect/platform": "^0.97.2",
+    "@effect/platform-node": "^0.108.2",
+    "@fin/domain": "*",
+    "@fin/protocol": "*",
+    "effect": "^3.22.2"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "@fin/ledger",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "dependencies": {
+    "@fin/domain": "*",
+    "@fin/entry-line": "*"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "name": "@fin/entry-line",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "dependencies": {
+    "@fin/domain": "*"
+  }
+}

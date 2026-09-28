@@ -1,0 +1,14 @@
+{
+  "name": "@fin/sync",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "dependencies": {
+    "@fin/domain": "*",
+    "@fin/ledger": "*",
+    "@fin/protocol": "*",
+    "effect": "^3.22.2"
+  }
+}
