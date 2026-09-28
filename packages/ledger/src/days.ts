@@ -6,7 +6,7 @@ import type { DayGroup, OperationView } from "./views"
 /** Операции по дням: сначала новые дни, внутри дня — новые операции. */
 export const listDays = (ctx: LedgerContext): Array<DayGroup> => {
   const byDate = new Map<IsoDate, Array<OperationView>>()
-  for (const record of ctx.records.live("operations")) {
+  for (const record of ctx.operations()) {
     const list = byDate.get(record.data.date) ?? []
     list.push(ctx.toView(record))
     byDate.set(record.data.date, list)

@@ -1,8 +1,8 @@
-import { formatDecimal, parseMoney } from "@fin/domain"
-import type { Ledger, OperationView, UpdateProblem } from "@fin/ledger"
+import { formatDecimal, formatMoney, parseMoney } from "@fin/domain"
+import { dayLabel, type Ledger, type OperationView, type RefundProblem, type UpdateProblem } from "@fin/ledger"
 import { useState } from "preact/hooks"
 import { CategoryGrid } from "../components/CategoryGrid"
-import { BackIcon } from "../icons"
+import { BackIcon, RefundIcon } from "../icons"
 import { navigate, useLedgerVersion } from "../state"
 import { showToast } from "../toast"
 
@@ -15,6 +15,109 @@ const problemText: Record<UpdateProblem, string> = {
 }
 
 const amountText = (kopecks: number) => formatDecimal(kopecks).replace(/,00$/, "")
+
+const refundProblemText: Record<RefundProblem, string> = {
+  "not-refundable": "Возврат оформляется только по расходу.",
+  "bad-amount": "Проверьте сумму возврата.",
+  "too-much": "Нельзя вернуть больше, чем потрачено."
+}
+
+const Refunds = ({ ledger, op }: { ledger: Ledger; op: OperationView }) => {
+  const info = ledger.refunds(op.id)
+  const [open, setOpen] = useState(false)
+  const [amount, setAmount] = useState("")
+  const [date, setDate] = useState(ledger.today())
+  const [error, setError] = useState<string | null>(null)
+  if (!info) return null
+  const today = ledger.today()
+
+  const submit = async () => {
+    const kopecks = parseMoney(amount)
+    if (kopecks === null) return setError(refundProblemText["bad-amount"])
+    const result = await ledger.addRefund(op.id, { amount: kopecks, date })
+    if (!result.ok) return setError(refundProblemText[result.problem])
+    setOpen(false)
+    showToast({ text: `Возврат ${formatMoney(kopecks)} оформлен` })
+  }
+
+  return (
+    <>
+      {info.items.length > 0 && (
+        <section class="refunds">
+          <h2>Возвраты</h2>
+          {info.items.map((r) => (
+            <a class="refund-row" href={`#/op/${r.id}`} key={r.id}>
+              <RefundIcon />
+              <span class="grow-text">{dayLabel(r.date, today)}</span>
+              <span class="num refund-amount">+{formatMoney(r.amount)}</span>
+            </a>
+          ))}
+          <span class="refunds-net">
+            {info.remaining > 0
+              ? `Итого потрачено с учётом возвратов: ${formatMoney(info.remaining)}`
+              : "Деньги вернули полностью"}
+          </span>
+        </section>
+      )}
+      {open && (
+        <section class="refund-form">
+          <h2>Возврат денег</h2>
+          <label for="op-refund" class="field-label">
+            Сколько вернули, ₽ (можно часть суммы)
+          </label>
+          <input
+            id="op-refund"
+            class="text-input num"
+            type="text"
+            inputMode="decimal"
+            value={amount}
+            onInput={(e) => setAmount(e.currentTarget.value)}
+          />
+          <div class="field-row">
+            <label for="op-refund-date" class="field-label">
+              Дата возврата
+            </label>
+            <input
+              id="op-refund-date"
+              class="chip date-chip"
+              type="date"
+              value={date}
+              max={today}
+              onChange={(e) => e.currentTarget.value && setDate(e.currentTarget.value)}
+            />
+          </div>
+          <span class="hint">
+            Расходы на «{op.category.name}» уменьшатся в периоде даты возврата. В доходы возврат не попадёт.
+          </span>
+          {error && <div class="hint error">{error}</div>}
+          <div class="actions-row">
+            <button type="button" class="secondary-button grow" onClick={() => setOpen(false)}>
+              Отмена
+            </button>
+            <button type="button" class="accent-button grow" onClick={() => void submit()}>
+              Оформить возврат
+            </button>
+          </div>
+        </section>
+      )}
+      {!open && info.remaining > 0 && (
+        <button
+          type="button"
+          class="outline-accent-button"
+          onClick={() => {
+            setAmount(amountText(info.remaining))
+            setDate(today)
+            setError(null)
+            setOpen(true)
+          }}
+        >
+          <RefundIcon size={18} />
+          <span>Возврат</span>
+        </button>
+      )}
+    </>
+  )
+}
 
 export const Header = ({ title, back = "#/" }: { title: string; back?: string }) => (
   <header class="screen-header">
@@ -108,6 +211,7 @@ const Editor = ({ ledger, op }: { ledger: Ledger; op: OperationView }) => {
           />
         </div>
         {error && <div class="hint error">{error}</div>}
+        {op.kind === "expense" && <Refunds ledger={ledger} op={op} />}
       </div>
       <div class="actions">
         <button type="button" class="primary-button" onClick={() => void save()}>

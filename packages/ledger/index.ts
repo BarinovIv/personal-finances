@@ -3,7 +3,14 @@ export type { Comparison, Dashboard, DashboardCategory, DashboardQuery, TrendBar
 export type { Period, PeriodMode } from "./src/periods"
 export type { EntryChoice, EntryPreview, EntryPreviewProblem, SubmitResult } from "./src/entry"
 export { openLedger, type Ledger, type LedgerOptions, type LedgerSyncPort } from "./src/ledger"
-export type { OperationPatch, UpdateProblem, UpdateResult } from "./src/operations"
+export type {
+  OperationPatch,
+  RefundProblem,
+  RefundResult,
+  RefundsInfo,
+  UpdateProblem,
+  UpdateResult
+} from "./src/operations"
 export { dayLabel, dayMonth } from "./src/format"
 export { indexedDbStore } from "./src/indexeddb"
 export { memoryStore, type LedgerStore, type StoreChange, type StoredState } from "./src/store"

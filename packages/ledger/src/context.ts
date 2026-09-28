@@ -52,6 +52,19 @@ export class LedgerContext {
     return this.categories().get(categoryId)?.kind === kind
   }
 
+  /**
+   * Живые операции. Возврат удалённого расхода тоже не живой: так бывает, если расход удалили
+   * на одном устройстве, а возврат оформили на другом до синхронизации.
+   */
+  readonly operations = this.cached(() => {
+    const live = this.records.live("operations")
+    return live.filter((r) => {
+      if (r.data.kind !== "refund" || !r.data.refundOf) return true
+      const original = this.records.get("operations", r.data.refundOf)
+      return original !== undefined && !original.deleted
+    })
+  })
+
   /** Дни зарплаты из настроек; по умолчанию 5 и 20. */
   paydays(): ReadonlyArray<number> {
     const settings = this.records.get("settings", SETTINGS_ID)
@@ -86,11 +99,13 @@ export class LedgerContext {
 
   toView(record: RecordOf<"operations">): OperationView {
     const { data } = record
+    const original = data.kind === "refund" && data.refundOf ? this.records.get("operations", data.refundOf) : undefined
     return {
       id: record.id,
       kind: data.kind,
       amount: data.amount,
-      description: data.description,
+      // у возврата описание исходного расхода, даже если его потом поправили
+      description: original ? original.data.description : data.description,
       date: data.date,
       category: this.operationCategory(record),
       refundOf: data.refundOf,

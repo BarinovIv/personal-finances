@@ -103,7 +103,7 @@ export const buildDashboard = (ctx: LedgerContext, query: DashboardQuery): Dashb
   const paydays = ctx.paydays()
   const period = shiftPeriod(mode, today, paydays, offset)
   const isCurrent = contains(period, today)
-  const ops = ctx.records.live("operations")
+  const ops = ctx.operations()
 
   let income = 0
   const byCategory = new Map<string, { amount: number; records: Array<RecordOf<"operations">> }>()
