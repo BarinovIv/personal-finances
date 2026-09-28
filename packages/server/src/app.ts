@@ -4,10 +4,12 @@ import { authRoutes, ensurePassword } from "./auth"
 import type { AppConfig } from "./config"
 import type { Db } from "./db"
 import { serveStatic } from "./static"
+import { syncRoutes } from "./sync"
 
 export const router = HttpRouter.empty.pipe(
   HttpRouter.get("/api/health", HttpServerResponse.json({ ok: true })),
   HttpRouter.concat(authRoutes),
+  HttpRouter.concat(syncRoutes),
   HttpRouter.all("/api/*", HttpServerResponse.json({ error: "not-found" }, { status: 404 })),
   HttpRouter.get("*", serveStatic)
 )

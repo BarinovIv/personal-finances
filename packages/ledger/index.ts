@@ -1,6 +1,7 @@
 export type { CategorySource } from "./src/categorize"
 export type { EntryChoice, EntryPreview, EntryPreviewProblem, SubmitResult } from "./src/entry"
-export { openLedger, type Ledger, type LedgerOptions } from "./src/ledger"
+export { openLedger, type Ledger, type LedgerOptions, type LedgerSyncPort } from "./src/ledger"
+export type { OperationPatch, UpdateProblem, UpdateResult } from "./src/operations"
 export { dayLabel, dayMonth } from "./src/format"
 export { indexedDbStore } from "./src/indexeddb"
 export { memoryStore, type LedgerStore, type StoreChange, type StoredState } from "./src/store"

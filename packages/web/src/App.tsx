@@ -1,15 +1,13 @@
-import type { Ledger } from "@fin/ledger"
-import { createAuthApi, type SessionState } from "@fin/sync"
+import type { SessionState } from "@fin/sync"
 import { useEffect, useState } from "preact/hooks"
+import { useSyncStatus } from "./components/SyncBadge"
 import { ChartIcon, PenIcon, SlidersIcon } from "./icons"
 import { EntryScreen } from "./screens/Entry"
 import { LoginScreen } from "./screens/Login"
 import { SettingsScreen } from "./screens/Settings"
-import { getLedger, useRoute } from "./state"
+import { auth, getServices, useRoute, type AppServices } from "./state"
 
 type Tab = "entry" | "dashboard" | "settings"
-
-const auth = createAuthApi({ baseUrl: window.location.origin, fetch: (request) => fetch(request) })
 
 const TabBar = ({ current }: { current: Tab | null }) => (
   <nav class="tabbar">
@@ -35,34 +33,49 @@ const tabOf = (route: string): Tab | null => {
   return null
 }
 
-export const App = () => {
-  const [ledger, setLedger] = useState<Ledger | null>(null)
-  const [session, setSession] = useState<SessionState | "checking">("checking")
+const Main = ({ services, onSignedOut }: { services: AppServices; onSignedOut: () => void }) => {
   const route = useRoute()
+  const status = useSyncStatus(services.sync)
+  // истёкшая сессия — на экран входа; очередь изменений остаётся на устройстве
+  useEffect(() => {
+    if (status.state === "unauthorized") onSignedOut()
+  }, [status.state])
+
+  const { ledger, sync } = services
+  return (
+    <div class="app">
+      {route.startsWith("/settings") ? (
+        <SettingsScreen ledger={ledger} sync={sync} auth={auth} onSignedOut={onSignedOut} />
+      ) : (
+        <EntryScreen ledger={ledger} sync={sync} />
+      )}
+      <TabBar current={tabOf(route)} />
+    </div>
+  )
+}
+
+export const App = () => {
+  const [services, setServices] = useState<AppServices | null>(null)
+  const [session, setSession] = useState<SessionState | "checking">("checking")
 
   useEffect(() => {
-    void getLedger().then(setLedger)
+    void getServices().then(setServices)
     void auth.checkSession().then(setSession)
   }, [])
 
   if (session === "signed-out") {
     return (
       <div class="app">
-        <LoginScreen auth={auth} onSignedIn={() => setSession("signed-in")} />
+        <LoginScreen
+          auth={auth}
+          onSignedIn={() => {
+            setSession("signed-in")
+            services?.sync.wake()
+          }}
+        />
       </div>
     )
   }
-  if (!ledger) return <div class="app" />
-
-  const signedOut = () => setSession("signed-out")
-  return (
-    <div class="app">
-      {route.startsWith("/settings") ? (
-        <SettingsScreen ledger={ledger} auth={auth} onSignedOut={signedOut} />
-      ) : (
-        <EntryScreen ledger={ledger} />
-      )}
-      <TabBar current={tabOf(route)} />
-    </div>
-  )
+  if (!services) return <div class="app" />
+  return <Main services={services} onSignedOut={() => setSession("signed-out")} />
 }

@@ -462,3 +462,11 @@ a {
 .sync-status.pending {
   color: #9a7417;
 }
+
+.composer-head,
+.page-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}

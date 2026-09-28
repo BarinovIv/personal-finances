@@ -1,6 +1,7 @@
 import type { Ledger } from "@fin/ledger"
-import type { AuthApi, SessionInfo } from "@fin/sync"
+import type { AuthApi, SessionInfo, Sync } from "@fin/sync"
 import { useEffect, useState } from "preact/hooks"
+import { SyncBadge } from "../components/SyncBadge"
 import { lastActive } from "../format"
 
 const Devices = ({ auth, onSignedOut }: { auth: AuthApi; onSignedOut: () => void }) => {
@@ -53,10 +54,13 @@ const Devices = ({ auth, onSignedOut }: { auth: AuthApi; onSignedOut: () => void
   )
 }
 
-export const SettingsScreen = (props: { ledger: Ledger; auth: AuthApi; onSignedOut: () => void }) => (
+export const SettingsScreen = (props: { ledger: Ledger; sync: Sync; auth: AuthApi; onSignedOut: () => void }) => (
   <div class="screen">
     <div class="page">
-      <h1>Настройки</h1>
+      <div class="page-head">
+        <h1>Настройки</h1>
+        <SyncBadge sync={props.sync} />
+      </div>
       <Devices auth={props.auth} onSignedOut={props.onSignedOut} />
     </div>
   </div>

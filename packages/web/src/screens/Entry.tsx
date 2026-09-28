@@ -1,8 +1,10 @@
 import { formatMoney } from "@fin/domain"
 import { dayLabel, type EntryChoice, type EntryPreviewProblem, type Ledger } from "@fin/ledger"
 import { useState } from "preact/hooks"
+import type { Sync } from "@fin/sync"
 import { CategoryGrid } from "../components/CategoryGrid"
 import { OperationRow } from "../components/OperationRow"
+import { SyncBadge } from "../components/SyncBadge"
 import { CheckIcon } from "../icons"
 import { useLedgerVersion } from "../state"
 
@@ -12,7 +14,7 @@ const problemText: Record<EntryPreviewProblem, string> = {
   "no-category": "Выберите категорию."
 }
 
-export const EntryScreen = ({ ledger }: { ledger: Ledger }) => {
+export const EntryScreen = ({ ledger, sync }: { ledger: Ledger; sync: Sync }) => {
   useLedgerVersion(ledger)
   const [text, setText] = useState("")
   const [choice, setChoice] = useState<EntryChoice>({})
@@ -53,7 +55,10 @@ export const EntryScreen = ({ ledger }: { ledger: Ledger }) => {
   return (
     <div class="screen">
       <div class="composer">
-        <label for="line">Что потратил или получил?</label>
+        <div class="composer-head">
+          <label for="line">Что потратил или получил?</label>
+          <SyncBadge sync={sync} />
+        </div>
         <input
           id="line"
           class="line-input"

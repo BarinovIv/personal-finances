@@ -26,6 +26,7 @@ export class Records {
   private readonly byKey = new Map<string, SyncRecord>()
   private readonly outbox = new Set<string>()
   private readonly listeners = new Set<() => void>()
+  private readonly meta: Map<string, unknown>
   private lastStamp = 0
   private saving: Promise<void> = Promise.resolve()
   /** Растёт при каждом изменении — для кэширования расчётов. */
@@ -35,8 +36,10 @@ export class Records {
     private readonly store: LedgerStore,
     private readonly now: () => number,
     records: ReadonlyArray<unknown>,
-    outbox: ReadonlyArray<string>
+    outbox: ReadonlyArray<string>,
+    meta: Readonly<Record<string, unknown>>
   ) {
+    this.meta = new Map(Object.entries(meta))
     for (const record of records as ReadonlyArray<SyncRecord>) {
       this.byKey.set(recordKey(record.collection, record.id), record)
       this.lastStamp = Math.max(this.lastStamp, record.updatedAt)
@@ -80,20 +83,23 @@ export class Records {
     return this.persist({ records: records.map((value, i) => ({ key: keys[i]!, value })), outboxAdd: keys })
   }
 
-  /** Записи с сервера: принимаются, если не старше локальных (ADR-0001). */
-  applyRemote(records: ReadonlyArray<SyncRecord>): Promise<void> {
+  /** Записи с сервера: принимаются, если не старше локальных (ADR-0001). `meta` сохраняется вместе с ними. */
+  applyRemote(records: ReadonlyArray<SyncRecord>, meta: Record<string, unknown> = {}): Promise<void> {
+    for (const [key, value] of Object.entries(meta)) this.meta.set(key, value)
     const accepted: Array<{ key: string; value: SyncRecord }> = []
+    const superseded: Array<string> = []
     for (const record of records) {
       const key = recordKey(record.collection, record.id)
       const local = this.byKey.get(key)
       if (local && local.updatedAt > record.updatedAt) continue
+      // локальная правка проиграла более поздней (или это она сама вернулась) — отправлять больше нечего
+      if (this.outbox.delete(key)) superseded.push(key)
       if (local && sameRecord(local, record)) continue
       this.byKey.set(key, record)
       this.lastStamp = Math.max(this.lastStamp, record.updatedAt)
       accepted.push({ key, value: record })
     }
-    if (accepted.length === 0) return this.saving
-    return this.persist({ records: accepted })
+    return this.persist({ records: accepted, outboxRemove: superseded, meta }, accepted.length > 0)
   }
 
   pending(): Array<SyncRecord> {
@@ -115,7 +121,12 @@ export class Records {
     return this.persist({ outboxRemove: done }, false)
   }
 
+  getMeta<T>(key: string): T | undefined {
+    return this.meta.get(key) as T | undefined
+  }
+
   saveMeta(meta: Record<string, unknown>): Promise<void> {
+    for (const [key, value] of Object.entries(meta)) this.meta.set(key, value)
     return this.persist({ meta }, false)
   }
 
