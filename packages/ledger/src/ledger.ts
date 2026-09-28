@@ -9,6 +9,7 @@ import {
 } from "./category-admin"
 import { LedgerContext } from "./context"
 import { exportCsv } from "./csv"
+import { randomId } from "./ids"
 import { buildDashboard, type Dashboard, type DashboardQuery } from "./dashboard"
 import { listDays } from "./days"
 import { previewEntry, submitEntry, type EntryChoice, type EntryPreview, type SubmitResult } from "./entry"
@@ -129,7 +130,7 @@ export const openLedger = async (options: LedgerOptions): Promise<Ledger> => {
     records,
     now,
     options.timeZone ?? APP_TIME_ZONE,
-    options.newId ?? (() => crypto.randomUUID())
+    options.newId ?? randomId
   )
 
   return {
