@@ -4,8 +4,10 @@ import { useSyncStatus } from "./components/SyncBadge"
 import { ChartIcon, PenIcon, SlidersIcon } from "./icons"
 import { EntryScreen } from "./screens/Entry"
 import { LoginScreen } from "./screens/Login"
+import { OperationScreen } from "./screens/Operation"
 import { SettingsScreen } from "./screens/Settings"
 import { auth, getServices, useRoute, type AppServices } from "./state"
+import { ToastHost } from "./toast"
 
 type Tab = "entry" | "dashboard" | "settings"
 
@@ -42,14 +44,19 @@ const Main = ({ services, onSignedOut }: { services: AppServices; onSignedOut: (
   }, [status.state])
 
   const { ledger, sync } = services
+  const tab = tabOf(route)
+  const op = /^\/op\/(.+)$/.exec(route)
   return (
     <div class="app">
-      {route.startsWith("/settings") ? (
+      {op ? (
+        <OperationScreen ledger={ledger} id={decodeURIComponent(op[1]!)} />
+      ) : tab === "settings" ? (
         <SettingsScreen ledger={ledger} sync={sync} auth={auth} onSignedOut={onSignedOut} />
       ) : (
         <EntryScreen ledger={ledger} sync={sync} />
       )}
-      <TabBar current={tabOf(route)} />
+      {tab && <TabBar current={tab} />}
+      <ToastHost />
     </div>
   )
 }
