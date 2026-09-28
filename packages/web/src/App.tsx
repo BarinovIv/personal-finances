@@ -1,6 +1,12 @@
+import type { Ledger } from "@fin/ledger"
+import { useEffect, useState } from "preact/hooks"
 import { ChartIcon, PenIcon, SlidersIcon } from "./icons"
+import { EntryScreen } from "./screens/Entry"
+import { getLedger, useRoute } from "./state"
 
-const TabBar = ({ current }: { current: "entry" | "dashboard" | "settings" }) => (
+type Tab = "entry" | "dashboard" | "settings"
+
+const TabBar = ({ current }: { current: Tab | null }) => (
   <nav class="tabbar">
     <a href="#/" aria-current={current === "entry" ? "page" : undefined}>
       <PenIcon />
@@ -17,22 +23,28 @@ const TabBar = ({ current }: { current: "entry" | "dashboard" | "settings" }) =>
   </nav>
 )
 
-const EntryScreen = () => (
-  <div class="screen">
-    <div class="composer">
-      <label for="line">Что потратил или получил?</label>
-      <input id="line" class="line-input" type="text" placeholder="футболка 1500" autocomplete="off" enterKeyHint="done" />
-      <div class="hint">
-        Например: <b>футболка 1500</b> · <b>+зарплата 95000</b> · <b>вчера такси 450</b> · <b>обед 1.2к</b>
-      </div>
-    </div>
-    <div class="empty">Пока нет операций</div>
-  </div>
-)
+const Screen = ({ ledger, route }: { ledger: Ledger; route: string }) => {
+  return <EntryScreen ledger={ledger} />
+}
 
-export const App = () => (
-  <div class="app">
-    <EntryScreen />
-    <TabBar current="entry" />
-  </div>
-)
+const tabOf = (route: string): Tab | null => {
+  if (route === "/") return "entry"
+  if (route.startsWith("/dashboard")) return "dashboard"
+  if (route.startsWith("/settings")) return "settings"
+  return null
+}
+
+export const App = () => {
+  const [ledger, setLedger] = useState<Ledger | null>(null)
+  const route = useRoute()
+  useEffect(() => {
+    void getLedger().then(setLedger)
+  }, [])
+  if (!ledger) return <div class="app" />
+  return (
+    <div class="app">
+      <Screen ledger={ledger} route={route} />
+      <TabBar current={tabOf(route)} />
+    </div>
+  )
+}
