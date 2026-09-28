@@ -42,8 +42,9 @@ export const EntryScreen = ({ ledger, sync }: { ledger: Ledger; sync: Sync }) =>
     const result = await ledger.submit(text, choice)
     if (!result.ok) {
       const first = result.problems[0]!
+      // без категории открывается выбор — он сам и есть объяснение
       if (first === "no-category") setPickerOpen(true)
-      setError(problemText[first])
+      else setError(problemText[first])
       return
     }
     const op = result.operation

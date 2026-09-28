@@ -137,7 +137,18 @@ a {
   display: flex;
   gap: 8px;
   align-items: center;
-  flex-wrap: wrap;
+}
+
+.recognized .chip {
+  padding: 0 12px;
+  min-width: 0;
+  flex-shrink: 1;
+}
+
+.recognized .chip span:last-of-type {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .chip {
@@ -170,8 +181,9 @@ a {
 }
 
 .amount-preview {
-  flex: 1;
+  flex: 1 0 auto;
   text-align: right;
+  white-space: nowrap;
   font-size: 16px;
   font-weight: 600;
 }
