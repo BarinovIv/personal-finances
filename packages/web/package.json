@@ -1,0 +1,19 @@
+{
+  "name": "@fin/web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite"
+  },
+  "dependencies": {
+    "@fin/domain": "*",
+    "@fin/ledger": "*",
+    "@fin/sync": "*",
+    "preact": "^10.29.8"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "^2.10.6",
+    "vite": "^7.3.6"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "@fin/protocol",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "dependencies": {
+    "@fin/domain": "*",
+    "effect": "^3.22.2"
+  }
+}
