@@ -10,5 +10,8 @@
     "@fin/ledger": "*",
     "@fin/protocol": "*",
     "effect": "^3.22.2"
+  },
+  "devDependencies": {
+    "@fin/server": "*"
   }
 }

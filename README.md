@@ -29,6 +29,11 @@ npm run dev -w @fin/web  # vite с проксированием /api на сер
 | ---------------- | --------------------- | ------------------------------------------------------------- |
 | `PORT`           | `8080`                | Порт HTTP                                                     |
 | `STATIC_DIR`     | `packages/web/dist`   | Папка со сборкой PWA                                          |
+| `APP_PASSWORD`   | —                     | Пароль входа. В базе хранится только его хэш (scrypt)         |
+| `DB_PATH`        | `data/finances.sqlite`| Файл SQLite (ADR-0003)                                        |
+| `SECURE_COOKIES` | `true`                | Флаг Secure у cookie сессии; `false` — только для http не на localhost |
+
+Локально: `APP_PASSWORD=секрет npm start`.
 
 ## Устройство кода
 

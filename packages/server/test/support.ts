@@ -1,8 +1,8 @@
-import { Effect, Layer, Option } from "effect"
+import { Effect, Layer, Option, type Scope } from "effect"
 import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
-import { appConfigLayer, makeWebHandler, type AppConfigShape } from "@fin/server"
+import { appConfigLayer, dbMemory, makeWebHandler, type AppConfigShape } from "@fin/server"
 
 /** Папка с «собранной» PWA для тестов. */
 export const staticFixture = (files: Record<string, string>) => {
@@ -75,9 +75,17 @@ export const defaultConfig: AppConfigShape = {
   secureCookies: true
 }
 
-/** Сервер в процессе с текущими (тестовыми) часами. */
-export const testServer = (config: Partial<AppConfigShape> = {}) =>
-  makeWebHandler.pipe(
-    Effect.map((handler) => makeClient(handler, "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) Safari/604.1")),
-    Effect.provide(Layer.mergeAll(appConfigLayer({ ...defaultConfig, ...config })))
-  )
+export const IPHONE_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1"
+export const MAC_CHROME_UA =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+
+/**
+ * Сервер в процессе: SQLite в памяти, текущие (тестовые) часы. Живёт до конца scope теста.
+ * Возвращает клиента «iPhone»; `device()` — ещё одно устройство.
+ */
+export const testServer = (config: Partial<AppConfigShape> = {}): Effect.Effect<TestClient, never, Scope.Scope> =>
+  Effect.gen(function* () {
+    const context = yield* Layer.build(Layer.merge(appConfigLayer({ ...defaultConfig, ...config }), dbMemory))
+    const handler = yield* makeWebHandler.pipe(Effect.provide(context))
+    return makeClient(handler, IPHONE_UA)
+  })
