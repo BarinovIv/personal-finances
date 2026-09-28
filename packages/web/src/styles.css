@@ -929,3 +929,78 @@ a {
   color: var(--muted);
   white-space: nowrap;
 }
+
+/* Возвраты */
+.refunds {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: var(--accent-soft);
+}
+
+.refunds h2,
+.refund-form h2 {
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--accent-dark);
+}
+
+.refund-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  font-size: 15px;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.grow-text {
+  flex: 1;
+}
+
+.refund-amount {
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.refunds-net {
+  font-size: 13px;
+  color: var(--accent-dark);
+}
+
+.refund-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 16px;
+  background: var(--surface);
+  border: 2px solid var(--accent);
+}
+
+.accent-button {
+  border: 0;
+  border-radius: 12px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.outline-accent-button {
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 14px;
+  border: 1px solid var(--accent);
+  background: var(--surface);
+  color: var(--accent);
+  font-size: 16px;
+  font-weight: 600;
+}

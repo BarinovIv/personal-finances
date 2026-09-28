@@ -4,10 +4,14 @@ import { buildDashboard, type Dashboard, type DashboardQuery } from "./dashboard
 import { listDays } from "./days"
 import { previewEntry, submitEntry, type EntryChoice, type EntryPreview, type SubmitResult } from "./entry"
 import {
+  addRefund,
   deleteOperation,
+  refundsOf,
   restoreOperation,
   updateOperation,
   type OperationPatch,
+  type RefundResult,
+  type RefundsInfo,
   type UpdateResult
 } from "./operations"
 import { Records } from "./records"
@@ -51,6 +55,10 @@ export interface Ledger {
   deleteOperation(id: string): Promise<void>
   /** Отменить удаление. */
   restoreOperation(id: string): Promise<void>
+  /** Возвраты расхода; для дохода и возврата — undefined. */
+  refunds(expenseId: string): RefundsInfo | undefined
+  /** Оформить возврат: по умолчанию вся ещё не возвращённая сумма, сегодня. */
+  addRefund(expenseId: string, options?: { amount?: number; date?: IsoDate }): Promise<RefundResult>
   /** Итоги периода; всё считается на устройстве. */
   dashboard(query: DashboardQuery): Dashboard
   /** Изменения, которые ещё не ушли на сервер. */
@@ -86,6 +94,8 @@ export const openLedger = async (options: LedgerOptions): Promise<Ledger> => {
     updateOperation: (id, patch) => updateOperation(ctx, id, patch),
     deleteOperation: (id) => deleteOperation(ctx, id),
     restoreOperation: (id) => restoreOperation(ctx, id),
+    refunds: (id) => refundsOf(ctx, id),
+    addRefund: (id, options) => addRefund(ctx, id, options),
     dashboard: (query) => buildDashboard(ctx, query),
     pendingChanges: () => records.pending(),
     sync: {

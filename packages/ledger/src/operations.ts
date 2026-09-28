@@ -1,5 +1,6 @@
 import type { IsoDate, OperationData } from "@fin/domain"
 import type { LedgerContext } from "./context"
+import type { OperationView } from "./views"
 
 export interface OperationPatch {
   /** Копейки. */
@@ -74,4 +75,59 @@ export const restoreOperation = async (ctx: LedgerContext, id: string): Promise<
   await ctx.records.write(
     [record, ...deletedTogether].map((r) => ({ collection: "operations" as const, id: r.id, data: r.data }))
   )
+}
+
+export type RefundProblem = "not-refundable" | "bad-amount" | "too-much"
+
+export type RefundResult =
+  | { readonly ok: true; readonly operation: OperationView }
+  | { readonly ok: false; readonly problem: RefundProblem }
+
+export interface RefundsInfo {
+  /** Уже возвращено, копейки. */
+  readonly refunded: number
+  /** Ещё можно вернуть. Ноль — кнопка «Возврат» скрыта. */
+  readonly remaining: number
+  /** Сначала новые. */
+  readonly items: ReadonlyArray<OperationView>
+}
+
+export const refundsOf = (ctx: LedgerContext, expenseId: string): RefundsInfo | undefined => {
+  const record = ctx.records.get("operations", expenseId)
+  if (!record || record.deleted || record.data.kind !== "expense") return undefined
+  const items = ctx
+    .operations()
+    .filter((r) => r.data.refundOf === expenseId)
+    .sort((a, b) => (a.data.date === b.data.date ? b.data.createdAt - a.data.createdAt : a.data.date < b.data.date ? 1 : -1))
+    .map((r) => ctx.toView(r))
+  const refunded = items.reduce((sum, r) => sum + r.amount, 0)
+  return { refunded, remaining: record.data.amount - refunded, items }
+}
+
+/** Возврат по расходу: по умолчанию вся ещё не возвращённая сумма, сегодня. */
+export const addRefund = async (
+  ctx: LedgerContext,
+  expenseId: string,
+  options: { readonly amount?: number; readonly date?: IsoDate } = {}
+): Promise<RefundResult> => {
+  const info = refundsOf(ctx, expenseId)
+  const original = ctx.records.get("operations", expenseId)
+  if (!info || !original) return { ok: false, problem: "not-refundable" }
+  const amount = options.amount ?? info.remaining
+  if (info.remaining <= 0 || amount > info.remaining) return { ok: false, problem: "too-much" }
+  if (!Number.isInteger(amount) || amount <= 0) return { ok: false, problem: "bad-amount" }
+  const id = ctx.newId()
+  const stamp = ctx.records.stamp()
+  const data: OperationData = {
+    kind: "refund",
+    amount,
+    description: original.data.description,
+    categoryId: original.data.categoryId,
+    date: options.date ?? ctx.today(),
+    createdAt: stamp,
+    refundOf: expenseId,
+    recurringId: null
+  }
+  await ctx.records.write([{ collection: "operations", id, data }], stamp)
+  return { ok: true, operation: ctx.toView(ctx.records.get("operations", id)!) }
 }
