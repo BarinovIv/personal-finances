@@ -83,7 +83,7 @@ export class LedgerContext {
             kind: r.data.kind as CategoryKind,
             description: r.data.description,
             categoryId: r.data.categoryId,
-            at: r.updatedAt
+            at: r.data.categorizedAt
           }))
       )
   )

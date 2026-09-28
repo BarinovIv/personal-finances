@@ -18,6 +18,7 @@ export const OperationData = Schema.Struct({
   categoryId: Schema.String,
   date: IsoDate,
   createdAt: Schema.Number,
+  categorizedAt: Schema.Number,
   refundOf: Schema.NullOr(Schema.String),
   recurringId: Schema.NullOr(Schema.String)
 })

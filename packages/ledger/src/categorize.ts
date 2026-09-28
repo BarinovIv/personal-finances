@@ -54,7 +54,7 @@ export interface HistoryEntry {
   readonly kind: CategoryKind
   readonly description: string
   readonly categoryId: string
-  /** Время последней правки: побеждает последний выбор. */
+  /** Когда выбрана категория: побеждает последний выбор. */
   readonly at: number
 }
 

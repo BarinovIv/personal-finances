@@ -72,6 +72,7 @@ export const submitEntry = async (ctx: LedgerContext, line: string, choice?: Ent
     categoryId: p.categoryId,
     date: p.date,
     createdAt: stamp,
+    categorizedAt: stamp,
     refundOf: null,
     recurringId: null
   }
