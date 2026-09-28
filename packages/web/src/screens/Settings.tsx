@@ -48,6 +48,30 @@ const Paydays = ({ ledger }: { ledger: Ledger }) => {
   )
 }
 
+const Export = ({ ledger }: { ledger: Ledger }) => (
+  <section class="section">
+    <h2>Выгрузка</h2>
+    <p class="section-note">Все операции, включая возвраты и регулярные, — файл открывается в Excel.</p>
+    <button
+      type="button"
+      class="secondary-button"
+      onClick={() => {
+        const blob = new Blob([ledger.exportCsv()], { type: "text/csv;charset=utf-8" })
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement("a")
+        link.href = url
+        link.download = `finances-${ledger.today()}.csv`
+        document.body.append(link)
+        link.click()
+        link.remove()
+        setTimeout(() => URL.revokeObjectURL(url), 10_000)
+      }}
+    >
+      Скачать всё в CSV
+    </button>
+  </section>
+)
+
 const Devices = ({ auth, onSignedOut }: { auth: AuthApi; onSignedOut: () => void }) => {
   const [sessions, setSessions] = useState<ReadonlyArray<SessionInfo> | null | undefined>(undefined)
   const load = () => auth.sessions().then(setSessions)
@@ -110,6 +134,7 @@ export const SettingsScreen = (props: { ledger: Ledger; sync: Sync; auth: AuthAp
       <Paydays ledger={props.ledger} />
       <RecurringSection ledger={props.ledger} />
       <CategoriesSection ledger={props.ledger} />
+      <Export ledger={props.ledger} />
       <Devices auth={props.auth} onSignedOut={props.onSignedOut} />
     </div>
   </div>
