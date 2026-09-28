@@ -1,10 +1,29 @@
 import { indexedDbStore, openLedger, type Ledger } from "@fin/ledger"
+import { createAuthApi, createSync, type Sync, type Transport } from "@fin/sync"
 import { useEffect, useState } from "preact/hooks"
 
-let ledgerPromise: Promise<Ledger> | undefined
+const transport: Transport = { baseUrl: window.location.origin, fetch: (request) => fetch(request) }
 
-/** Журнал на этом устройстве (IndexedDB). */
-export const getLedger = () => (ledgerPromise ??= openLedger({ store: indexedDbStore() }))
+export const auth = createAuthApi(transport)
+
+export interface AppServices {
+  readonly ledger: Ledger
+  readonly sync: Sync
+}
+
+let services: Promise<AppServices> | undefined
+
+/** Журнал на этом устройстве (IndexedDB) и его синхронизация в фоне. */
+export const getServices = () =>
+  (services ??= openLedger({ store: indexedDbStore() }).then((ledger) => {
+    const sync = createSync({ ledger, transport })
+    sync.start()
+    window.addEventListener("online", () => sync.wake())
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") sync.wake()
+    })
+    return { ledger, sync }
+  }))
 
 /** Перерисовывает компонент при любом изменении журнала. */
 export const useLedgerVersion = (ledger: Ledger) => {
