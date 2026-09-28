@@ -1,8 +1,10 @@
-import { todayIn, type CategoryKind, type IsoDate } from "@fin/domain"
+import { SETTINGS_ID, todayIn, type CategoryKind, type IsoDate } from "@fin/domain"
 import { History } from "./categorize"
 import { STARTER_CATEGORIES, UNKNOWN_CATEGORY_COLOR } from "./categories"
 import type { RecordOf, Records } from "./records"
 import type { CategoryView, OperationView } from "./views"
+
+export const DEFAULT_PAYDAYS: ReadonlyArray<number> = [5, 20]
 
 /** Общее для всех частей журнала: записи, часы и производные данные, пересчитываемые при изменениях. */
 export class LedgerContext {
@@ -48,6 +50,12 @@ export class LedgerContext {
   /** Подходит ли категория операции этого вида. */
   allowed(categoryId: string, kind: CategoryKind): boolean {
     return this.categories().get(categoryId)?.kind === kind
+  }
+
+  /** Дни зарплаты из настроек; по умолчанию 5 и 20. */
+  paydays(): ReadonlyArray<number> {
+    const settings = this.records.get("settings", SETTINGS_ID)
+    return settings && !settings.deleted && settings.data.paydays.length > 0 ? settings.data.paydays : DEFAULT_PAYDAYS
   }
 
   /** История подстановок — только живые расходы и доходы. */

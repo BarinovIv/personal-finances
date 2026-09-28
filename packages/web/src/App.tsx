@@ -2,6 +2,7 @@ import type { SessionState } from "@fin/sync"
 import { useEffect, useState } from "preact/hooks"
 import { useSyncStatus } from "./components/SyncBadge"
 import { ChartIcon, PenIcon, SlidersIcon } from "./icons"
+import { DashboardScreen } from "./screens/Dashboard"
 import { EntryScreen } from "./screens/Entry"
 import { LoginScreen } from "./screens/Login"
 import { OperationScreen } from "./screens/Operation"
@@ -50,6 +51,8 @@ const Main = ({ services, onSignedOut }: { services: AppServices; onSignedOut: (
     <div class="app">
       {op ? (
         <OperationScreen ledger={ledger} id={decodeURIComponent(op[1]!)} />
+      ) : tab === "dashboard" ? (
+        <DashboardScreen ledger={ledger} mode="month" />
       ) : tab === "settings" ? (
         <SettingsScreen ledger={ledger} sync={sync} auth={auth} onSignedOut={onSignedOut} />
       ) : (

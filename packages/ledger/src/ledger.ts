@@ -1,5 +1,6 @@
 import { APP_TIME_ZONE, type CategoryKind, type IsoDate, type SyncRecord } from "@fin/domain"
 import { LedgerContext } from "./context"
+import { buildDashboard, type Dashboard, type DashboardQuery } from "./dashboard"
 import { listDays } from "./days"
 import { previewEntry, submitEntry, type EntryChoice, type EntryPreview, type SubmitResult } from "./entry"
 import {
@@ -50,6 +51,8 @@ export interface Ledger {
   deleteOperation(id: string): Promise<void>
   /** Отменить удаление. */
   restoreOperation(id: string): Promise<void>
+  /** Итоги периода; всё считается на устройстве. */
+  dashboard(query: DashboardQuery): Dashboard
   /** Изменения, которые ещё не ушли на сервер. */
   pendingChanges(): ReadonlyArray<SyncRecord>
   readonly sync: LedgerSyncPort
@@ -83,6 +86,7 @@ export const openLedger = async (options: LedgerOptions): Promise<Ledger> => {
     updateOperation: (id, patch) => updateOperation(ctx, id, patch),
     deleteOperation: (id) => deleteOperation(ctx, id),
     restoreOperation: (id) => restoreOperation(ctx, id),
+    dashboard: (query) => buildDashboard(ctx, query),
     pendingChanges: () => records.pending(),
     sync: {
       pending: () => records.pending(),
