@@ -23,6 +23,7 @@ describe("выгрузка в CSV", () => {
             categoryId: "subscriptions",
             date: "2026-09-25",
             createdAt: 1,
+            categorizedAt: 1,
             refundOf: null,
             recurringId: "tpl"
           }

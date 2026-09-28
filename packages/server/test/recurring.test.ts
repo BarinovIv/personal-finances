@@ -67,6 +67,7 @@ describe("регулярные операции: сервер", () => {
           categoryId: "subscriptions",
           date: "2026-09-10",
           createdAt: MSK("2026-09-28T12:00:00"),
+          categorizedAt: MSK("2026-09-28T12:00:00"),
           refundOf: null,
           recurringId: "net"
         }

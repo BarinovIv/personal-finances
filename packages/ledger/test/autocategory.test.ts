@@ -64,6 +64,20 @@ describe("автокатегоризация", () => {
     expect(ledger.preview("тишка 500").categoryId).toBe(categoryId(ledger, "Подарки"))
   })
 
+  it("выбором считается только выбор категории, а не правка суммы или даты", async () => {
+    const { ledger, clock } = await makeLedger()
+    const old = await add(ledger, "кофе 250", { categoryId: categoryId(ledger, "Кафе") })
+    clock.advance(1000)
+    await add(ledger, "кофе 900", { categoryId: categoryId(ledger, "Продукты") })
+    clock.advance(1000)
+    await ledger.updateOperation(old.id, { amount: 30000, date: "2026-09-27" })
+    expect(ledger.preview("кофе 1").categoryId).toBe(categoryId(ledger, "Продукты"))
+    // удаление и «Отменить» тоже не выбор
+    await ledger.deleteOperation(old.id)
+    await ledger.restoreOperation(old.id)
+    expect(ledger.preview("кофе 1").categoryId).toBe(categoryId(ledger, "Продукты"))
+  })
+
   it("подставленную категорию можно сменить", async () => {
     const { ledger } = await makeLedger()
     const op = await add(ledger, "футболка 1500", { categoryId: categoryId(ledger, "Подарки") })

@@ -61,6 +61,7 @@ describe("регулярные операции на устройстве", () =
         categoryId: "subscriptions",
         date: "2026-09-10",
         createdAt: 1,
+        categorizedAt: 1,
         refundOf: null,
         recurringId: id
       }
@@ -139,6 +140,7 @@ describe("регулярные операции на устройстве", () =
               categoryId: "subscriptions",
               date: "2026-09-28",
               createdAt: 1,
+              categorizedAt: 1,
               refundOf: null,
               recurringId: gym.id
             }

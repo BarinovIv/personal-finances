@@ -35,6 +35,9 @@ export const updateOperation = async (ctx: LedgerContext, id: string, patch: Ope
   }
   if (!Number.isInteger(next.amount) || next.amount <= 0) return { ok: false, problem: "bad-amount" }
   if (!next.description) return { ok: false, problem: "no-description" }
+  const stamp = ctx.records.stamp()
+  // выбор категории — отдельное событие для истории подстановок
+  const data = next.categoryId === current.categoryId ? next : { ...next, categorizedAt: stamp }
 
   if (current.kind === "refund") {
     // у возврата меняются только сумма и дата; категория — всегда категория исходного расхода
@@ -51,7 +54,7 @@ export const updateOperation = async (ctx: LedgerContext, id: string, patch: Ope
       return { ok: false, problem: "below-refunds" }
     }
   }
-  await ctx.records.write([{ collection: "operations", id, data: next }])
+  await ctx.records.write([{ collection: "operations", id, data }], stamp)
   return { ok: true }
 }
 
@@ -125,6 +128,7 @@ export const addRefund = async (
     categoryId: original.data.categoryId,
     date: options.date ?? ctx.today(),
     createdAt: stamp,
+    categorizedAt: stamp,
     refundOf: expenseId,
     recurringId: null
   }

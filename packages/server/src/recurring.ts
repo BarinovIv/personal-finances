@@ -37,6 +37,7 @@ export const generateRecurring = Effect.gen(function* () {
             categoryId: t.categoryId,
             date: occurrence.date,
             createdAt: now,
+            categorizedAt: now,
             refundOf: null,
             recurringId: template.id
           }

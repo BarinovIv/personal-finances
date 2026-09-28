@@ -14,6 +14,7 @@ const op = (id: string, updatedAt: number, amount: number, deleted = false) => (
     categoryId: "cafe",
     date: "2026-09-28",
     createdAt: 1,
+    categorizedAt: 1,
     refundOf: null,
     recurringId: null
   }

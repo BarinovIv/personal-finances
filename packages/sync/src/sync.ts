@@ -72,20 +72,23 @@ export const createSync = (options: SyncOptions): Sync => {
   /** Отправить очередь и забрать чужие изменения; повторять, пока сервер говорит «есть ещё». */
   const exchange: Effect.Effect<void, RequestError> = Effect.gen(function* () {
     for (;;) {
-      const pending = port.pending()
+      // запись, не прошедшая схему, не отправляется, но и не пропадает: она остаётся в очереди,
+      // а индикатор показывает «ждёт сети» — так её не потерять
+      const sent: Array<SyncRecord> = []
       const changes: Array<unknown> = []
-      const invalid: Array<SyncRecord> = []
-      for (const record of pending) {
+      for (const record of port.pending()) {
         const encoded = encodeRecord(record as never)
-        if (Either.isRight(encoded)) changes.push(encoded.right)
-        else invalid.push(record)
+        if (Either.isRight(encoded)) {
+          sent.push(record)
+          changes.push(encoded.right)
+        }
       }
       const response = yield* request(transport(), "POST", "/api/sync", SyncResponse, {
         cursor: port.cursor(),
         changes
       })
       yield* Effect.promise(() => port.receive(response.changes, response.cursor))
-      yield* Effect.promise(() => port.acknowledge([...pending, ...invalid]))
+      yield* Effect.promise(() => port.acknowledge(sent))
       if (!response.hasMore) return
     }
   })
