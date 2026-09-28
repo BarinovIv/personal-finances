@@ -158,12 +158,19 @@ const Trend = ({ d }: { d: Dashboard }) => {
   )
 }
 
-export const DashboardScreen = ({ ledger, mode }: { ledger: Ledger; mode: PeriodMode }) => {
+export const DashboardScreen = ({ ledger }: { ledger: Ledger }) => {
   useLedgerVersion(ledger)
+  const [mode, setMode] = useState<PeriodMode>(ledger.dashboardMode())
   const [offset, setOffset] = useState(0)
   const [selected, setSelected] = useState<string | null>(null)
   const d = ledger.dashboard({ mode, offset })
   const select = (id: string) => setSelected(selected === id ? null : id)
+  const switchMode = (next: PeriodMode) => {
+    setMode(next)
+    setOffset(0)
+    setSelected(null)
+    void ledger.setDashboardMode(next)
+  }
   const go = (delta: number) => {
     setOffset(offset + delta)
     setSelected(null)
@@ -173,6 +180,14 @@ export const DashboardScreen = ({ ledger, mode }: { ledger: Ledger; mode: Period
     <div class="screen">
       <div class="page">
         <h1>Дашборд</h1>
+        <div class="segmented" role="group" aria-label="Вид периода">
+          <button type="button" aria-pressed={mode === "pay"} onClick={() => switchMode("pay")}>
+            Зарплатный период
+          </button>
+          <button type="button" aria-pressed={mode === "month"} onClick={() => switchMode("month")}>
+            Месяц
+          </button>
+        </div>
         <div class="period-nav">
           <button type="button" class="icon-button" aria-label="Предыдущий период" onClick={() => go(-1)}>
             <BackIcon size={22} />
