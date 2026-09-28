@@ -187,4 +187,26 @@ describe("синхронизация", () => {
     await mac.sync.syncNow()
     expect(mac.ledger.days()[0]!.items).toHaveLength(1100)
   })
+
+  it("операции, созданные сервером по регулярным операциям, приходят на устройства", async () => {
+    const clock = testClock("2026-09-28T12:00:00+03:00")
+    server = await inProcessServer(clock)
+    const phone = await signedInDevice(clock)
+    const mac = await signedInDevice(clock)
+    const created = await phone.ledger.addRecurring({
+      kind: "expense",
+      description: "Спортзал",
+      amount: 300000,
+      categoryId: "health",
+      dayOfMonth: 28
+    })
+    expect(created.ok).toBe(true)
+    await phone.sync.syncNow()
+    // сегодня 28-е: операция создана сервером в том же обмене
+    expect(phone.ledger.days()[0]!.items).toMatchObject([{ description: "Спортзал", date: "2026-09-28" }])
+    expect(phone.ledger.dashboard({ mode: "month", offset: 0 }).upcoming.items).toEqual([])
+
+    await mac.sync.syncNow()
+    expect(mac.ledger.days()[0]!.items).toMatchObject([{ description: "Спортзал", recurringId: created.ok && created.id }])
+  })
 })

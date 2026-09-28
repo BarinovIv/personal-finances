@@ -2,7 +2,7 @@ import { formatMoney } from "@fin/domain"
 import { dayMonth, type Dashboard, type DashboardCategory, type Ledger, type PeriodMode } from "@fin/ledger"
 import { useState } from "preact/hooks"
 import { signedAmount } from "../components/OperationRow"
-import { BackIcon, ForwardIcon } from "../icons"
+import { BackIcon, ForwardIcon, RepeatIcon } from "../icons"
 import { useLedgerVersion } from "../state"
 
 const MUTED_SECTOR = "#E4E0D8"
@@ -134,6 +134,27 @@ const CategoryList = (props: { d: Dashboard; selected: string | null; onSelect: 
   )
 }
 
+const UpcomingBlock = ({ d, today }: { d: Dashboard; today: string }) => {
+  if (!d.isCurrent || d.upcoming.items.length === 0) return null
+  return (
+    <section class="upcoming">
+      <div class="upcoming-head">
+        <h2>Предстоящие списания</h2>
+        <span class="num upcoming-total">{formatMoney(d.upcoming.total)}</span>
+      </div>
+      {d.upcoming.items.map((u) => (
+        <div class="upcoming-row" key={`${u.templateId}:${u.date}`}>
+          <RepeatIcon />
+          <span class="grow-text">
+            {u.description} · {dayMonth(u.date, today)}
+          </span>
+          <span class="num">{formatMoney(u.amount)}</span>
+        </div>
+      ))}
+    </section>
+  )
+}
+
 const Trend = ({ d }: { d: Dashboard }) => {
   const max = Math.max(1, ...d.trend.map((t) => t.amount))
   return (
@@ -202,6 +223,7 @@ export const DashboardScreen = ({ ledger }: { ledger: Ledger }) => {
         </div>
         <Summary d={d} />
         <Donut d={d} selected={selected} onSelect={select} />
+        <UpcomingBlock d={d} today={ledger.today()} />
         <CategoryList d={d} selected={selected} onSelect={select} today={ledger.today()} />
         <Trend d={d} />
       </div>

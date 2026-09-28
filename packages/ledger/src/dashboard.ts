@@ -11,6 +11,7 @@ import {
   type PeriodMode
 } from "./periods"
 import type { RecordOf } from "./records"
+import { upcomingIn, type Upcoming } from "./recurring"
 import type { OperationView } from "./views"
 
 export interface DashboardQuery {
@@ -68,6 +69,8 @@ export interface Dashboard {
   readonly comparison: Comparison
   /** Шесть периодов, последний — выбранный. */
   readonly trend: ReadonlyArray<TrendBar>
+  /** Регулярные расходы, которые ещё появятся до конца текущего периода; для других периодов пусто. */
+  readonly upcoming: Upcoming
 }
 
 const TREND_LENGTH = 6
@@ -175,6 +178,7 @@ export const buildDashboard = (ctx: LedgerContext, query: DashboardQuery): Dashb
       label: rangeLabel(mode, previousRange, !isCurrent),
       change: before > 0 ? Math.round(((current - before) / before) * 100) : null
     },
-    trend
+    trend,
+    upcoming: upcomingIn(ctx, period)
   }
 }

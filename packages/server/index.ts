@@ -3,3 +3,4 @@ export { BLOCK_DURATION, MAX_FAILURES, SESSION_COOKIE, SESSION_TTL } from "./src
 export { AppConfig, appConfigFromEnv, appConfigLayer, type AppConfigShape } from "./src/config"
 export { Db, dbFile, dbMemory, type DbShape } from "./src/db"
 export { ServerLive } from "./src/main"
+export { generateRecurring } from "./src/recurring"

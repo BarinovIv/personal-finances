@@ -1,4 +1,4 @@
-import { Effect, Layer, Option, type Scope } from "effect"
+import { Effect, Exit, Layer, Option, Scope } from "effect"
 import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
@@ -89,3 +89,17 @@ export const testServer = (config: Partial<AppConfigShape> = {}): Effect.Effect<
     const handler = yield* makeWebHandler.pipe(Effect.provide(context))
     return makeClient(handler, IPHONE_UA)
   })
+
+/**
+ * Сервер, который можно останавливать и запускать заново на той же базе.
+ * `start` возвращает клиента и функцию остановки.
+ */
+export const restartableServer = Effect.gen(function* () {
+  const context = yield* Layer.build(Layer.merge(appConfigLayer(defaultConfig), dbMemory))
+  const start = Effect.gen(function* () {
+    const scope = yield* Scope.make()
+    const handler = yield* makeWebHandler.pipe(Effect.provide(context), Scope.extend(scope))
+    return { client: makeClient(handler, IPHONE_UA), stop: Scope.close(scope, Exit.void) }
+  })
+  return { start }
+})

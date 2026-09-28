@@ -5,6 +5,7 @@ import { SyncBadge } from "../components/SyncBadge"
 import { lastActive } from "../format"
 import { useLedgerVersion } from "../state"
 import { CategoriesSection } from "./Categories"
+import { RecurringSection } from "./Recurring"
 
 const Paydays = ({ ledger }: { ledger: Ledger }) => {
   const current = ledger.settings().paydays.join(", ")
@@ -107,6 +108,7 @@ export const SettingsScreen = (props: { ledger: Ledger; sync: Sync; auth: AuthAp
         <SyncBadge sync={props.sync} />
       </div>
       <Paydays ledger={props.ledger} />
+      <RecurringSection ledger={props.ledger} />
       <CategoriesSection ledger={props.ledger} />
       <Devices auth={props.auth} onSignedOut={props.onSignedOut} />
     </div>

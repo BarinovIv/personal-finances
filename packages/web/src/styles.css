@@ -1071,3 +1071,57 @@ select.text-input {
   opacity: 0.5;
   cursor: default;
 }
+
+/* Регулярные операции */
+.upcoming {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+
+.upcoming-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.upcoming-total {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.upcoming-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #4a4742;
+}
+
+.row.inactive .row-title,
+.row.inactive .op-amount {
+  color: var(--faint);
+}
+
+.row-title svg {
+  vertical-align: -2px;
+}
+
+.grow-field {
+  flex: 1;
+  min-width: 0;
+}
+
+.day-field {
+  width: 88px;
+  flex-shrink: 0;
+}
+
+.field > span {
+  font-size: 13px;
+  color: var(--muted);
+}

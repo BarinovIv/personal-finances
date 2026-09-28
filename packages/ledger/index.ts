@@ -14,6 +14,14 @@ export type {
 } from "./src/operations"
 export { dayLabel, dayMonth } from "./src/format"
 export { indexedDbStore } from "./src/indexeddb"
+export type {
+  RecurringInput,
+  RecurringProblem,
+  RecurringResult,
+  RecurringView,
+  Upcoming,
+  UpcomingItem
+} from "./src/recurring"
 export type { Settings } from "./src/settings"
 export { memoryStore, type LedgerStore, type StoreChange, type StoredState } from "./src/store"
 export type { CategoryView, DayGroup, OperationView } from "./src/views"
