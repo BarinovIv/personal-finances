@@ -3,6 +3,8 @@ import type { AuthApi, SessionInfo, Sync } from "@fin/sync"
 import { useEffect, useState } from "preact/hooks"
 import { SyncBadge } from "../components/SyncBadge"
 import { lastActive } from "../format"
+import { useLedgerVersion } from "../state"
+import { CategoriesSection } from "./Categories"
 
 const Paydays = ({ ledger }: { ledger: Ledger }) => {
   const current = ledger.settings().paydays.join(", ")
@@ -95,7 +97,9 @@ const Devices = ({ auth, onSignedOut }: { auth: AuthApi; onSignedOut: () => void
   )
 }
 
-export const SettingsScreen = (props: { ledger: Ledger; sync: Sync; auth: AuthApi; onSignedOut: () => void }) => (
+export const SettingsScreen = (props: { ledger: Ledger; sync: Sync; auth: AuthApi; onSignedOut: () => void }) => {
+  useLedgerVersion(props.ledger)
+  return (
   <div class="screen">
     <div class="page">
       <div class="page-head">
@@ -103,7 +107,9 @@ export const SettingsScreen = (props: { ledger: Ledger; sync: Sync; auth: AuthAp
         <SyncBadge sync={props.sync} />
       </div>
       <Paydays ledger={props.ledger} />
+      <CategoriesSection ledger={props.ledger} />
       <Devices auth={props.auth} onSignedOut={props.onSignedOut} />
     </div>
   </div>
-)
+  )
+}

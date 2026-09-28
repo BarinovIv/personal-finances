@@ -1043,3 +1043,31 @@ a {
 .inline-form .secondary-button {
   height: 52px;
 }
+
+.subhead {
+  margin: 6px 2px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.row.editing {
+  align-items: stretch;
+  padding: 12px 14px;
+}
+
+.stack {
+  gap: 10px;
+}
+
+select.text-input {
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.secondary-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
