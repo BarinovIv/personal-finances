@@ -1,0 +1,14 @@
+# Amvera, тариф Starter, один экземпляр (ADR-0003).
+# Пароль задаётся переменной APP_PASSWORD в настройках приложения Amvera (секрет).
+meta:
+  environment: docker
+  toolchain:
+    name: docker
+
+build:
+  dockerfile: Dockerfile
+
+run:
+  containerPort: 8080
+  # SQLite лежит на постоянном диске и переживает передеплой (DB_PATH=/data/finances.sqlite)
+  persistenceMount: /data
