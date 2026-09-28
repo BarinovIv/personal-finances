@@ -1,0 +1,61 @@
+/// <reference lib="webworker" />
+/**
+ * Service worker: оболочка приложения из кэша, поэтому холодный запуск работает без сети.
+ * Версия и список файлов подставляются при сборке. Новая версия ставится в фоне, старый кэш
+ * удаляется при активации — со следующего запуска приложение открывается уже новым.
+ */
+declare const __VERSION__: string
+declare const __PRECACHE__: ReadonlyArray<string>
+
+const sw = self as unknown as ServiceWorkerGlobalScope
+
+const SHELL = `shell-${__VERSION__}`
+const FONTS = "fonts-v1"
+
+sw.addEventListener("install", (event: ExtendableEvent) => {
+  event.waitUntil(
+    caches
+      .open(SHELL)
+      .then((cache) => cache.addAll(__PRECACHE__.map((url) => new Request(url, { cache: "reload" }))))
+      .then(() => sw.skipWaiting())
+  )
+})
+
+sw.addEventListener("activate", (event: ExtendableEvent) => {
+  event.waitUntil(
+    caches
+      .keys()
+      .then((keys) => Promise.all(keys.filter((k) => k !== SHELL && k !== FONTS).map((k) => caches.delete(k))))
+      .then(() => sw.clients.claim())
+  )
+})
+
+const cacheFirst = async (cacheName: string, request: Request) => {
+  const cache = await caches.open(cacheName)
+  const hit = await cache.match(request)
+  if (hit) return hit
+  const response = await fetch(request)
+  if (response.ok || response.type === "opaque") void cache.put(request, response.clone())
+  return response
+}
+
+sw.addEventListener("fetch", (event: FetchEvent) => {
+  const { request } = event
+  if (request.method !== "GET") return
+  const url = new URL(request.url)
+
+  if (url.hostname === "fonts.googleapis.com" || url.hostname === "fonts.gstatic.com") {
+    event.respondWith(cacheFirst(FONTS, request))
+    return
+  }
+  if (url.origin !== sw.location.origin || url.pathname.startsWith("/api/")) return
+
+  // экраны приложения — всегда оболочка из кэша
+  if (request.mode === "navigate") {
+    event.respondWith(
+      caches.open(SHELL).then(async (cache) => (await cache.match("/index.html")) ?? fetch(request))
+    )
+    return
+  }
+  event.respondWith(cacheFirst(SHELL, request))
+})

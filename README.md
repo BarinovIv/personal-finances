@@ -21,7 +21,10 @@ npm run boundaries # dependency-cruiser: границы пакетов
 npm run build      # сборка PWA в packages/web/dist
 npm run serve      # только сервер (без пересборки PWA)
 npm run dev -w @fin/web  # vite с проксированием /api на сервер
+npm run icons -w @fin/web # перерисовать иконки PWA
 ```
+
+PWA: манифест и иконки в `packages/web/public`, service worker — `packages/web/src/sw.ts`. Сборка вписывает в него список файлов оболочки и версию; оболочка открывается из кэша без сети, новая версия ставится в фоне и открывается со следующего запуска.
 
 ## Переменные окружения сервера
 

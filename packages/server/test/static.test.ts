@@ -6,7 +6,8 @@ describe("статика PWA", () => {
   const staticDir = staticFixture({
     "index.html": "<!doctype html><title>Учёт</title><div id=app></div>",
     "assets/app-1.js": "console.log(1)",
-    "manifest.webmanifest": "{}"
+    "manifest.webmanifest": "{}",
+    "sw.js": "self.addEventListener('fetch', () => {})"
   })
 
   it.scoped("экран приложения отдаёт index.html", () =>
@@ -29,6 +30,9 @@ describe("статика PWA", () => {
       expect(js.headers.get("cache-control")).toContain("immutable")
       const manifest = yield* server.get("/manifest.webmanifest")
       expect(manifest.headers.get("content-type")).toContain("manifest+json")
+      // service worker проверяется на обновление при каждом запуске
+      const sw = yield* server.get("/sw.js")
+      expect(sw.headers.get("cache-control")).toBe("no-cache")
     }))
 
   it.scoped("нет файла или выход за папку — 404", () =>
