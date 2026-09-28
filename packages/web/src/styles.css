@@ -328,3 +328,137 @@ a {
   color: var(--muted);
   font-size: 15px;
 }
+
+/* Экран входа */
+.login {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 14px;
+  padding: 24px 20px calc(24px + env(safe-area-inset-bottom));
+}
+
+.login h1 {
+  margin: 0 0 6px;
+  font-size: 28px;
+}
+
+.text-input {
+  height: 52px;
+  padding: 0 16px;
+  font-size: 18px;
+  border: 1px solid var(--chip-line);
+  border-radius: 14px;
+  background: var(--surface);
+  width: 100%;
+}
+
+.primary-button {
+  height: 52px;
+  border-radius: 14px;
+  border: 0;
+  background: var(--ink);
+  color: #fff;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.primary-button:disabled {
+  background: var(--disabled);
+}
+
+.secondary-button {
+  height: 44px;
+  padding: 0 14px;
+  border-radius: 12px;
+  border: 1px solid var(--chip-line);
+  background: var(--surface);
+  font-size: 15px;
+}
+
+.danger-button {
+  color: var(--danger);
+}
+
+.text-button {
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: 15px;
+  padding: 8px 4px;
+  min-height: 44px;
+}
+
+/* Настройки */
+.page {
+  padding: calc(16px + env(safe-area-inset-top)) 16px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.page h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.section h2 {
+  margin: 4px 2px 0;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.section-note {
+  font-size: 13px;
+  color: var(--muted);
+  margin: 0 2px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 8px 14px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.row:first-child {
+  border-top-color: transparent;
+}
+
+.row-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.row-title {
+  font-size: 16px;
+}
+
+.row-sub {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.sync-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.sync-status.pending {
+  color: #9a7417;
+}

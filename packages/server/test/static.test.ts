@@ -9,7 +9,7 @@ describe("статика PWA", () => {
     "manifest.webmanifest": "{}"
   })
 
-  it.effect("экран приложения отдаёт index.html", () =>
+  it.scoped("экран приложения отдаёт index.html", () =>
     Effect.gen(function* () {
       const server = yield* testServer({ staticDir })
       for (const path of ["/", "/dashboard"]) {
@@ -20,7 +20,7 @@ describe("статика PWA", () => {
       }
     }))
 
-  it.effect("файлы сборки отдаются с типом и кэшем", () =>
+  it.scoped("файлы сборки отдаются с типом и кэшем", () =>
     Effect.gen(function* () {
       const server = yield* testServer({ staticDir })
       const js = yield* server.get("/assets/app-1.js")
@@ -31,7 +31,7 @@ describe("статика PWA", () => {
       expect(manifest.headers.get("content-type")).toContain("manifest+json")
     }))
 
-  it.effect("нет файла или выход за папку — 404", () =>
+  it.scoped("нет файла или выход за папку — 404", () =>
     Effect.gen(function* () {
       const server = yield* testServer({ staticDir })
       expect((yield* server.get("/assets/nope.js")).status).toBe(404)
@@ -39,7 +39,7 @@ describe("статика PWA", () => {
       expect((yield* server.get("/api/nope")).status).toBe(404)
     }))
 
-  it.effect("health", () =>
+  it.scoped("health", () =>
     Effect.gen(function* () {
       const server = yield* testServer({ staticDir })
       const res = yield* server.get("/api/health")
