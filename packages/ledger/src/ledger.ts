@@ -14,7 +14,17 @@ import { exportCsv } from "./csv"
 import { randomId } from "./ids"
 import { buildDashboard, type Dashboard, type DashboardQuery } from "./dashboard"
 import { listDays } from "./days"
-import { previewEntry, submitEntry, type EntryChoice, type EntryPreview, type SubmitResult } from "./entry"
+import {
+  previewEntries,
+  previewEntry,
+  submitEntries,
+  submitEntry,
+  type EntriesChoice,
+  type EntryChoice,
+  type EntryPreview,
+  type SubmitEntriesResult,
+  type SubmitResult
+} from "./entry"
 import {
   addRefund,
   deleteOperation,
@@ -89,6 +99,10 @@ export interface Ledger {
   preview(line: string, choice?: EntryChoice): EntryPreview
   /** Сохранить строку ввода как операцию. */
   submit(line: string, choice?: EntryChoice): Promise<SubmitResult>
+  /** Строка ввода с одной или несколькими операциями: «шаурма 340 такси 500». */
+  previewEntries(line: string, choice?: EntriesChoice): ReadonlyArray<EntryPreview>
+  /** Сохранить все операции строки ввода — вместе или ни одной. */
+  submitEntries(line: string, choice?: EntriesChoice): Promise<SubmitEntriesResult>
   /** Операции по дням, сначала новые. */
   days(): ReadonlyArray<DayGroup>
   /** Поиск по ленте: подстрока в описании или сумме, при необходимости — только в выбранных категориях. */
@@ -151,6 +165,8 @@ export const openLedger = async (options: LedgerOptions): Promise<Ledger> => {
     deleteCategory: (id, options) => deleteCategory(ctx, id, options),
     preview: (line, choice) => previewEntry(ctx, line, choice),
     submit: (line, choice) => submitEntry(ctx, line, choice),
+    previewEntries: (line, choice) => previewEntries(ctx, line, choice),
+    submitEntries: (line, choice) => submitEntries(ctx, line, choice),
     days: () => listDays(ctx),
     search: (query, categoryIds) => searchOperations(ctx, query, categoryIds),
     operation: (id) => {

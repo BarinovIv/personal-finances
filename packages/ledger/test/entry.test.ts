@@ -115,3 +115,42 @@ describe("ввод операции строкой", () => {
     expect(again.pendingChanges()).toHaveLength(2)
   })
 })
+
+describe("несколько операций одной строкой", () => {
+  it("предпросмотр показывает каждую операцию со своей категорией", async () => {
+    const { ledger } = await makeLedger()
+    expect(
+      ledger.previewEntries("шаурма 340 абвгд 400 +подработка 5000", { categoryIds: [null, categoryId(ledger, "Кафе")] })
+    ).toMatchObject([
+      { kind: "expense", description: "шаурма", amount: 34000, categorySource: "dictionary", problems: [] },
+      { kind: "expense", description: "абвгд", amount: 40000, categoryId: categoryId(ledger, "Кафе"), problems: [] },
+      { kind: "income", description: "подработка", amount: 500000, categoryId: categoryId(ledger, "Подработка") }
+    ])
+  })
+
+  it("сохраняются все вместе, в ленте — в порядке строки, новые сверху", async () => {
+    const { ledger } = await makeLedger()
+    const result = await ledger.submitEntries("вчера шаурма 340 такси 500", { categoryIds: [] })
+    expect(result).toMatchObject({ ok: true, operations: [{ description: "шаурма" }, { description: "такси" }] })
+    expect(ledger.days().map((d) => [d.label, d.expenseTotal, d.items.map((o) => o.description)])).toEqual([
+      ["Вчера", 84000, ["такси", "шаурма"]]
+    ])
+  })
+
+  it("выбранная дата — для всех операций строки", async () => {
+    const { ledger } = await makeLedger()
+    await ledger.submitEntries("шаурма 340 вчера такси 500", { date: "2026-09-20" })
+    expect(ledger.days().map((d) => [d.date, d.items.length])).toEqual([["2026-09-20", 2]])
+  })
+
+  it("если хоть одна не готова, не сохраняется ни одна, и понятно какая", async () => {
+    const { ledger } = await makeLedger()
+    expect(await ledger.submitEntries("шаурма 340 абвгд 400 такси 500")).toEqual({
+      ok: false,
+      index: 1,
+      problems: ["no-category"]
+    })
+    expect(await ledger.submitEntries("шаурма 340 такси")).toEqual({ ok: false, index: 1, problems: ["no-amount"] })
+    expect(ledger.days()).toEqual([])
+  })
+})

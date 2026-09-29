@@ -34,6 +34,59 @@ export const parseEntryLine = (line: string): ParsedEntryLine => {
   return { kind, amount: amount?.kopecks ?? null, description, dateShift, problems }
 }
 
+/**
+ * Строка с несколькими операциями: «шаурма 340 шашлык 400 такси 500» или через запятую.
+ * Операция кончается на сумме, за которой идёт слово, поэтому «2 кофе 500» и «футболка 1 500» — одна операция.
+ * Слово даты в начале строки относится ко всем операциям, у которых нет своего.
+ */
+export const parseEntryLines = (line: string): ReadonlyArray<ParsedEntryLine> => {
+  const groups = line
+    .split(SEPARATOR)
+    .flatMap((chunk) => splitAfterAmounts(chunk.split(/\s+/).filter(Boolean)))
+  if (groups.length <= 1) return [parseEntryLine(groups[0]?.join(" ") ?? line)]
+
+  const lead = line.trim().replace(/^\+\s*/, "").split(/\s+/)[0]!.toLowerCase()
+  const shared = DATE_WORDS.get(lead)
+  return groups.map((tokens) => {
+    const parsed = parseEntryLine(tokens.join(" "))
+    return shared !== undefined && !tokens.some(isDateWord) ? { ...parsed, dateShift: shared } : parsed
+  })
+}
+
+/** Явный разделитель операций; запятая перед цифрой — это копейки («99,90»). */
+const SEPARATOR = /[;\n]|,(?!\d)/
+
+const splitAfterAmounts = (tokens: ReadonlyArray<string>): Array<Array<string>> => {
+  const groups: Array<Array<string>> = []
+  let current: Array<string> = []
+  tokens.forEach((token, i) => {
+    current.push(token)
+    if (endsEntry(current, tokens[i + 1], tokens[i + 2])) {
+      groups.push(current)
+      current = []
+    }
+  })
+  if (current.length > 0) groups.push(current)
+  return groups
+}
+
+const endsEntry = (current: ReadonlyArray<string>, next: string | undefined, afterNext: string | undefined) => {
+  if (next === undefined || !current.some(isWord)) return false
+  const last = current.at(-1)!
+  const onAmount = isAmount(last) || (CURRENCY.test(last) && isAmount(current.at(-2) ?? ""))
+  if (!onAmount) return false
+  // «такси 450 вчера» — дата этой же операции, «такси 450 вчера кино 800» — уже следующей
+  if (isDateWord(next)) return afterNext !== undefined && isWord(afterNext)
+  return next.startsWith("+") || isWord(next)
+}
+
+const isAmount = (token: string) => parseAmountToken(token) !== null
+
+const isDateWord = (token: string) => DATE_WORDS.has(token.toLowerCase())
+
+/** Слово описания: с буквами, но не сумма («2к»), не валюта и не дата. */
+const isWord = (token: string) => /\p{L}/u.test(token) && !isAmount(token) && !CURRENCY.test(token) && !isDateWord(token)
+
 const DATE_WORDS = new Map([["сегодня", 0], ["вчера", -1], ["позавчера", -2]])
 
 const CURRENCY = /^(₽|р|р\.|руб|руб\.|рублей|рубля)$/i

@@ -1170,6 +1170,22 @@ select.text-input {
   color: var(--accent);
 }
 
+/* Несколько операций в одной строке: список распознанного, под ним общая дата и итог */
+.recognized-many {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: fin-rise 0.45s var(--spring-smooth);
+}
+
+.recognized-many .card-list > .recognized-row {
+  --separator-inset: 60px;
+}
+
+.recognized-row .missing {
+  color: var(--danger);
+}
+
 .flash {
   display: flex;
   align-items: center;

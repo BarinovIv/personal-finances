@@ -1,5 +1,12 @@
 import { formatMoney } from "@fin/domain"
-import { dayLabel, type EntryChoice, type EntryPreviewProblem, type Ledger, type OperationView } from "@fin/ledger"
+import {
+  dayLabel,
+  type EntriesChoice,
+  type EntryPreview,
+  type EntryPreviewProblem,
+  type Ledger,
+  type OperationView
+} from "@fin/ledger"
 import { memo } from "preact/compat"
 import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks"
 import type { Sync } from "@fin/sync"
@@ -169,51 +176,87 @@ const SpentHero = memo(({ ledger }: { ledger: Ledger }) => {
 const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) => {
   useLedgerVersion(ledger)
   const [text, setText] = useState("")
-  const [choice, setChoice] = useState<EntryChoice>({})
-  const [pickerOpen, setPickerOpen] = useState(false)
+  const [choice, setChoice] = useState<EntriesChoice>({})
+  // для какой операции строки открыт выбор категории
+  const [pickerFor, setPickerFor] = useState<number | null>(null)
   // шторка выбора сама всплывает, только когда строка дописана и набор затих
   const [autoPick, setAutoPick] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [flash, setFlash] = useState("")
 
-  const preview = ledger.preview(text, choice)
+  const previews = ledger.previewEntries(text, choice)
+  const first = previews[0]!
+  const many = previews.length > 1
   const has = text.trim() !== ""
-  const needPick = has && preview.description !== "" && preview.categoryId === null
-  const canAdd = has && preview.problems.length === 0
-  const category = preview.categoryId
-    ? ledger.categories(preview.kind).find((c) => c.id === preview.categoryId)
-    : undefined
+  const needsPick = (p: EntryPreview) => p.description !== "" && p.categoryId === null
+  const canAdd = has && previews.every((p) => p.problems.length === 0)
+  const categoryOf = (p: EntryPreview) =>
+    p.categoryId ? ledger.categories(p.kind).find((c) => c.id === p.categoryId) : undefined
   const today = ledger.today()
-  const awaitsPick = needPick && !preview.problems.includes("no-amount")
+  const awaiting = previews.findIndex((p) => needsPick(p) && !p.problems.includes("no-amount"))
+  const picking = !has ? null : (pickerFor ?? (autoPick && awaiting >= 0 ? awaiting : null))
+  const picked = picking === null ? undefined : previews[picking]
 
   useEffect(() => {
     setAutoPick(false)
-    if (!awaitsPick) return
+    if (awaiting < 0) return
     const timer = window.setTimeout(() => setAutoPick(true), AUTO_PICK_DELAY_MS)
     return () => window.clearTimeout(timer)
-  }, [text, awaitsPick])
+  }, [text, awaiting])
 
   const reset = () => {
     setText("")
     setChoice({})
-    setPickerOpen(false)
+    setPickerFor(null)
+    setError(null)
+  }
+
+  const pick = (index: number, categoryId: string) => {
+    const categoryIds = previews.map((_, i) => (i === index ? categoryId : (choice.categoryIds?.[i] ?? null)))
+    setChoice({ ...choice, categoryIds })
     setError(null)
   }
 
   const add = async () => {
-    const result = await ledger.submit(text, choice)
+    const result = await ledger.submitEntries(text, choice)
     if (!result.ok) {
-      const first = result.problems[0]!
+      const problem = result.problems[0]!
       // без категории открывается выбор — он сам и есть объяснение
-      if (first === "no-category") setPickerOpen(true)
-      else setError(problemText[first])
+      if (problem === "no-category") setPickerFor(result.index)
+      else setError(many ? `«${previews[result.index]!.description || "…"}»: ${problemText[problem]}` : problemText[problem])
       return
     }
-    const op = result.operation
-    const taught = preview.categorySource === "manual"
-    setFlash(taught ? `Запомнил: «${op.description}» → ${op.category.name}` : `Добавлено: ${op.description} · ${op.category.name}`)
+    const ops = result.operations
+    if (ops.length > 1) {
+      const total = ops.reduce((sum, op) => sum + (op.kind === "expense" ? op.amount : 0), 0)
+      const count = `${ops.length} ${plural(ops.length, "операция", "операции", "операций")}`
+      setFlash(total > 0 ? `Добавлено: ${count} · ${formatMoney(total, { sign: "−" })}` : `Добавлено: ${count}`)
+    } else {
+      const op = ops[0]!
+      const taught = first.categorySource === "manual"
+      setFlash(taught ? `Запомнил: «${op.description}» → ${op.category.name}` : `Добавлено: ${op.description} · ${op.category.name}`)
+    }
     reset()
   }
+
+  const signed = (p: EntryPreview) => formatMoney(p.amount!, { sign: p.kind === "income" ? "+" : "−" })
+  const sameDate = previews.every((p) => p.date === first.date)
+  const dateChip = (
+    <label class="chip">
+      <span>{sameDate ? dayLabel(first.date, today) : "Разные дни"}</span>
+      <input
+        type="date"
+        aria-label={many ? "Дата всех операций" : "Дата операции"}
+        value={first.date}
+        max={today}
+        onChange={(e) => {
+          const date = e.currentTarget.value
+          if (date) setChoice({ ...choice, date })
+        }}
+      />
+    </label>
+  )
+  const expenses = previews.reduce((sum, p) => sum + (p.kind === "expense" ? (p.amount ?? 0) : 0), 0)
 
   return (
     <div class={`composer${reveal ? " reveal" : ""}`}>
@@ -235,7 +278,7 @@ const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) 
             setFlash("")
             if (!value.trim()) {
               setChoice({})
-              setPickerOpen(false)
+              setPickerFor(null)
             }
           }}
           onKeyDown={(e) => {
@@ -251,59 +294,69 @@ const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) 
           </button>
         )}
       </div>
-      {has ? (
+      {has && many ? (
+        <div class="recognized-many">
+          <div class="card-list">
+            {previews.map((p, i) => {
+              const category = categoryOf(p)
+              return (
+                <button type="button" class="row row-button recognized-row" key={i} onClick={() => setPickerFor(i)}>
+                  <CategoryBadge category={category ?? { color: "gray", icon: "dots", name: "" }} size={32} />
+                  <span class="row-main">
+                    <span class="row-title">{p.description || "что это?"}</span>
+                    <span class="row-sub">
+                      {category ? category.name : <span class="missing">Категория?</span>}
+                      {!sameDate && ` · ${dayLabel(p.date, today)}`}
+                    </span>
+                  </span>
+                  <span class={`op-amount num ${p.kind}`}>{p.amount ? signed(p) : "сумма?"}</span>
+                </button>
+              )
+            })}
+          </div>
+          <div class="recognized">
+            {dateChip}
+            <span class="amount-preview num">{expenses > 0 ? formatMoney(expenses, { sign: "−" }) : ""}</span>
+          </div>
+        </div>
+      ) : has ? (
         <div class="recognized">
-          <button type="button" class="chip" onClick={() => setPickerOpen(!pickerOpen)}>
-            <CategoryBadge category={category ?? { color: "gray", icon: "dots", name: "" }} size={22} />
-            <span>{category?.name ?? "Категория?"}</span>
+          <button type="button" class="chip" onClick={() => setPickerFor(pickerFor === null ? 0 : null)}>
+            <CategoryBadge category={categoryOf(first) ?? { color: "gray", icon: "dots", name: "" }} size={22} />
+            <span>{categoryOf(first)?.name ?? "Категория?"}</span>
           </button>
-          <label class="chip">
-            <span>{dayLabel(preview.date, today)}</span>
-            <input
-              type="date"
-              aria-label="Дата операции"
-              value={preview.date}
-              max={today}
-              onChange={(e) => {
-                const date = e.currentTarget.value
-                if (date) setChoice({ ...choice, date })
-              }}
-            />
-          </label>
-          <span class={`amount-preview num ${preview.kind}`}>
-            {preview.amount ? formatMoney(preview.amount, { sign: preview.kind === "income" ? "+" : "−" }) : "сумма?"}
-          </span>
+          {dateChip}
+          <span class={`amount-preview num ${first.kind}`}>{first.amount ? signed(first) : "сумма?"}</span>
         </div>
       ) : (
         !flash && (
           <div class="hint">
-            Например: <b>футболка 1500</b> · <b>+зарплата 95000</b> · <b>вчера такси 450</b> · <b>обед 1.2к</b>
+            Например: <b>футболка 1500</b> · <b>+зарплата 95000</b> · <b>вчера такси 450</b> · <b>шаурма 340 такси 500</b>
           </div>
         )
       )}
-      {has && ((needPick && autoPick) || pickerOpen) && (
-        <Sheet label="Выбор категории" onClose={() => setPickerOpen(false)}>
+      {picking !== null && picked && (
+        <Sheet label="Выбор категории" onClose={() => setPickerFor(null)}>
           {(close) => (
             <div class="picker">
               <div class="sheet-title">
-                {needPick
-                  ? `Куда отнести «${preview.description}»?`
-                  : preview.kind === "income"
+                {needsPick(picked) || many
+                  ? `Куда отнести «${picked.description}»?`
+                  : picked.kind === "income"
                     ? "Категория дохода"
                     : "Категория расхода"}
               </div>
               <CategoryGrid
-                categories={ledger.categories(preview.kind)}
-                selected={preview.categoryId}
+                categories={ledger.categories(picked.kind)}
+                selected={picked.categoryId}
                 onPick={(categoryId) => {
-                  setChoice({ ...choice, categoryId })
-                  setError(null)
+                  pick(picking, categoryId)
                   // держим панель открытой, пока она уезжает — иначе она пропала бы мгновенно
-                  setPickerOpen(true)
+                  setPickerFor(picking)
                   close()
                 }}
               />
-              {needPick && <div class="hint">Выбор запомнится — в следующий раз подставлю сам.</div>}
+              {needsPick(picked) && <div class="hint">Выбор запомнится — в следующий раз подставлю сам.</div>}
             </div>
           )}
         </Sheet>
