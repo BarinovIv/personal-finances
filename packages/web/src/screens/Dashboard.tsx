@@ -166,6 +166,36 @@ const Donut = ({ d, selected }: { d: Dashboard; selected: string | null }) => {
   )
 }
 
+/**
+ * Полоска категории. Без лимита — доля от самой большой категории периода; с лимитом — заполнение лимита
+ * и подпись «из 15 000 ₽», сверх лимита — красным.
+ */
+const CategoryBar = ({ c, max }: { c: DashboardCategory; max: number }) => {
+  if (c.limit === null) {
+    return (
+      <span class="bar-track">
+        <span
+          class="bar-fill"
+          style={{ width: `${Math.max(0, (c.amount / max) * 100).toFixed(1)}%`, background: paletteVar(c.color) }}
+        />
+      </span>
+    )
+  }
+  const over = c.amount > c.limit
+  const filled = Math.min(1, Math.max(0, c.amount / c.limit))
+  return (
+    <span class={`cat-limit-line${over ? " over" : ""}`}>
+      <span class="bar-track">
+        <span
+          class="bar-fill"
+          style={{ width: `${(filled * 100).toFixed(1)}%`, background: over ? "var(--danger)" : paletteVar(c.color) }}
+        />
+      </span>
+      <span class="cat-limit num">из {formatMoney(c.limit)}</span>
+    </span>
+  )
+}
+
 const CategoryList = (props: { d: Dashboard; selected: string | null; onSelect: (id: string) => void; today: string }) => {
   const max = Math.max(1, ...props.d.categories.map((c) => c.amount))
   if (props.d.categories.length === 0) return <div class="empty">За этот период расходов нет</div>
@@ -175,6 +205,7 @@ const CategoryList = (props: { d: Dashboard; selected: string | null; onSelect: 
       <div class="card-list">
         {props.d.categories.map((c: DashboardCategory) => {
           const open = props.selected === c.id
+          const tone = c.amount < 0 ? "negative" : c.limit !== null && c.amount > c.limit ? "over" : ""
           return (
             <div class="cat-block" key={c.id}>
               <button type="button" class="cat-row" aria-expanded={open} onClick={() => props.onSelect(c.id)}>
@@ -182,17 +213,12 @@ const CategoryList = (props: { d: Dashboard; selected: string | null; onSelect: 
                   <CategoryBadge category={c} />
                   <span class="cat-name">{c.name}</span>
                   <span class="cat-share num">{c.share === null ? "" : `${Math.round(c.share * 100)}%`}</span>
-                  <span class={`cat-amount num ${c.amount < 0 ? "negative" : ""}`}>{formatMoney(c.amount)}</span>
+                  <span class={`cat-amount num ${tone}`}>{formatMoney(c.amount)}</span>
                   <span class="chevron" style={{ transform: open ? "rotate(90deg)" : "none" }}>
                     <ForwardIcon size={16} />
                   </span>
                 </span>
-                <span class="bar-track">
-                  <span
-                    class="bar-fill"
-                    style={{ width: `${Math.max(0, (c.amount / max) * 100).toFixed(1)}%`, background: paletteVar(c.color) }}
-                  />
-                </span>
+                <CategoryBar c={c} max={max} />
               </button>
               {open && (
                 <div class="cat-ops">

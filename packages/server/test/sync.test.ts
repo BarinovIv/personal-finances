@@ -70,6 +70,26 @@ describe("синхронизация: сервер", () => {
       expect(newer.json).toEqual({ cursor: 2, changes: [op("a", 300, 70000)], hasMore: false })
     }))
 
+  it.scoped("категории принимаются и с лимитом, и без; лимит — положительная сумма в копейках", () =>
+    Effect.gen(function* () {
+      const server = yield* signedIn
+      const category = (id: string, updatedAt: number, extra: object = {}) => ({
+        collection: "categories",
+        id,
+        updatedAt,
+        deleted: false,
+        data: { kind: "expense", name: "Кафе", color: "orange", icon: "cup", ...extra }
+      })
+      const pushed = yield* sync(server, 0, [category("cafe", 100, { limit: 1500000 }), category("hobby", 100)])
+      expect(pushed.status).toBe(200)
+      expect((yield* sync(server, 0)).json.changes).toEqual([category("cafe", 100, { limit: 1500000 }), category("hobby", 100)])
+      // лимит убрали — поля больше нет
+      expect((yield* sync(server, 2, [category("cafe", 200)])).status).toBe(200)
+      expect((yield* sync(server, 0)).json.changes).toEqual([category("hobby", 100), category("cafe", 200)])
+      expect((yield* sync(server, 3, [category("cafe", 300, { limit: 0 })])).status).toBe(400)
+      expect((yield* sync(server, 3, [category("cafe", 300, { limit: 99.5 })])).status).toBe(400)
+    }))
+
   it.scoped("удаление — тоже правка: старая версия не воскрешает запись", () =>
     Effect.gen(function* () {
       const server = yield* signedIn

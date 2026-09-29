@@ -7,6 +7,8 @@ export interface CategoryView {
   /** Название цвета из палитры (ADR-0004), не hex. */
   readonly color: string
   readonly icon: string
+  /** Лимит в месяц, копейки; у категорий без лимита и у доходов — null. */
+  readonly limit: number | null
 }
 
 export interface OperationView {

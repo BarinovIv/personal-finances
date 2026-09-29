@@ -1,5 +1,10 @@
 export type { CategorySource } from "./src/categorize"
-export type { CategoryProblem, CategoryStyle, DeleteCategoryProblem } from "./src/category-admin"
+export type {
+  CategoryLimitProblem,
+  CategoryProblem,
+  CategoryStyle,
+  DeleteCategoryProblem
+} from "./src/category-admin"
 export { CATEGORY_ICONS } from "./src/icons"
 export { PALETTE_COLORS, type PaletteColor } from "./src/palette"
 export type { Comparison, Dashboard, DashboardCategory, DashboardQuery, TrendBar } from "./src/dashboard"
@@ -22,6 +27,7 @@ export type {
   UpdateResult
 } from "./src/operations"
 export { dayLabel, dayMonth } from "./src/format"
+export type { LimitWarning } from "./src/limits"
 export { indexedDbStore } from "./src/indexeddb"
 export type {
   RecurringInput,

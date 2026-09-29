@@ -7,11 +7,18 @@ import type { CategoryView } from "./views"
 
 export type CategoryProblem = "empty-name" | "duplicate" | "not-found"
 export type DeleteCategoryProblem = "not-found" | "needs-target" | "bad-target" | "last-category"
+export type CategoryLimitProblem = "not-found" | "income" | "bad-limit"
 
 /** Цвет и иконка выбираются пользователем при создании и правке категории. */
 export interface CategoryStyle {
   readonly color?: string
   readonly icon?: string
+}
+
+/** Запись категории из её вида; без лимита поля `limit` нет — как у записей до появления лимитов. */
+const categoryData = (category: CategoryView): CategoryData => {
+  const { kind, name, color, icon, limit } = category
+  return limit === null ? { kind, name, color, icon } : { kind, name, color, icon, limit }
 }
 
 const nameTaken = (ctx: LedgerContext, kind: CategoryKind, name: string, except?: string) =>
@@ -34,7 +41,7 @@ export const addCategory = async (
   const data: CategoryData = { kind, name, color, icon }
   const id = ctx.newId()
   await ctx.records.write([{ collection: "categories", id, data }])
-  return { ok: true, category: { id, kind, name, color, icon } }
+  return { ok: true, category: { id, kind, name, color, icon, limit: null } }
 }
 
 /** Переименование меняет только запись категории: операции ссылаются на неё по id. */
@@ -48,8 +55,7 @@ export const renameCategory = async (
   const name = rawName.trim()
   if (!name) return { ok: false, problem: "empty-name" }
   if (nameTaken(ctx, category.kind, name, id)) return { ok: false, problem: "duplicate" }
-  const data: CategoryData = { kind: category.kind, name, color: category.color, icon: category.icon }
-  await ctx.records.write([{ collection: "categories", id, data }])
+  await ctx.records.write([{ collection: "categories", id, data: categoryData({ ...category, name }) }])
   return { ok: true }
 }
 
@@ -61,13 +67,26 @@ export const setCategoryStyle = async (
 ): Promise<{ ok: true } | { ok: false; problem: "not-found" }> => {
   const category = ctx.categories().get(id)
   if (!category) return { ok: false, problem: "not-found" }
-  const data: CategoryData = {
-    kind: category.kind,
-    name: category.name,
+  const data = categoryData({
+    ...category,
     color: style.color ? normalizePaletteColor(style.color) : category.color,
     icon: style.icon ? normalizeIcon(style.icon, category.kind) : category.icon
-  }
+  })
   await ctx.records.write([{ collection: "categories", id, data }])
+  return { ok: true }
+}
+
+/** Лимит в месяц, копейки; null убирает лимит. Лимит бывает только у категорий расходов. */
+export const setCategoryLimit = async (
+  ctx: LedgerContext,
+  id: string,
+  limit: number | null
+): Promise<{ ok: true } | { ok: false; problem: CategoryLimitProblem }> => {
+  const category = ctx.categories().get(id)
+  if (!category) return { ok: false, problem: "not-found" }
+  if (category.kind !== "expense") return { ok: false, problem: "income" }
+  if (limit !== null && (!Number.isInteger(limit) || limit <= 0)) return { ok: false, problem: "bad-limit" }
+  await ctx.records.write([{ collection: "categories", id, data: categoryData({ ...category, limit }) }])
   return { ok: true }
 }
 
@@ -102,10 +121,9 @@ export const deleteCategory = async (
     if (!options.moveTo) return { ok: false, problem: "needs-target" }
     if (!target || target.kind !== category.kind || target.id === id) return { ok: false, problem: "bad-target" }
   }
-  const data: CategoryData = { kind: category.kind, name: category.name, color: category.color, icon: category.icon }
   await ctx.records.write([
     ...moved.map((m) => ({ ...m, data: { ...(m.data as object), categoryId: options.moveTo! } })),
-    { collection: "categories", id, data, deleted: true }
+    { collection: "categories", id, data: categoryData(category), deleted: true }
   ])
   return { ok: true }
 }

@@ -2,6 +2,7 @@ import { addDays, type IsoDate, type OperationData } from "@fin/domain"
 import { parseEntryLine, parseEntryLines, type EntryProblem, type ParsedEntryLine } from "@fin/entry-line"
 import { suggestCategory, type CategorySource } from "./categorize"
 import type { LedgerContext } from "./context"
+import { limitWarnings, type LimitWarning } from "./limits"
 import { writeUndoable, type Undo } from "./undo"
 import type { OperationView } from "./views"
 
@@ -24,8 +25,14 @@ export interface EntryPreview {
   readonly problems: ReadonlyArray<EntryPreviewProblem>
 }
 
+/** `warnings` — предупреждения о лимитах категорий, которые задела эта операция. */
 export type SubmitResult =
-  | { readonly ok: true; readonly operation: OperationView; readonly undo: Undo }
+  | {
+      readonly ok: true
+      readonly operation: OperationView
+      readonly undo: Undo
+      readonly warnings: ReadonlyArray<LimitWarning>
+    }
   | { readonly ok: false; readonly problems: ReadonlyArray<EntryPreviewProblem> }
 
 /** Выбор вручную для строки с несколькими операциями. */
@@ -37,8 +44,13 @@ export interface EntriesChoice {
 }
 
 export type SubmitEntriesResult =
-  /** `undo` удаляет все операции, сохранённые строкой. */
-  | { readonly ok: true; readonly operations: ReadonlyArray<OperationView>; readonly undo: Undo }
+  /** `undo` удаляет все операции, сохранённые строкой; `warnings` — одно предупреждение о лимите на категорию. */
+  | {
+      readonly ok: true
+      readonly operations: ReadonlyArray<OperationView>
+      readonly undo: Undo
+      readonly warnings: ReadonlyArray<LimitWarning>
+    }
   | { readonly ok: false; readonly index: number; readonly problems: ReadonlyArray<EntryPreviewProblem> }
 
 export const previewEntry = (ctx: LedgerContext, line: string, choice: EntryChoice = {}): EntryPreview =>
@@ -82,7 +94,7 @@ const previewParsed = (ctx: LedgerContext, parsed: ParsedEntryLine, choice: Entr
 export const submitEntry = async (ctx: LedgerContext, line: string, choice?: EntryChoice): Promise<SubmitResult> => {
   const result = await saveAll(ctx, [previewEntry(ctx, line, choice)])
   return result.ok
-    ? { ok: true, operation: result.operations[0]!, undo: result.undo }
+    ? { ok: true, operation: result.operations[0]!, undo: result.undo, warnings: result.warnings }
     : { ok: false, problems: result.problems }
 }
 
@@ -93,6 +105,7 @@ export const submitEntries = (ctx: LedgerContext, line: string, choice?: Entries
 const saveAll = async (ctx: LedgerContext, previews: ReadonlyArray<EntryPreview>): Promise<SubmitEntriesResult> => {
   const index = previews.findIndex((p) => p.problems.length > 0 || p.amount === null || p.categoryId === null)
   if (index >= 0) return { ok: false, index, problems: previews[index]!.problems }
+  const before = ctx.operations()
   let stamp = 0
   const changes = previews.map((p) => {
     // своя отметка у каждой — в ленте операции строки идут в том же порядке, что и в ней
@@ -111,5 +124,10 @@ const saveAll = async (ctx: LedgerContext, previews: ReadonlyArray<EntryPreview>
     return { collection: "operations" as const, id: ctx.newId(), data }
   })
   const undo = await writeUndoable(ctx.records, changes, stamp)
-  return { ok: true, operations: changes.map((c) => ctx.toView(ctx.records.get("operations", c.id)!)), undo }
+  return {
+    ok: true,
+    operations: changes.map((c) => ctx.toView(ctx.records.get("operations", c.id)!)),
+    undo,
+    warnings: limitWarnings(ctx, before, previews.map((p) => p.date))
+  }
 }
