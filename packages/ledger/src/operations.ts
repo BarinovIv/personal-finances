@@ -1,5 +1,6 @@
-import type { IsoDate, OperationData } from "@fin/domain"
+import { isMovement, parentOperation, type IsoDate, type OperationData } from "@fin/domain"
 import type { LedgerContext } from "./context"
+import { movementUpdateProblem } from "./movements"
 import { writeUndoable, type Undo } from "./undo"
 import type { OperationView } from "./views"
 
@@ -9,9 +10,19 @@ export interface OperationPatch {
   readonly description?: string
   readonly categoryId?: string
   readonly date?: IsoDate
+  /** Только у «Одолжил» и «Занял». */
+  readonly person?: string
 }
 
-export type UpdateProblem = "not-found" | "bad-amount" | "no-description" | "bad-category" | "below-refunds"
+export type UpdateProblem =
+  | "not-found"
+  | "bad-amount"
+  | "no-description"
+  | "bad-category"
+  | "below-refunds"
+  /** Сумма долга меньше уже погашенного. */
+  | "below-repayments"
+  | "no-person"
 
 /** `undo` возвращает прежние сумму, описание, категорию и дату — и подстановку по истории, как до правки. */
 export type UpdateResult =
@@ -35,9 +46,19 @@ export const updateOperation = async (ctx: LedgerContext, id: string, patch: Ope
     ...(patch.amount !== undefined ? { amount: patch.amount } : {}),
     ...(patch.description !== undefined ? { description: patch.description.trim() } : {}),
     ...(patch.categoryId !== undefined ? { categoryId: patch.categoryId } : {}),
-    ...(patch.date !== undefined ? { date: patch.date } : {})
+    ...(patch.date !== undefined ? { date: patch.date } : {}),
+    ...(patch.person !== undefined && (current.kind === "lent" || current.kind === "borrowed")
+      ? { person: patch.person.trim() }
+      : {})
   }
   if (!Number.isInteger(next.amount) || next.amount <= 0) return { ok: false, problem: "bad-amount" }
+  if (isMovement(current.kind)) {
+    // у операций вне расходов и доходов описание необязательно, а категории нет
+    const problem = movementUpdateProblem(ctx, id, current, next)
+    if (problem) return { ok: false, problem }
+    const undo = await writeUndoable(ctx.records, [{ collection: "operations", id, data: next }])
+    return { ok: true, undo }
+  }
   if (!next.description) return { ok: false, problem: "no-description" }
   const stamp = ctx.records.stamp()
   // выбор категории — отдельное событие для истории подстановок
@@ -63,16 +84,16 @@ export const updateOperation = async (ctx: LedgerContext, id: string, patch: Ope
 }
 
 /**
- * Удаление — тоже правка: запись помечается удалённой (ADR-0001). Вместе с расходом удаляются его возвраты.
- * `undo` возвращает операцию вместе с возвратами, удалёнными вместе с ней.
+ * Удаление — тоже правка: запись помечается удалённой (ADR-0001). Вместе с расходом удаляются его возвраты,
+ * вместе с долгом — его погашения. `undo` возвращает операцию вместе с удалёнными вместе с ней.
  */
 export const deleteOperation = async (ctx: LedgerContext, id: string): Promise<Undo> => {
   const record = ctx.records.get("operations", id)
   if (!record || record.deleted) return async () => ({ ok: false })
-  const refunds = ctx.records.live("operations").filter((r) => r.data.refundOf === id)
+  const linked = ctx.records.live("operations").filter((r) => parentOperation(r.data) === id)
   return writeUndoable(
     ctx.records,
-    [record, ...refunds].map((r) => ({ collection: "operations" as const, id: r.id, data: r.data, deleted: true }))
+    [record, ...linked].map((r) => ({ collection: "operations" as const, id: r.id, data: r.data, deleted: true }))
   )
 }
 

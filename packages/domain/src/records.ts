@@ -17,7 +17,14 @@ export interface SyncRecord<C extends Collection = Collection, D = unknown> {
 
 export const recordKey = (collection: Collection, id: string) => `${collection}:${id}`
 
-export type OperationKind = "expense" | "income" | "refund"
+/**
+ * Операции вне расходов и доходов: деньги двигаются, но это не расход и не доход.
+ * «Отложено» и «Снято» — на цель и с цели; «Одолжил» и «Занял» — долг человеку и у человека;
+ * «Мне вернули» и «Я вернул» — погашения этих долгов.
+ */
+export type MovementKind = "saved" | "withdrawn" | "lent" | "borrowed" | "repaid-to-me" | "repaid-by-me"
+
+export type OperationKind = "expense" | "income" | "refund" | MovementKind
 
 /** Вид категории и регулярной операции: у расходов и доходов свои наборы категорий. */
 export type CategoryKind = "expense" | "income"
@@ -27,6 +34,7 @@ export interface OperationData {
   /** Сумма в копейках, всегда положительная. */
   readonly amount: number
   readonly description: string
+  /** У операций вне расходов и доходов категории нет — пустая строка. */
   readonly categoryId: string
   readonly date: IsoDate
   /** Когда операция создана, мс. Порядок в списке не меняется от правок. */
@@ -40,6 +48,15 @@ export interface OperationData {
   readonly refundOf: string | null
   /** Для операции, созданной по регулярной операции, — её шаблон. */
   readonly recurringId: string | null
+  /**
+   * Дальше — поля операций вне расходов и доходов. Они необязательны: у записей, созданных до их появления, полей нет.
+   * Для «Отложено» и «Снято» — цель.
+   */
+  readonly goalId?: string
+  /** Для «Одолжил» и «Занял» — человек, свободный текст. */
+  readonly person?: string
+  /** Для погашения («Мне вернули», «Я вернул») — его долг: операция «Одолжил» или «Занял». */
+  readonly repaymentOf?: string
 }
 
 export interface CategoryData {

@@ -1,9 +1,10 @@
-import { formatDecimal, formatMoney, parseMoney } from "@fin/domain"
+import { formatDecimal, formatMoney, isMovement, parseMoney } from "@fin/domain"
 import { dayLabel, type Ledger, type OperationView, type RefundProblem, type RefundsInfo, type UpdateProblem } from "@fin/ledger"
 import { useEffect, useState } from "preact/hooks"
 import { CategoryBadge } from "../components/CategoryBadge"
 import { CategoryGrid } from "../components/CategoryGrid"
 import { Header } from "../components/Header"
+import { kindLabel, OperationBadge, operationTitle } from "../components/OperationBadge"
 import { signedAmount } from "../components/OperationRow"
 import { Sheet } from "../components/Sheet"
 import { SwipeBack } from "../components/SwipeBack"
@@ -16,7 +17,9 @@ const problemText: Record<UpdateProblem, string> = {
   "bad-amount": "Проверьте сумму.",
   "no-description": "Добавьте описание.",
   "bad-category": "Выберите категорию.",
-  "below-refunds": "Сумма меньше уже оформленных возвратов."
+  "below-refunds": "Сумма меньше уже оформленных возвратов.",
+  "below-repayments": "Сумма меньше уже погашенного.",
+  "no-person": "Укажите, кто."
 }
 
 const amountText = (kopecks: number) => formatDecimal(kopecks).replace(/,00$/, "")
@@ -27,7 +30,11 @@ const refundProblemText: Record<RefundProblem, string> = {
   "too-much": "Нельзя вернуть больше, чем потрачено."
 }
 
-const deletedText = (op: OperationView) => (op.kind === "refund" ? `Возврат: ${op.description}` : op.description)
+const deletedText = operationTitle
+
+/** Заголовок экрана операции. */
+const screenTitle = (op: OperationView) =>
+  op.kind === "refund" ? "Возврат" : isMovement(op.kind) ? kindLabel(op.kind) : "Операция"
 
 const RefundsList = ({
   ledger,
@@ -132,7 +139,7 @@ const RefundForm = ({
             </label>
           </div>
           <span class="hint">
-            Можно вернуть часть суммы. Расходы на «{op.category.name}» уменьшатся в периоде даты возврата, в доходы возврат
+            Можно вернуть часть суммы. Расходы на «{op.category?.name}» уменьшатся в периоде даты возврата, в доходы возврат
             не попадёт.
           </span>
           {error && <div class="hint error">{error}</div>}
@@ -182,12 +189,13 @@ const ViewCard = ({ ledger, op, onEdit }: { ledger: Ledger; op: OperationView; o
   const [refundOpen, setRefundOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const isRefund = op.kind === "refund"
+  const movement = isMovement(op.kind)
   const info = op.kind === "expense" ? ledger.refunds(op.id) : undefined
 
   return (
     <>
       <Header
-        title={isRefund ? "Возврат" : "Операция"}
+        title={screenTitle(op)}
         trailing={
           <button type="button" class="glass-button text" onClick={onEdit}>
             Изменить
@@ -196,18 +204,38 @@ const ViewCard = ({ ledger, op, onEdit }: { ledger: Ledger; op: OperationView; o
       />
       <div class="page">
         <section class="op-hero">
-          <CategoryBadge category={op.category} size={64} />
+          <OperationBadge op={op} size={64} />
           <span class={`op-hero-amount num ${op.kind}`}>{signedAmount(op)}</span>
-          <span class="op-hero-desc">{isRefund ? `Возврат: ${op.description}` : op.description}</span>
+          <span class="op-hero-desc">{operationTitle(op)}</span>
         </section>
         <div class="card-list">
-          <div class="row info-row">
-            <span class="row-label">Категория</span>
-            <span class="row-value">
-              <CategoryBadge category={op.category} size={22} />
-              {op.category.name}
-            </span>
-          </div>
+          {op.category && (
+            <div class="row info-row">
+              <span class="row-label">Категория</span>
+              <span class="row-value">
+                <CategoryBadge category={op.category} size={22} />
+                {op.category.name}
+              </span>
+            </div>
+          )}
+          {movement && (
+            <div class="row info-row">
+              <span class="row-label">Вид</span>
+              <span class="row-value">{kindLabel(op.kind)}</span>
+            </div>
+          )}
+          {op.person && (
+            <div class="row info-row">
+              <span class="row-label">Кто</span>
+              <span class="row-value">{op.person}</span>
+            </div>
+          )}
+          {movement && op.description && (
+            <div class="row info-row">
+              <span class="row-label">Описание</span>
+              <span class="row-value">{op.description}</span>
+            </div>
+          )}
           <div class="row info-row">
             <span class="row-label">Дата</span>
             <span class="row-value">{dayLabel(op.date, ledger.today())}</span>
@@ -221,7 +249,17 @@ const ViewCard = ({ ledger, op, onEdit }: { ledger: Ledger; op: OperationView; o
               </span>
             </a>
           )}
+          {op.repaymentOf && (
+            <a class="row row-button info-row" href={`#/op/${op.repaymentOf}`}>
+              <span class="row-label">Долг</span>
+              <span class="row-value">{op.person}</span>
+              <span class="row-chevron">
+                <ForwardIcon size={16} />
+              </span>
+            </a>
+          )}
         </div>
+        {movement && <p class="section-footer">Не расход и не доход: в дашборд и категории не попадает, но меняет свободные деньги.</p>}
         {info && <RefundsList ledger={ledger} info={info} onOpenForm={() => setRefundOpen(true)} />}
         <div class="card-list">
           <button type="button" class="row row-button action-row destructive" onClick={() => setDeleteOpen(true)}>
@@ -239,10 +277,14 @@ const ViewCard = ({ ledger, op, onEdit }: { ledger: Ledger; op: OperationView; o
 const EditForm = ({ ledger, op, onDone }: { ledger: Ledger; op: OperationView; onDone: () => void }) => {
   const [amount, setAmount] = useState(amountText(op.amount))
   const [description, setDescription] = useState(op.description)
-  const [categoryId, setCategoryId] = useState(op.category.id)
+  const [categoryId, setCategoryId] = useState(op.category?.id ?? "")
+  const [person, setPerson] = useState(op.person ?? "")
   const [date, setDate] = useState(op.date)
   const [error, setError] = useState<string | null>(null)
   const isRefund = op.kind === "refund"
+  const movement = isMovement(op.kind)
+  // у долга человек свой, у погашения — человек долга, его здесь не правят
+  const hasPerson = op.kind === "lent" || op.kind === "borrowed"
   const categoryKind = op.kind === "income" ? "income" : "expense"
   const categoryName = () => ledger.categories(categoryKind).find((c) => c.id === categoryId)?.name ?? ""
 
@@ -251,10 +293,14 @@ const EditForm = ({ ledger, op, onDone }: { ledger: Ledger; op: OperationView; o
     if (kopecks === null) return setError(problemText["bad-amount"])
     const result = await ledger.updateOperation(
       op.id,
-      isRefund ? { amount: kopecks, date } : { amount: kopecks, description, categoryId, date }
+      isRefund
+        ? { amount: kopecks, date }
+        : movement
+          ? { amount: kopecks, description, date, ...(hasPerson ? { person } : {}) }
+          : { amount: kopecks, description, categoryId, date }
     )
     if (!result.ok) return setError(problemText[result.problem])
-    const learned = !isRefund && categoryId !== op.category.id
+    const learned = !isRefund && !movement && categoryId !== op.category?.id
     showToast({
       text: learned ? `Сохранено. Запомню: «${description.trim()}» → ${categoryName()}` : "Сохранено",
       action: { label: "Отменить", run: () => void result.undo() }
@@ -265,7 +311,7 @@ const EditForm = ({ ledger, op, onDone }: { ledger: Ledger; op: OperationView; o
   return (
     <>
       <Header
-        title={isRefund ? "Возврат" : "Операция"}
+        title={screenTitle(op)}
         leading={
           <button type="button" class="glass-button" aria-label="Отменить" onClick={onDone}>
             <CloseIcon size={20} />
@@ -293,6 +339,12 @@ const EditForm = ({ ledger, op, onDone }: { ledger: Ledger; op: OperationView; o
           <span class="amount-currency">₽</span>
         </label>
         <div class="card-list">
+          {hasPerson && (
+            <label class="row input-row">
+              <span class="row-label">Кто</span>
+              <input id="op-person" class="row-input" type="text" value={person} onInput={(e) => setPerson(e.currentTarget.value)} />
+            </label>
+          )}
           {!isRefund && (
             <label class="row input-row">
               <span class="row-label">Описание</span>
@@ -301,6 +353,7 @@ const EditForm = ({ ledger, op, onDone }: { ledger: Ledger; op: OperationView; o
                 class="row-input"
                 type="text"
                 value={description}
+                placeholder={movement ? "необязательно" : undefined}
                 onInput={(e) => setDescription(e.currentTarget.value)}
               />
             </label>
@@ -317,11 +370,11 @@ const EditForm = ({ ledger, op, onDone }: { ledger: Ledger; op: OperationView; o
             />
           </label>
         </div>
-        {!isRefund && (
+        {!isRefund && !movement && (
           <section class="section">
             <h2 class="section-header">Категория</h2>
             <CategoryGrid categories={ledger.categories(categoryKind)} selected={categoryId} onPick={setCategoryId} />
-            {categoryId !== op.category.id && (
+            {categoryId !== op.category?.id && (
               <p class="section-footer accent">
                 Запомню: «{description.trim()}» → {categoryName()}. Следующая такая операция попадёт туда же.
               </p>
@@ -330,7 +383,7 @@ const EditForm = ({ ledger, op, onDone }: { ledger: Ledger; op: OperationView; o
         )}
         {isRefund && (
           <p class="section-footer">
-            Возврат по расходу «{op.description}» · {op.category.name}
+            Возврат по расходу «{op.description}» · {op.category?.name}
           </p>
         )}
         {error && <div class="hint error">{error}</div>}

@@ -38,7 +38,7 @@ describe("автокатегоризация", () => {
     await add(ledger, "тишка 10500", { categoryId: categoryId(ledger, "Одежда") })
     expect(ledger.preview("тишка 500")).toMatchObject({ categoryId: categoryId(ledger, "Одежда"), problems: [] })
     const saved = await ledger.submit("тишка 500")
-    expect(saved.ok && saved.operation.category.name).toBe("Одежда")
+    expect(saved.ok && saved.operation.category?.name).toBe("Одежда")
   })
 
   it("история узнаёт формы слова и отдельные слова", async () => {
@@ -81,7 +81,7 @@ describe("автокатегоризация", () => {
   it("подставленную категорию можно сменить", async () => {
     const { ledger } = await makeLedger()
     const op = await add(ledger, "футболка 1500", { categoryId: categoryId(ledger, "Подарки") })
-    expect(op.category.name).toBe("Подарки")
+    expect(op.category?.name).toBe("Подарки")
     expect(ledger.preview("футболка 700").categoryId).toBe(categoryId(ledger, "Подарки"))
   })
 

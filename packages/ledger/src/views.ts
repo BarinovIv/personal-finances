@@ -16,9 +16,15 @@ export interface OperationView {
   readonly amount: number
   readonly description: string
   readonly date: IsoDate
-  /** Для возврата — категория исходного расхода. */
-  readonly category: CategoryView
+  /** Для возврата — категория исходного расхода. У операций вне расходов и доходов категории нет. */
+  readonly category: CategoryView | null
   readonly refundOf: string | null
+  /** Для «Отложено» и «Снято» — цель. */
+  readonly goalId: string | null
+  /** Для «Одолжил» и «Занял» — человек; у погашения — человек его долга. */
+  readonly person: string | null
+  /** Для погашения — долг («Одолжил» или «Занял»). */
+  readonly repaymentOf: string | null
   readonly recurringId: string | null
   readonly createdAt: number
   readonly updatedAt: number

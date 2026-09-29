@@ -1,6 +1,7 @@
 export * from "./src/allowance"
 export * from "./src/dates"
 export * from "./src/money"
+export * from "./src/movements"
 export * from "./src/periods"
 export * from "./src/records"
 export * from "./src/recurring"

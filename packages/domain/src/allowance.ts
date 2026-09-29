@@ -27,15 +27,17 @@ export type DailyAllowance =
     }
 
 /**
- * Свободные деньги периода: доходы − расходы (за вычетом возвратов) − предстоящие списания.
- * Остаток прошлого периода не переносится. Всё, что меняет свободные деньги, учитывается здесь.
+ * Свободные деньги периода: доходы − расходы (за вычетом возвратов) ± операции вне расходов и доходов
+ * − предстоящие списания. Остаток прошлого периода не переносится. Всё, что меняет свободные деньги, учитывается здесь.
  */
-const freeMoney = (totals: PeriodTotals, upcoming: number) => totals.income - totals.expenses - upcoming
+export const freeMoney = (totals: PeriodTotals, upcoming: number): number =>
+  totals.income - totals.expenses + totals.movements - upcoming
 
 /**
  * Можно тратить в день и сегодня осталось; для периода, в котором нет `today`, — null.
  * `operations` — все живые операции (см. `liveOperations`), `upcoming` — сумма предстоящих списаний периода
- * (см. `upcomingCharges`), копейки. Доход и возврат, пришедшие сегодня, сразу увеличивают сумму на день.
+ * (см. `upcomingCharges`), копейки. Доход и возврат, пришедшие сегодня, сразу увеличивают сумму на день; сегодняшние
+ * операции вне расходов и доходов тоже сразу её меняют — это не траты за сегодня.
  */
 export const dailyAllowance = (
   operations: ReadonlyArray<OperationRecord>,
