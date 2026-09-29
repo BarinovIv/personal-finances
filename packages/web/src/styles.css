@@ -290,11 +290,32 @@ a {
   flex-direction: column;
 }
 
-/* Экраны вкладок: мягкое свечение сверху уезжает вместе с содержимым */
+/* Экраны вкладок на ПК шире колонки приложения: свечение не упирается в её края,
+   а содержимое остаётся в колонке */
 .tab-screen {
-  background:
-    radial-gradient(130% 380px at 50% -120px, var(--ambient), transparent 72%) no-repeat local,
-    var(--bg);
+  position: relative;
+  isolation: isolate;
+  margin-inline: calc(50% - 50vw);
+}
+
+.tab-screen > .large-title,
+.tab-screen > .page {
+  max-width: 560px;
+  margin-inline: auto;
+}
+
+/* Мягкое свечение сверху уезжает вместе с содержимым. Слой начинается выше содержимого,
+   чтобы при оттягивании вниз свечение продолжалось, а не обрывалось в фон */
+.tab-screen::before {
+  content: "";
+  position: absolute;
+  top: -400px;
+  left: 0;
+  right: 0;
+  z-index: -1;
+  height: 800px;
+  background: radial-gradient(min(130vw, 820px) 380px at 50% 280px, var(--ambient), transparent 72%);
+  pointer-events: none;
 }
 
 .page {
@@ -404,7 +425,7 @@ a {
   align-items: center;
   gap: 8px;
   min-height: calc(56px + env(safe-area-inset-top));
-  padding: env(safe-area-inset-top) 16px 0;
+  padding: env(safe-area-inset-top) max(16px, calc(50% - 264px)) 0;
 }
 
 /* «Край прокрутки»: содержимое под шапкой размывается и тает, без жёсткой линии */
@@ -2252,7 +2273,19 @@ select.text-input {
   max-width: 440px;
   margin: 0 auto;
   padding: 24px 16px calc(24px + env(safe-area-inset-bottom));
-  background: radial-gradient(120% 420px at 50% -80px, var(--ambient), transparent 70%) no-repeat;
+  position: relative;
+  isolation: isolate;
+}
+
+/* Свечение на всю ширину окна, а не колонки формы */
+.login::before {
+  content: "";
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: -1;
+  height: 420px;
+  background: radial-gradient(min(120vw, 760px) 420px at 50% -80px, var(--ambient), transparent 70%);
+  pointer-events: none;
 }
 
 .login-brand {
