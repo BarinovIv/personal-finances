@@ -33,7 +33,8 @@ export const useLedgerVersion = (ledger: Ledger) => {
 }
 
 /** Вложенный экран — показывается поверх вкладки, с «Назад» и въездом справа. */
-const isNestedPath = (path: string) => path.startsWith("/op/") || /^\/settings\/[a-z-]+$/.test(path)
+const isNestedPath = (path: string) =>
+  path.startsWith("/op/") || path.startsWith("/goal/") || /^\/settings\/[a-z-]+$/.test(path)
 
 const prefersReducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches
 

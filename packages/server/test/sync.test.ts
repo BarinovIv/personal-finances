@@ -159,3 +159,37 @@ describe("синхронизация: операции вне расходов �
       }
     }))
 })
+
+describe("синхронизация: цели накоплений", () => {
+  const goal = (id: string, updatedAt: number, extra: object = {}) => ({
+    collection: "goals",
+    id,
+    updatedAt,
+    deleted: false,
+    data: { name: "Отпуск", icon: "plane", target: 10000000, deadline: null, archived: false, createdAt: 1, ...extra }
+  })
+
+  it.scoped("сервер принимает цели со сроком и без и отдаёт их другому устройству без изменений", () =>
+    Effect.gen(function* () {
+      const phone = yield* signedIn
+      const mac = phone.device()
+      yield* mac.post("/api/login", { password: "верный-пароль" })
+
+      const goals = [goal("trip", 100), goal("car", 100, { name: "Машина", icon: "car", deadline: "2027-02-28", archived: true })]
+      expect((yield* sync(phone, 0, goals)).status).toBe(200)
+      expect((yield* sync(mac, 0)).json).toEqual({ cursor: 2, changes: goals, hasMore: false })
+    }))
+
+  it.scoped("целевая сумма — положительная в копейках, срок — дата или null — иначе 400", () =>
+    Effect.gen(function* () {
+      const server = yield* signedIn
+      for (const bad of [
+        goal("x", 100, { target: 0 }),
+        goal("x", 100, { target: 99.5 }),
+        goal("x", 100, { deadline: "завтра" }),
+        goal("x", 100, { archived: undefined })
+      ]) {
+        expect((yield* sync(server, 0, [bad])).status).toBe(400)
+      }
+    }))
+})
