@@ -1,13 +1,14 @@
 import { formatDecimal, formatMoney, parseMoney } from "@fin/domain"
 import { dayLabel, type Ledger, type OperationView, type RefundProblem, type RefundsInfo, type UpdateProblem } from "@fin/ledger"
-import type { ComponentChildren } from "preact"
 import { useEffect, useState } from "preact/hooks"
 import { CategoryBadge } from "../components/CategoryBadge"
 import { CategoryGrid } from "../components/CategoryGrid"
+import { Header } from "../components/Header"
 import { signedAmount } from "../components/OperationRow"
 import { Sheet } from "../components/Sheet"
-import { BackIcon, RefundIcon } from "../icons"
-import { navigate, useLedgerVersion } from "../state"
+import { SwipeBack } from "../components/SwipeBack"
+import { RefundIcon } from "../icons"
+import { goBack, useLedgerVersion } from "../state"
 import { showToast } from "../toast"
 
 const problemText: Record<UpdateProblem, string> = {
@@ -27,31 +28,6 @@ const refundProblemText: Record<RefundProblem, string> = {
 }
 
 const deletedText = (op: OperationView) => (op.kind === "refund" ? `Возврат: ${op.description}` : op.description)
-
-export const Header = ({
-  title,
-  back = "#/",
-  leading,
-  trailing
-}: {
-  title: string
-  back?: string
-  leading?: ComponentChildren
-  trailing?: ComponentChildren
-}) => (
-  <header class="screen-header">
-    <div class="header-side">
-      {leading ?? (
-        <a href={back} class="back-link">
-          <BackIcon />
-          <span>Назад</span>
-        </a>
-      )}
-    </div>
-    <span class="screen-title">{title}</span>
-    <div class="header-side trailing">{trailing}</div>
-  </header>
-)
 
 const RefundsList = ({
   ledger,
@@ -181,7 +157,7 @@ const DeleteSheet = ({ op, onConfirm, onClose }: { op: OperationView; onConfirm:
 
 const remove = async (ledger: Ledger, op: OperationView) => {
   await ledger.deleteOperation(op.id)
-  navigate("/")
+  goBack("/")
   showToast({ text: `Удалено: ${deletedText(op)}`, action: { label: "Отменить", run: () => void ledger.restoreOperation(op.id) } })
 }
 
@@ -342,12 +318,14 @@ export const OperationScreen = ({ ledger, id }: { ledger: Ledger; id: string }) 
   }
 
   return (
-    <div class="screen column">
-      {mode === "view" ? (
-        <ViewCard ledger={ledger} op={op} onEdit={() => setMode("edit")} />
-      ) : (
-        <EditForm key={`${op.id}:${op.updatedAt}`} ledger={ledger} op={op} onDone={() => setMode("view")} />
-      )}
-    </div>
+    <SwipeBack onBack={() => goBack("/")}>
+      <div class="screen column">
+        {mode === "view" ? (
+          <ViewCard ledger={ledger} op={op} onEdit={() => setMode("edit")} />
+        ) : (
+          <EditForm key={`${op.id}:${op.updatedAt}`} ledger={ledger} op={op} onDone={() => setMode("view")} />
+        )}
+      </div>
+    </SwipeBack>
   )
 }

@@ -6,11 +6,19 @@ import { DashboardScreen } from "./screens/Dashboard"
 import { EntryScreen } from "./screens/Entry"
 import { LoginScreen } from "./screens/Login"
 import { OperationScreen } from "./screens/Operation"
-import { SettingsScreen } from "./screens/Settings"
+import { SettingsScreen, type SettingsSub } from "./screens/Settings"
 import { auth, getServices, useRoute, type AppServices } from "./state"
 import { ToastHost } from "./toast"
 
 type Tab = "entry" | "dashboard" | "settings"
+
+const SETTINGS_SUBS: ReadonlyArray<SettingsSub> = ["paydays", "recurring", "categories", "export", "devices"]
+
+/** Подстраница настроек — отдельный вложенный экран, без таббара (как «Операция»). */
+const settingsSubOf = (route: string): SettingsSub | null => {
+  const sub = /^\/settings\/([a-z]+)$/.exec(route)?.[1]
+  return (SETTINGS_SUBS as ReadonlyArray<string>).includes(sub ?? "") ? (sub as SettingsSub) : null
+}
 
 const TabBar = ({ current }: { current: Tab | null }) => (
   <nav class="tabbar">
@@ -32,7 +40,7 @@ const TabBar = ({ current }: { current: Tab | null }) => (
 const tabOf = (route: string): Tab | null => {
   if (route === "/") return "entry"
   if (route.startsWith("/dashboard")) return "dashboard"
-  if (route.startsWith("/settings")) return "settings"
+  if (route === "/settings") return "settings"
   return null
 }
 
@@ -47,14 +55,15 @@ const Main = ({ services, onSignedOut }: { services: AppServices; onSignedOut: (
   const { ledger, sync } = services
   const tab = tabOf(route)
   const op = /^\/op\/(.+)$/.exec(route)
+  const settingsSub = settingsSubOf(route)
   return (
     <div class="app">
       {op ? (
         <OperationScreen ledger={ledger} id={decodeURIComponent(op[1]!)} />
       ) : tab === "dashboard" ? (
         <DashboardScreen ledger={ledger} />
-      ) : tab === "settings" ? (
-        <SettingsScreen ledger={ledger} sync={sync} auth={auth} onSignedOut={onSignedOut} />
+      ) : tab === "settings" || settingsSub ? (
+        <SettingsScreen ledger={ledger} sync={sync} auth={auth} onSignedOut={onSignedOut} sub={settingsSub} />
       ) : (
         <EntryScreen ledger={ledger} sync={sync} />
       )}
