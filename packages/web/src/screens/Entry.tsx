@@ -1,13 +1,17 @@
 import { formatMoney } from "@fin/domain"
 import { dayLabel, type EntryChoice, type EntryPreviewProblem, type Ledger, type OperationView } from "@fin/ledger"
-import { useEffect, useRef, useState } from "preact/hooks"
+import { memo } from "preact/compat"
+import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks"
 import type { Sync } from "@fin/sync"
 import { CategoryBadge } from "../components/CategoryBadge"
+import { CategoryFilter } from "../components/CategoryFilter"
 import { CategoryGrid } from "../components/CategoryGrid"
 import { OperationRow } from "../components/OperationRow"
 import { Sheet } from "../components/Sheet"
 import { SyncBadge } from "../components/SyncBadge"
-import { CheckIcon } from "../icons"
+import { LargeTitle } from "../components/LargeTitle"
+import { ArrowUpIcon, CheckIcon, SearchIcon } from "../icons"
+import { plural } from "../format"
 import { navigate, useLedgerVersion } from "../state"
 import { showToast } from "../toast"
 
@@ -17,69 +21,160 @@ const problemText: Record<EntryPreviewProblem, string> = {
   "no-category": "Выберите категорию."
 }
 
-const plural = (n: number, one: string, few: string, many: string) => {
-  const mod10 = n % 10
-  const mod100 = n % 100
-  if (mod10 === 1 && mod100 !== 11) return one
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few
-  return many
-}
+/** Сколько тает поиск при закрытии — совпадает с `fin-sink` у `.search-mode.leaving` в styles.css. */
+const SEARCH_CLOSE_MS = 200
 
-const SearchIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-    <circle cx="11" cy="11" r="7" />
-    <path d="m20 20-3.2-3.2" />
-  </svg>
-)
+const NO_CATEGORIES: ReadonlyArray<string> = []
 
-const CloseIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-    <path d="M6 6l12 12M18 6 6 18" />
-  </svg>
-)
+/** Сколько ждать после последнего нажатия, прежде чем самому предложить выбрать категорию. */
+const AUTO_PICK_DELAY_MS = 2500
 
 /** Удаляет операцию с задержкой на анимацию исчезновения; в окне задержки можно отменить. */
 const useRemoveWithUndo = (ledger: Ledger) => {
   const [leaving, setLeaving] = useState<ReadonlySet<string>>(new Set())
-  const remove = (op: OperationView) => {
-    let cancelled = false
-    setLeaving((prev) => new Set(prev).add(op.id))
-    const unmark = () =>
-      setLeaving((prev) => {
-        const next = new Set(prev)
-        next.delete(op.id)
-        return next
-      })
-    showToast({
-      text: `Удалено: ${op.description}`,
-      action: {
-        label: "Отменить",
-        run: () => {
-          cancelled = true
-          unmark()
+  // одна функция на всё время жизни экрана — иначе каждая строка ленты перерисовывалась бы вместе с ним
+  const remove = useCallback(
+    (op: OperationView) => {
+      let cancelled = false
+      setLeaving((prev) => new Set(prev).add(op.id))
+      const unmark = () =>
+        setLeaving((prev) => {
+          const next = new Set(prev)
+          next.delete(op.id)
+          return next
+        })
+      showToast({
+        text: `Удалено: ${op.description}`,
+        action: {
+          label: "Отменить",
+          run: () => {
+            cancelled = true
+            unmark()
+          }
         }
-      }
-    })
-    setTimeout(() => {
-      unmark()
-      if (!cancelled) void ledger.deleteOperation(op.id)
-    }, 200)
-  }
+      })
+      setTimeout(() => {
+        unmark()
+        if (!cancelled) void ledger.deleteOperation(op.id)
+      }, 200)
+    },
+    [ledger]
+  )
   return { leaving, remove }
 }
 
+/**
+ * Экран ввода держит только режим поиска; строка ввода, сумма за период и лента — отдельные
+ * компоненты со своим состоянием, чтобы набор текста или открытие поиска не перерисовывали ленту.
+ */
 export const EntryScreen = ({ ledger, sync }: { ledger: Ledger; sync: Sync }) => {
+  // "closing" — поиск ещё виден и тает, лента вернётся, когда он уйдёт
+  const [search, setSearch] = useState<"closed" | "open" | "closing">("closed")
+  const [composerReveal, setComposerReveal] = useState(false)
+  const [query, setQuery] = useState("")
+  const [filterCategories, setFilterCategories] = useState<ReadonlyArray<string>>(NO_CATEGORIES)
+  const searchInput = useRef<HTMLInputElement>(null)
+  const { leaving, remove } = useRemoveWithUndo(ledger)
+
+  const searchOpen = search !== "closed"
+
+  useEffect(() => {
+    if (search === "open") searchInput.current?.focus()
+  }, [search])
+
+  /** Закрытие зеркалит открытие: поиск тает, затем строка ввода и лента въезжают на его место. */
+  const closeSearch = () => {
+    if (search !== "open") return
+    searchInput.current?.blur()
+    const finish = () => {
+      setSearch("closed")
+      setQuery("")
+      setFilterCategories(NO_CATEGORIES)
+      setComposerReveal(true)
+    }
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return finish()
+    setSearch("closing")
+    window.setTimeout(finish, SEARCH_CLOSE_MS)
+  }
+
+  return (
+    <LargeTitle
+      title="Ввод"
+      heading={<SpentHero ledger={ledger} />}
+      actions={
+        <>
+          <SyncBadge sync={sync} />
+          <button
+            type="button"
+            class={`glass-button${search === "open" ? " active" : ""}`}
+            aria-label="Поиск"
+            aria-pressed={search === "open"}
+            onClick={() => (search === "open" ? closeSearch() : search === "closed" && setSearch("open"))}
+          >
+            <SearchIcon />
+          </button>
+        </>
+      }
+    >
+      {searchOpen ? (
+        <div class={`search-mode${search === "closing" ? " leaving" : ""}`}>
+          <div class="search-bar">
+            <label class="search-field">
+              <SearchIcon size={17} />
+              <input
+                ref={searchInput}
+                type="search"
+                placeholder="Описание или сумма"
+                aria-label="Поиск по описанию или сумме"
+                value={query}
+                onInput={(e) => setQuery(e.currentTarget.value)}
+              />
+            </label>
+            <button type="button" class="text-button" onClick={closeSearch}>
+              Отмена
+            </button>
+          </div>
+          <CategoryFilter ledger={ledger} selected={filterCategories} onChange={setFilterCategories} />
+        </div>
+      ) : (
+        <Composer ledger={ledger} reveal={composerReveal} />
+      )}
+      <Feed
+        ledger={ledger}
+        searching={searchOpen}
+        query={query}
+        categoryIds={filterCategories}
+        motion={search === "closing" ? "leaving" : search === "closed" && composerReveal ? "reveal" : null}
+        leaving={leaving}
+        onDelete={remove}
+      />
+    </LargeTitle>
+  )
+}
+
+/** Потрачено за текущий период — пересчитывается только при изменении журнала. */
+const SpentHero = memo(({ ledger }: { ledger: Ledger }) => {
+  useLedgerVersion(ledger)
+  const currentPeriod = ledger.dashboard({ mode: ledger.dashboardMode(), offset: 0 })
+  return (
+    <button type="button" class="spent-hero" onClick={() => navigate("/dashboard")}>
+      <h1 class="visually-hidden">Ввод</h1>
+      <span class="spent-hero-label">Потрачено за период</span>
+      <span class="spent-hero-value num">{formatMoney(currentPeriod.expenses)}</span>
+    </button>
+  )
+})
+
+/** Строка ввода с распознаванием; её состояние живёт здесь, чтобы набор текста не трогал остальной экран. */
+const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) => {
   useLedgerVersion(ledger)
   const [text, setText] = useState("")
   const [choice, setChoice] = useState<EntryChoice>({})
   const [pickerOpen, setPickerOpen] = useState(false)
+  // шторка выбора сама всплывает, только когда строка дописана и набор затих
+  const [autoPick, setAutoPick] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [flash, setFlash] = useState("")
-  const [searchOpen, setSearchOpen] = useState(false)
-  const [query, setQuery] = useState("")
-  const [filterCategory, setFilterCategory] = useState<string | null>(null)
-  const searchInput = useRef<HTMLInputElement>(null)
-  const { leaving, remove } = useRemoveWithUndo(ledger)
 
   const preview = ledger.preview(text, choice)
   const has = text.trim() !== ""
@@ -89,11 +184,14 @@ export const EntryScreen = ({ ledger, sync }: { ledger: Ledger; sync: Sync }) =>
     ? ledger.categories(preview.kind).find((c) => c.id === preview.categoryId)
     : undefined
   const today = ledger.today()
-  const currentPeriod = ledger.dashboard({ mode: ledger.dashboardMode(), offset: 0 })
+  const awaitsPick = needPick && !preview.problems.includes("no-amount")
 
   useEffect(() => {
-    if (searchOpen) searchInput.current?.focus()
-  }, [searchOpen])
+    setAutoPick(false)
+    if (!awaitsPick) return
+    const timer = window.setTimeout(() => setAutoPick(true), AUTO_PICK_DELAY_MS)
+    return () => window.clearTimeout(timer)
+  }, [text, awaitsPick])
 
   const reset = () => {
     setText("")
@@ -117,28 +215,12 @@ export const EntryScreen = ({ ledger, sync }: { ledger: Ledger; sync: Sync }) =>
     reset()
   }
 
-  const closeSearch = () => {
-    setSearchOpen(false)
-    setQuery("")
-    setFilterCategory(null)
-  }
-
-  const categories = [...ledger.categories("expense"), ...ledger.categories("income")]
-
   return (
-    <div class="screen">
-      <div class="composer">
-        <div class="composer-head">
-          <label for="line">Что потратил или получил?</label>
-          <div class="composer-tools">
-            <button type="button" class="icon-button on-accent" aria-label="Поиск" onClick={() => setSearchOpen(!searchOpen)}>
-              <SearchIcon />
-            </button>
-            <SyncBadge sync={sync} />
-          </div>
-        </div>
+    <div class={`composer${reveal ? " reveal" : ""}`}>
+      <div class={`composer-field${has ? " filled" : ""}`}>
         <input
           id="line"
+          aria-label="Что потратил или получил?"
           class="line-input"
           type="text"
           placeholder="футболка 1500"
@@ -163,42 +245,47 @@ export const EntryScreen = ({ ledger, sync }: { ledger: Ledger; sync: Sync }) =>
             }
           }}
         />
-        {!has && (
+        {has && (
+          <button type="button" class="send-button" aria-label="Добавить" disabled={!canAdd} onClick={() => void add()}>
+            <ArrowUpIcon />
+          </button>
+        )}
+      </div>
+      {has ? (
+        <div class="recognized">
+          <button type="button" class="chip" onClick={() => setPickerOpen(!pickerOpen)}>
+            <CategoryBadge category={category ?? { color: "gray", icon: "dots", name: "" }} size={22} />
+            <span>{category?.name ?? "Категория?"}</span>
+          </button>
+          <label class="chip">
+            <span>{dayLabel(preview.date, today)}</span>
+            <input
+              type="date"
+              aria-label="Дата операции"
+              value={preview.date}
+              max={today}
+              onChange={(e) => {
+                const date = e.currentTarget.value
+                if (date) setChoice({ ...choice, date })
+              }}
+            />
+          </label>
+          <span class={`amount-preview num ${preview.kind}`}>
+            {preview.amount ? formatMoney(preview.amount, { sign: preview.kind === "income" ? "+" : "−" }) : "сумма?"}
+          </span>
+        </div>
+      ) : (
+        !flash && (
           <div class="hint">
             Например: <b>футболка 1500</b> · <b>+зарплата 95000</b> · <b>вчера такси 450</b> · <b>обед 1.2к</b>
           </div>
-        )}
-        {has && (
-          <div class="recognized">
-            <button type="button" class="chip" onClick={() => setPickerOpen(!pickerOpen)}>
-              <CategoryBadge category={category ?? { color: "gray", icon: "dots", name: "" }} size={24} />
-              <span>{category?.name ?? "Категория?"}</span>
-            </button>
-            <label class="chip">
-              <span>{dayLabel(preview.date, today)}</span>
-              <input
-                type="date"
-                aria-label="Дата операции"
-                value={preview.date}
-                max={today}
-                onChange={(e) => {
-                  const date = e.currentTarget.value
-                  if (date) setChoice({ ...choice, date })
-                }}
-              />
-            </label>
-            <span class="amount-preview num">
-              {preview.amount ? formatMoney(preview.amount, { sign: preview.kind === "income" ? "+" : "−" }) : "сумма?"}
-            </span>
-            <button type="button" class="round-button" aria-label="Добавить" disabled={!canAdd} onClick={() => void add()}>
-              <CheckIcon />
-            </button>
-          </div>
-        )}
-        {has && (needPick || pickerOpen) && (
-          <Sheet onClose={() => setPickerOpen(false)}>
+        )
+      )}
+      {has && ((needPick && autoPick) || pickerOpen) && (
+        <Sheet label="Выбор категории" onClose={() => setPickerOpen(false)}>
+          {(close) => (
             <div class="picker">
-              <div class="picker-title">
+              <div class="sheet-title">
                 {needPick
                   ? `Куда отнести «${preview.description}»?`
                   : preview.kind === "income"
@@ -210,129 +297,88 @@ export const EntryScreen = ({ ledger, sync }: { ledger: Ledger; sync: Sync }) =>
                 selected={preview.categoryId}
                 onPick={(categoryId) => {
                   setChoice({ ...choice, categoryId })
-                  setPickerOpen(false)
                   setError(null)
+                  // держим панель открытой, пока она уезжает — иначе она пропала бы мгновенно
+                  setPickerOpen(true)
+                  close()
                 }}
               />
               {needPick && <div class="hint">Выбор запомнится — в следующий раз подставлю сам.</div>}
             </div>
-          </Sheet>
-        )}
-        {error && <div class="hint error">{error}</div>}
-        {flash && <div class="flash">{flash}</div>}
-        <button type="button" class="composer-spent" onClick={() => navigate("/dashboard")}>
-          <span>Потрачено за период</span>
-          <strong class="num">{formatMoney(currentPeriod.expenses)}</strong>
-        </button>
-      </div>
-      <div class={`search-panel${searchOpen ? " open" : ""}`}>
-        <div class="search-panel-inner">
-          <div class="search-row">
-            <input
-              ref={searchInput}
-              class="text-input"
-              type="search"
-              placeholder="Поиск по описанию или сумме"
-              value={query}
-              onInput={(e) => setQuery(e.currentTarget.value)}
-            />
-            <button type="button" class="icon-button" aria-label="Закрыть поиск" onClick={closeSearch}>
-              <CloseIcon />
-            </button>
-          </div>
-          <div class="filter-chips" role="group" aria-label="Фильтр по категории">
-            <button type="button" class="chip" aria-pressed={filterCategory === null} onClick={() => setFilterCategory(null)}>
-              <span>Все</span>
-            </button>
-            {categories.map((c) => (
-              <button
-                type="button"
-                class="chip"
-                key={c.id}
-                aria-pressed={filterCategory === c.id}
-                onClick={() => setFilterCategory(filterCategory === c.id ? null : c.id)}
-              >
-                <CategoryBadge category={c} size={20} />
-                <span>{c.name}</span>
-              </button>
-            ))}
-          </div>
+          )}
+        </Sheet>
+      )}
+      {error && <div class="hint error">{error}</div>}
+      {flash && (
+        <div class="flash" key={flash}>
+          <CheckIcon size={16} />
+          <span>{flash}</span>
+        </div>
+      )}
+    </div>
+  )
+})
+
+/**
+ * Лента по дням — и обычная, и результаты поиска. Один и тот же экземпляр в обоих режимах:
+ * при открытии поиска с пустым запросом строки не пересоздаются и не проигрывают появление заново.
+ * `motion` — как лента уходит вместе с поиском ("leaving") и возвращается после него ("reveal").
+ */
+const Feed = memo(
+  ({
+    ledger,
+    searching,
+    query,
+    categoryIds,
+    motion,
+    leaving,
+    onDelete
+  }: {
+    ledger: Ledger
+    searching: boolean
+    query: string
+    categoryIds: ReadonlyArray<string>
+    motion: "leaving" | "reveal" | null
+    leaving: ReadonlySet<string>
+    onDelete: (op: OperationView) => void
+  }) => {
+    const version = useLedgerVersion(ledger)
+    // подписи дней («Сегодня», «Вчера») зависят от даты — пересчитываем и при её смене
+    const today = ledger.today()
+    const found = useMemo(
+      () => (searching ? ledger.search(query, categoryIds) : null),
+      [ledger, version, today, searching, query, categoryIds]
+    )
+    const all = useMemo(() => (searching ? null : ledger.days()), [ledger, version, today, searching])
+    const days = found?.days ?? all ?? []
+
+    return (
+      <div class={`feed${motion ? ` ${motion}` : ""}`}>
+        <div class="days">
+          {found && (
+            <div class="search-summary">
+              {found.count} {plural(found.count, "операция", "операции", "операций")} · {formatMoney(found.total)}
+            </div>
+          )}
+          {days.length === 0 ? (
+            <div class="empty">{found ? "Ничего не нашлось" : "Пока нет операций"}</div>
+          ) : (
+            days.map((day) => (
+              <section class="day" key={day.date}>
+                <div class="day-head">
+                  <span>{day.label}</span>
+                  {!found && <span class="num">{day.expenseTotal > 0 ? formatMoney(day.expenseTotal, { sign: "−" }) : ""}</span>}
+                </div>
+                <div class="card-list">
+                  {day.items.map((op) => (
+                    <OperationRow key={op.id} op={op} onDelete={onDelete} leaving={leaving.has(op.id)} />
+                  ))}
+                </div>
+              </section>
+            ))
+          )}
         </div>
       </div>
-      {searchOpen ? (
-        <SearchResults ledger={ledger} query={query} categoryId={filterCategory} leaving={leaving} onDelete={remove} />
-      ) : (
-        <DayList ledger={ledger} leaving={leaving} onDelete={remove} />
-      )}
-    </div>
-  )
-}
-
-const SearchResults = ({
-  ledger,
-  query,
-  categoryId,
-  leaving,
-  onDelete
-}: {
-  ledger: Ledger
-  query: string
-  categoryId: string | null
-  leaving: ReadonlySet<string>
-  onDelete: (op: OperationView) => void
-}) => {
-  const result = ledger.search(query, categoryId)
-  return (
-    <div class="days">
-      <div class="search-summary">
-        {result.count} {plural(result.count, "операция", "операции", "операций")} · {formatMoney(result.total)}
-      </div>
-      {result.count === 0 ? (
-        <div class="empty">Ничего не нашлось</div>
-      ) : (
-        result.days.map((day) => (
-          <section class="day" key={day.date}>
-            <div class="day-head">
-              <span>{day.label}</span>
-            </div>
-            <div class="card-list">
-              {day.items.map((op) => (
-                <OperationRow key={op.id} op={op} onDelete={() => onDelete(op)} leaving={leaving.has(op.id)} />
-              ))}
-            </div>
-          </section>
-        ))
-      )}
-    </div>
-  )
-}
-
-const DayList = ({
-  ledger,
-  leaving,
-  onDelete
-}: {
-  ledger: Ledger
-  leaving: ReadonlySet<string>
-  onDelete: (op: OperationView) => void
-}) => {
-  const days = ledger.days()
-  if (days.length === 0) return <div class="empty">Пока нет операций</div>
-  return (
-    <div class="days">
-      {days.map((day) => (
-        <section class="day" key={day.date}>
-          <div class="day-head">
-            <span>{day.label}</span>
-            <span class="num">{day.expenseTotal > 0 ? formatMoney(day.expenseTotal, { sign: "−" }) : ""}</span>
-          </div>
-          <div class="card-list">
-            {day.items.map((op) => (
-              <OperationRow key={op.id} op={op} onDelete={() => onDelete(op)} leaving={leaving.has(op.id)} />
-            ))}
-          </div>
-        </section>
-      ))}
-    </div>
-  )
-}
+    )
+  }
+)

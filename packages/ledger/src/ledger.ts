@@ -91,8 +91,8 @@ export interface Ledger {
   submit(line: string, choice?: EntryChoice): Promise<SubmitResult>
   /** Операции по дням, сначала новые. */
   days(): ReadonlyArray<DayGroup>
-  /** Поиск по ленте: подстрока в описании или сумме, при необходимости — в одной категории. */
-  search(query: string, categoryId?: string | null): SearchSummary
+  /** Поиск по ленте: подстрока в описании или сумме, при необходимости — только в выбранных категориях. */
+  search(query: string, categoryIds?: ReadonlyArray<string>): SearchSummary
   operation(id: string): OperationView | undefined
   updateOperation(id: string, patch: OperationPatch): Promise<UpdateResult>
   deleteOperation(id: string): Promise<void>
@@ -152,7 +152,7 @@ export const openLedger = async (options: LedgerOptions): Promise<Ledger> => {
     preview: (line, choice) => previewEntry(ctx, line, choice),
     submit: (line, choice) => submitEntry(ctx, line, choice),
     days: () => listDays(ctx),
-    search: (query, categoryId) => searchOperations(ctx, query, categoryId ?? null),
+    search: (query, categoryIds) => searchOperations(ctx, query, categoryIds),
     operation: (id) => {
       const record = records.get("operations", id)
       return record && !record.deleted ? ctx.toView(record) : undefined

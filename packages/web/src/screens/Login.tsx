@@ -29,20 +29,27 @@ export const LoginScreen = ({ auth, onSignedIn }: { auth: AuthApi; onSignedIn: (
 
   return (
     <form class="login" onSubmit={submit}>
-      <h1>Учёт</h1>
-      <label for="password" class="hint">
-        Пароль
-      </label>
-      <input
-        id="password"
-        class="text-input"
-        type="password"
-        autocomplete="current-password"
-        value={password}
-        onInput={(e) => setPassword(e.currentTarget.value)}
-      />
-      {error && <div class="hint error">{error}</div>}
-      <button type="submit" class="primary-button" disabled={!password || busy}>
+      <div class="login-brand">
+        <img class="login-icon" src="/icons/icon-192.png" alt="" width={88} height={88} />
+        <h1>Учёт</h1>
+        <p class="hint">Расходы и доходы — одной строкой</p>
+      </div>
+      <div class="card-list">
+        <label class="row input-row">
+          <span class="row-label">Пароль</span>
+          <input
+            id="password"
+            class="row-input"
+            type="password"
+            autocomplete="current-password"
+            placeholder="Обязательно"
+            value={password}
+            onInput={(e) => setPassword(e.currentTarget.value)}
+          />
+        </label>
+      </div>
+      {error && <div class="hint error center">{error}</div>}
+      <button type="submit" class="accent-button large" disabled={!password || busy}>
         Войти
       </button>
     </form>
