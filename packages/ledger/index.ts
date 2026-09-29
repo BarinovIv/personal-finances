@@ -26,6 +26,7 @@ export type {
   UpdateProblem,
   UpdateResult
 } from "./src/operations"
+export type { DebtsOverview, DebtView, PersonDebts } from "./src/debts"
 export type { MovementInput, MovementProblem, MovementResult, RepaymentsInfo } from "./src/movements"
 export { dayLabel, dayMonth, OPERATION_KIND_TEXT } from "./src/format"
 export type { LimitWarning } from "./src/limits"

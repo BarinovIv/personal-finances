@@ -14,6 +14,7 @@ import {
 import { LedgerContext } from "./context"
 import { exportCsv } from "./csv"
 import { randomId } from "./ids"
+import { debtPeople, debtsOverview, type DebtsOverview } from "./debts"
 import { buildDashboard, type Dashboard, type DashboardQuery } from "./dashboard"
 import { listDays } from "./days"
 import {
@@ -136,6 +137,10 @@ export interface Ledger {
   repayments(debtId: string): RepaymentsInfo | undefined
   /** Накоплено на цели: отложено − снято, копейки. */
   goalSavings(goalId: string): number
+  /** Долги по людям с сальдо («Петя должен мне 1 500») и отдельно закрытые. «Петя» и «петя» — один человек. */
+  debts(): DebtsOverview
+  /** Подсказки для поля «Кто» у долга: уже встречавшиеся люди, сначала недавние. */
+  debtPeople(): ReadonlyArray<string>
   /** Итоги периода; всё считается на устройстве. */
   dashboard(query: DashboardQuery): Dashboard
   /** Последний выбранный на этом устройстве режим дашборда. */
@@ -201,6 +206,8 @@ export const openLedger = async (options: LedgerOptions): Promise<Ledger> => {
     addMovement: (input) => addMovement(ctx, input),
     repayments: (id) => repaymentsOf(ctx, id),
     goalSavings: (goalId) => goalSavings(ctx, goalId),
+    debts: () => debtsOverview(ctx),
+    debtPeople: () => debtPeople(ctx),
     dashboard: (query) => buildDashboard(ctx, query),
     dashboardMode: () => dashboardMode(ctx),
     setDashboardMode: (mode) => setDashboardMode(ctx, mode),

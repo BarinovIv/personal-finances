@@ -2068,6 +2068,27 @@ select.text-input {
   color: var(--accent);
 }
 
+/* Долги: сальдо человека — зелёным, когда должны мне */
+.debt-person {
+  font-weight: 600;
+}
+
+.debt-balance {
+  font-size: 20px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.debt-balance.owed-to-me {
+  color: var(--accent);
+}
+
+.person-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .info-row .row-value {
   color: var(--muted);
 }
