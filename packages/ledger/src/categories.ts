@@ -1,33 +1,57 @@
 import type { CategoryData, CategoryKind } from "@fin/domain"
+import type { PaletteColor } from "./palette"
 
 export interface StarterCategory extends CategoryData {
   readonly id: string
+  readonly icon: string
 }
 
-const expense = (id: string, name: string, color: string): StarterCategory => ({ id, kind: "expense", name, color })
-const income = (id: string, name: string, color: string): StarterCategory => ({ id, kind: "income", name, color })
+const expense = (id: string, name: string, color: PaletteColor, icon: string): StarterCategory => ({
+  id,
+  kind: "expense",
+  name,
+  color,
+  icon
+})
+const income = (id: string, name: string, color: PaletteColor, icon: string): StarterCategory => ({
+  id,
+  kind: "income",
+  name,
+  color,
+  icon
+})
 
 /** Стартовый набор. Эти категории есть без записей в хранилище; правка или удаление создают запись с тем же id. */
 export const STARTER_CATEGORIES: ReadonlyArray<StarterCategory> = [
-  expense("food", "Продукты", "#3F6E5A"),
-  expense("cafe", "Кафе", "#B0602A"),
-  expense("transport", "Транспорт", "#2F5B8A"),
-  expense("clothes", "Одежда", "#7A4E8C"),
-  expense("home", "Дом", "#86693A"),
-  expense("health", "Здоровье", "#A23B4B"),
-  expense("fun", "Развлечения", "#9A7417"),
-  expense("subscriptions", "Подписки", "#4B6B8F"),
-  expense("gifts", "Подарки", "#9B4F73"),
-  expense("other", "Прочее", "#6B6862"),
-  income("salary", "Зарплата", "#2F5D50"),
-  income("side", "Подработка", "#3E7C6B"),
-  income("other-income", "Прочие доходы", "#5B7F75")
+  expense("food", "Продукты", "green", "cart"),
+  expense("cafe", "Кафе", "orange", "cup"),
+  expense("transport", "Транспорт", "blue", "car"),
+  expense("clothes", "Одежда", "purple", "shirt"),
+  expense("home", "Дом", "brown", "home"),
+  expense("health", "Здоровье", "red", "heart"),
+  expense("fun", "Развлечения", "yellow", "star"),
+  expense("subscriptions", "Подписки", "indigo", "card"),
+  expense("gifts", "Подарки", "pink", "gift"),
+  expense("other", "Прочее", "gray", "dots"),
+  income("salary", "Зарплата", "teal", "banknote"),
+  income("side", "Подработка", "green", "briefcase"),
+  income("other-income", "Прочие доходы", "gray", "wallet")
 ]
 
-/** Цвета для новых категорий — по кругу. */
-export const CATEGORY_PALETTE: Record<CategoryKind, ReadonlyArray<string>> = {
-  expense: ["#5A6E2F", "#8C4E4E", "#2F7A8A", "#8A5A2F", "#5E4E8C", "#3F5E6E", "#8C7A2F", "#6E3F5A"],
-  income: ["#4E7C3E", "#2F6E7A", "#6B7F3E", "#3E5B7C"]
-}
+/** Цвет для новой категории, если пользователь его не выбрал, — по кругу. */
+export const CATEGORY_PALETTE: ReadonlyArray<PaletteColor> = [
+  "blue",
+  "green",
+  "orange",
+  "purple",
+  "red",
+  "teal",
+  "yellow",
+  "pink",
+  "indigo",
+  "brown",
+  "gray"
+]
 
-export const UNKNOWN_CATEGORY_COLOR = "#8A857C"
+export const UNKNOWN_CATEGORY_COLOR: PaletteColor = "gray"
+export const UNKNOWN_CATEGORY_ICON = "dots"

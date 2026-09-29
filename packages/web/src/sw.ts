@@ -10,7 +10,6 @@ declare const __PRECACHE__: ReadonlyArray<string>
 const sw = self as unknown as ServiceWorkerGlobalScope
 
 const SHELL = `shell-${__VERSION__}`
-const FONTS = "fonts-v1"
 
 sw.addEventListener("install", (event: ExtendableEvent) => {
   event.waitUntil(
@@ -25,7 +24,7 @@ sw.addEventListener("activate", (event: ExtendableEvent) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== SHELL && k !== FONTS).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => k !== SHELL).map((k) => caches.delete(k))))
       .then(() => sw.clients.claim())
   )
 })
@@ -44,10 +43,6 @@ sw.addEventListener("fetch", (event: FetchEvent) => {
   if (request.method !== "GET") return
   const url = new URL(request.url)
 
-  if (url.hostname === "fonts.googleapis.com" || url.hostname === "fonts.gstatic.com") {
-    event.respondWith(cacheFirst(FONTS, request))
-    return
-  }
   if (url.origin !== sw.location.origin || url.pathname.startsWith("/api/")) return
 
   // экраны приложения — всегда оболочка из кэша

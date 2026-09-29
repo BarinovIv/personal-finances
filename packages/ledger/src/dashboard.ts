@@ -24,6 +24,7 @@ export interface DashboardCategory {
   readonly id: string
   readonly name: string
   readonly color: string
+  readonly icon: string
   /** Расходы минус возвраты, копейки. Может уйти в минус. */
   readonly amount: number
   /** Доля от расходов периода (0–1); для нулевой и отрицательной суммы — null. */
@@ -132,6 +133,7 @@ export const buildDashboard = (ctx: LedgerContext, query: DashboardQuery): Dashb
         id,
         name: category.name,
         color: category.color,
+        icon: category.icon,
         amount: c.amount,
         share: c.amount > 0 && expenses > 0 ? c.amount / expenses : null,
         operations: c.records

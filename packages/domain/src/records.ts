@@ -45,7 +45,13 @@ export interface OperationData {
 export interface CategoryData {
   readonly kind: CategoryKind
   readonly name: string
+  /** Название цвета из фиксированной палитры (ADR-0004), не hex. */
   readonly color: string
+  /**
+   * Название пиктограммы из встроенного набора. Необязательно: у категорий, созданных
+   * до появления иконок, поля нет — при чтении подставляется иконка по умолчанию.
+   */
+  readonly icon?: string
 }
 
 export type RecurringStatus = "active" | "paused" | "ended"

@@ -1,5 +1,6 @@
 import { formatMoney } from "@fin/domain"
 import type { OperationView } from "@fin/ledger"
+import { CategoryBadge } from "./CategoryBadge"
 import { RefundIcon, RepeatIcon } from "../icons"
 
 export const signedAmount = (op: Pick<OperationView, "kind" | "amount">) =>
@@ -7,7 +8,7 @@ export const signedAmount = (op: Pick<OperationView, "kind" | "amount">) =>
 
 export const OperationRow = ({ op, sub }: { op: OperationView; sub?: string }) => (
   <a class="op-row" href={`#/op/${op.id}`}>
-    <span class="dot" style={{ background: op.category.color }} />
+    <CategoryBadge category={op.category} />
     <span class="op-main">
       <span class="op-desc">
         {op.kind === "refund" && <RefundIcon label="Возврат" />}

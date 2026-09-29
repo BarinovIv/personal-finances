@@ -1,11 +1,14 @@
 import { formatMoney } from "@fin/domain"
 import { dayMonth, type Dashboard, type DashboardCategory, type Ledger, type PeriodMode } from "@fin/ledger"
 import { useState } from "preact/hooks"
+import { CategoryBadge } from "../components/CategoryBadge"
+import { LargeTitle } from "../components/LargeTitle"
 import { signedAmount } from "../components/OperationRow"
 import { BackIcon, ForwardIcon, RepeatIcon } from "../icons"
 import { useLedgerVersion } from "../state"
 
-const MUTED_SECTOR = "#E4E0D8"
+const MUTED_SECTOR = "var(--line)"
+const paletteVar = (color: string) => `var(--palette-${color})`
 
 const shortMoney = (kopecks: number) => {
   const rub = kopecks / 100
@@ -51,7 +54,7 @@ const Donut = ({ d, selected, onSelect }: { d: Dashboard; selected: string | nul
     const from = (acc / total) * 100
     acc += c.amount
     const to = (acc / total) * 100
-    const color = !selected || selected === c.id ? c.color : MUTED_SECTOR
+    const color = !selected || selected === c.id ? paletteVar(c.color) : MUTED_SECTOR
     return `${color} ${from.toFixed(2)}% ${to.toFixed(2)}%`
   })
   const sel = d.categories.find((c) => c.id === selected)
@@ -78,7 +81,7 @@ const Donut = ({ d, selected, onSelect }: { d: Dashboard; selected: string | nul
             style={{ color: !selected || selected === c.id ? "var(--ink)" : "var(--faint)" }}
             onClick={() => onSelect(c.id)}
           >
-            <span class="dot small" style={{ background: c.color }} />
+            <CategoryBadge category={c} size={20} />
             <span class="legend-name">{c.name}</span>
             <span class="num">{c.share === null ? "—" : `${Math.round(c.share * 100)}%`}</span>
           </button>
@@ -101,7 +104,7 @@ const CategoryList = (props: { d: Dashboard; selected: string | null; onSelect: 
             <div class="cat-block" key={c.id}>
               <button type="button" class="cat-row" aria-expanded={open} onClick={() => props.onSelect(c.id)}>
                 <span class="cat-row-line">
-                  <span class="dot" style={{ background: c.color }} />
+                  <CategoryBadge category={c} />
                   <span class="cat-name">{c.name}</span>
                   <span class="cat-share num">{c.share === null ? "" : `${Math.round(c.share * 100)}%`}</span>
                   <span class={`cat-amount num ${c.amount < 0 ? "negative" : ""}`}>{formatMoney(c.amount)}</span>
@@ -110,7 +113,10 @@ const CategoryList = (props: { d: Dashboard; selected: string | null; onSelect: 
                   </span>
                 </span>
                 <span class="bar-track">
-                  <span class="bar-fill" style={{ width: `${Math.max(0, (c.amount / max) * 100).toFixed(1)}%`, background: c.color }} />
+                  <span
+                    class="bar-fill"
+                    style={{ width: `${Math.max(0, (c.amount / max) * 100).toFixed(1)}%`, background: paletteVar(c.color) }}
+                  />
                 </span>
               </button>
               {open && (
@@ -198,35 +204,32 @@ export const DashboardScreen = ({ ledger }: { ledger: Ledger }) => {
   }
 
   return (
-    <div class="screen">
-      <div class="page">
-        <h1>Дашборд</h1>
-        <div class="segmented" role="group" aria-label="Вид периода">
-          <button type="button" aria-pressed={mode === "pay"} onClick={() => switchMode("pay")}>
-            Зарплатный период
-          </button>
-          <button type="button" aria-pressed={mode === "month"} onClick={() => switchMode("month")}>
-            Месяц
-          </button>
-        </div>
-        <div class="period-nav">
-          <button type="button" class="icon-button" aria-label="Предыдущий период" onClick={() => go(-1)}>
-            <BackIcon size={22} />
-          </button>
-          <div class="period-title">
-            <span class="period-label">{d.period.label}</span>
-            {d.progress && <span class="row-sub">{d.progress}</span>}
-          </div>
-          <button type="button" class="icon-button" aria-label="Следующий период" onClick={() => go(1)}>
-            <ForwardIcon size={22} />
-          </button>
-        </div>
-        <Summary d={d} />
-        <Donut d={d} selected={selected} onSelect={select} />
-        <UpcomingBlock d={d} today={ledger.today()} />
-        <CategoryList d={d} selected={selected} onSelect={select} today={ledger.today()} />
-        <Trend d={d} />
+    <LargeTitle title="Дашборд">
+      <div class="segmented" role="group" aria-label="Вид периода">
+        <button type="button" aria-pressed={mode === "pay"} onClick={() => switchMode("pay")}>
+          Зарплатный период
+        </button>
+        <button type="button" aria-pressed={mode === "month"} onClick={() => switchMode("month")}>
+          Месяц
+        </button>
       </div>
-    </div>
+      <div class="period-nav">
+        <button type="button" class="icon-button" aria-label="Предыдущий период" onClick={() => go(-1)}>
+          <BackIcon size={22} />
+        </button>
+        <div class="period-title">
+          <span class="period-label">{d.period.label}</span>
+          {d.progress && <span class="row-sub">{d.progress}</span>}
+        </div>
+        <button type="button" class="icon-button" aria-label="Следующий период" onClick={() => go(1)}>
+          <ForwardIcon size={22} />
+        </button>
+      </div>
+      <Summary d={d} />
+      <Donut d={d} selected={selected} onSelect={select} />
+      <UpcomingBlock d={d} today={ledger.today()} />
+      <CategoryList d={d} selected={selected} onSelect={select} today={ledger.today()} />
+      <Trend d={d} />
+    </LargeTitle>
   )
 }

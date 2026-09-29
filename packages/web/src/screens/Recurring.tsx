@@ -1,6 +1,7 @@
 import { formatDecimal, formatMoney, parseMoney, type CategoryKind } from "@fin/domain"
 import { dayMonth, type Ledger, type RecurringProblem, type RecurringView } from "@fin/ledger"
 import { useState } from "preact/hooks"
+import { CategoryBadge } from "../components/CategoryBadge"
 import { RepeatIcon } from "../icons"
 
 const problemText: Record<RecurringProblem, string> = {
@@ -151,7 +152,7 @@ const RecurringRow = ({ ledger, item }: { ledger: Ledger; item: RecurringView })
   }
   return (
     <div class={`row ${item.status === "active" ? "" : "inactive"}`}>
-      <span class="dot" style={{ background: item.category.color }} />
+      <CategoryBadge category={item.category} />
       <div class="row-main">
         <span class="row-title">
           {item.description} <RepeatIcon />
