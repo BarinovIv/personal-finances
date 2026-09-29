@@ -4,6 +4,7 @@ import {
   dateParts,
   dayOfMonth,
   daysBetween,
+  freeMoney,
   inPeriod,
   limitUsage,
   periodAt,
@@ -70,8 +71,13 @@ export interface Dashboard {
   /** Расходы минус возвраты, копейки. */
   readonly expenses: number
   readonly income: number
-  /** Доходы минус расходы. */
+  /** Доходы минус расходы. Операции вне расходов и доходов сюда не входят. */
   readonly balance: number
+  /**
+   * Свободные деньги периода: доходы − расходы ± операции вне расходов и доходов − предстоящие списания
+   * (они есть только у текущего периода). Меньше нуля — перерасход.
+   */
+  readonly free: number
   /** По убыванию суммы. Доходы сюда не входят. */
   readonly categories: ReadonlyArray<DashboardCategory>
   readonly comparison: Comparison
@@ -110,11 +116,12 @@ export const buildDashboard = (ctx: LedgerContext, query: DashboardQuery): Dashb
   const period = periodAt(mode, today, paydays, offset)
   const isCurrent = inPeriod(period, today)
   const ops = ctx.operations()
-  const { expenses, income, categories: totals } = periodTotals(ops, period)
+  const totals = periodTotals(ops, period)
+  const { expenses, income } = totals
   const expensesIn = (range: Period) => periodTotals(ops, range).expenses
   const limits = new Map(limitUsage(ctx.records.all("categories"), ops, period).map((u) => [u.categoryId, u.limit]))
 
-  const categories = totals.map((c): DashboardCategory => {
+  const categories = totals.categories.map((c): DashboardCategory => {
     const category = ctx.categoryOf(c.categoryId, "expense")
     return {
       id: c.categoryId,
@@ -162,6 +169,7 @@ export const buildDashboard = (ctx: LedgerContext, query: DashboardQuery): Dashb
     expenses,
     income,
     balance: income - expenses,
+    free: freeMoney(totals, upcoming.total),
     categories,
     comparison: {
       current,

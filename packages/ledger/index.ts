@@ -26,7 +26,8 @@ export type {
   UpdateProblem,
   UpdateResult
 } from "./src/operations"
-export { dayLabel, dayMonth } from "./src/format"
+export type { MovementInput, MovementProblem, MovementResult, RepaymentsInfo } from "./src/movements"
+export { dayLabel, dayMonth, OPERATION_KIND_TEXT } from "./src/format"
 export type { LimitWarning } from "./src/limits"
 export { indexedDbStore } from "./src/indexeddb"
 export type {

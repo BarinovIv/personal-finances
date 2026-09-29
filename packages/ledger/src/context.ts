@@ -1,4 +1,5 @@
 import {
+  isMovement,
   liveOperations,
   monthlyLimit,
   paydaysOf,
@@ -87,13 +88,13 @@ export class LedgerContext {
     return paydaysOf(this.records.get("settings", SETTINGS_ID))
   }
 
-  /** История подстановок — только живые расходы и доходы. */
+  /** История подстановок — только живые расходы и доходы: на возвратах и операциях вне расходов и доходов она не учится. */
   readonly history = this.cached(
     () =>
       new History(
         this.records
           .live("operations")
-          .filter((r) => r.data.kind !== "refund")
+          .filter((r) => r.data.kind === "expense" || r.data.kind === "income")
           .map((r) => ({
             kind: r.data.kind as CategoryKind,
             description: r.data.description,
@@ -103,9 +104,10 @@ export class LedgerContext {
       )
   )
 
-  /** Категория операции; у возврата — категория исходного расхода. */
-  operationCategory(record: RecordOf<"operations">): CategoryView {
+  /** Категория операции; у возврата — категория исходного расхода, у операций вне расходов и доходов её нет. */
+  operationCategory(record: RecordOf<"operations">): CategoryView | null {
     const { data } = record
+    if (isMovement(data.kind)) return null
     if (data.kind === "refund" && data.refundOf) {
       const original = this.records.get("operations", data.refundOf)
       if (original) return this.categoryOf(original.data.categoryId, "expense")
@@ -116,6 +118,7 @@ export class LedgerContext {
   toView(record: RecordOf<"operations">): OperationView {
     const { data } = record
     const original = data.kind === "refund" && data.refundOf ? this.records.get("operations", data.refundOf) : undefined
+    const debt = data.repaymentOf ? this.records.get("operations", data.repaymentOf) : undefined
     return {
       id: record.id,
       kind: data.kind,
@@ -125,6 +128,10 @@ export class LedgerContext {
       date: data.date,
       category: this.operationCategory(record),
       refundOf: data.refundOf,
+      goalId: data.goalId ?? null,
+      // у погашения человек его долга, даже если долг потом поправили
+      person: (debt ? debt.data.person : data.person) ?? null,
+      repaymentOf: data.repaymentOf ?? null,
       recurringId: data.recurringId,
       createdAt: data.createdAt,
       updatedAt: record.updatedAt
