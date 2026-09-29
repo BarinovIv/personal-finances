@@ -57,6 +57,8 @@ export const LoopIcon = ({ size = 18 }: { size?: number }) => <SfSymbol name="re
 
 export const GridIcon = ({ size = 18 }: { size?: number }) => <SfSymbol name="square_grid_2x2_fill" size={size} />
 
+export const StarIcon = ({ size = 18 }: { size?: number }) => <SfSymbol name="star_fill" size={size} />
+
 export const DownloadIcon = ({ size = 18 }: { size?: number }) => <SfSymbol name="square_arrow_down" size={size} />
 
 export const PhoneIcon = ({ size = 18 }: { size?: number }) => <SfSymbol name="device_phone_portrait" size={size} />

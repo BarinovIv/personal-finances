@@ -1,5 +1,6 @@
 import type {
   CategoryData as CategoryDataType,
+  GoalData as GoalDataType,
   OperationData as OperationDataType,
   RecurringData as RecurringDataType,
   SettingsData as SettingsDataType,
@@ -78,6 +79,16 @@ export const SettingsData = Schema.Struct({
   paydays: Schema.Array(Schema.Int.pipe(Schema.between(1, 31)))
 })
 
+/** Цель накопления: целевая сумма — положительная в копейках, срок необязателен. */
+export const GoalData = Schema.Struct({
+  name: Schema.String,
+  icon: Schema.String,
+  target: Kopecks,
+  deadline: Schema.NullOr(IsoDate),
+  archived: Schema.Boolean,
+  createdAt: Schema.Number
+})
+
 const record = <C extends string, D extends Schema.Schema.Any>(collection: C, data: D) =>
   Schema.Struct({
     collection: Schema.Literal(collection),
@@ -91,9 +102,10 @@ export const OperationRecord = record("operations", OperationData)
 export const CategoryRecord = record("categories", CategoryData)
 export const RecurringRecord = record("recurring", RecurringData)
 export const SettingsRecord = record("settings", SettingsData)
+export const GoalRecord = record("goals", GoalData)
 
 /** Любая синхронизируемая запись; данные проверяются по виду коллекции. */
-export const SyncRecord = Schema.Union(OperationRecord, CategoryRecord, RecurringRecord, SettingsRecord)
+export const SyncRecord = Schema.Union(OperationRecord, CategoryRecord, RecurringRecord, SettingsRecord, GoalRecord)
 export type SyncRecord = typeof SyncRecord.Type
 
 // Схемы протокола и типы клиента описывают одно и то же.
@@ -103,4 +115,5 @@ same<Same<typeof OperationData.Type, OperationDataType>>()
 same<Same<typeof CategoryData.Type, CategoryDataType>>()
 same<Same<typeof RecurringData.Type, RecurringDataType>>()
 same<Same<typeof SettingsData.Type, SettingsDataType>>()
+same<Same<typeof GoalData.Type, GoalDataType>>()
 export const toDomainRecord = (record: SyncRecord): SyncRecordType => record

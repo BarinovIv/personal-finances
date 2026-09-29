@@ -1,6 +1,6 @@
 import { recurringOperationId } from "@fin/domain"
 import { describe, expect, it } from "vitest"
-import { add, makeLedger } from "./support"
+import { add, addGoal, makeLedger } from "./support"
 
 describe("выгрузка в CSV", () => {
   it("все операции, включая возвраты и регулярные; UTF-8 с BOM, «;», десятичная запятая", async () => {
@@ -56,8 +56,9 @@ describe("выгрузка в CSV", () => {
 
   it("операции вне расходов и доходов — с понятным видом, без категории, у долгов и погашений — человек", async () => {
     const { ledger } = await makeLedger()
-    await ledger.addMovement({ kind: "saved", goalId: "car", amount: 3000000, date: "2026-09-01" })
-    await ledger.addMovement({ kind: "withdrawn", goalId: "car", amount: 1000000, date: "2026-09-02" })
+    const car = (await addGoal(ledger, { name: "Машина", target: 100000000 })).id
+    await ledger.addMovement({ kind: "saved", goalId: car, amount: 3000000, date: "2026-09-01" })
+    await ledger.addMovement({ kind: "withdrawn", goalId: car, amount: 1000000, date: "2026-09-02" })
     const lent = await ledger.addMovement({ kind: "lent", person: "Петя", amount: 200000, date: "2026-09-03" })
     if (!lent.ok) throw new Error()
     await ledger.addMovement({ kind: "repaid-to-me", debtId: lent.operation.id, amount: 50000, date: "2026-09-04" })

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "preact/hooks"
 import { ChartIcon, PenIcon, SlidersIcon } from "./icons"
 import { DashboardScreen } from "./screens/Dashboard"
 import { EntryScreen } from "./screens/Entry"
+import { GoalScreen } from "./screens/Goal"
 import { LoginScreen } from "./screens/Login"
 import { OperationScreen } from "./screens/Operation"
 import { SettingsScreen, type SettingsSub } from "./screens/Settings"
@@ -12,7 +13,7 @@ import { ToastHost } from "./toast"
 
 type Tab = "entry" | "dashboard" | "settings"
 
-const SETTINGS_SUBS: ReadonlyArray<SettingsSub> = ["paydays", "recurring", "categories", "export", "devices"]
+const SETTINGS_SUBS: ReadonlyArray<SettingsSub> = ["paydays", "recurring", "categories", "goals", "export", "devices"]
 
 /** Подстраница настроек — отдельный вложенный экран, без таббара (как «Операция»). */
 const settingsSubOf = (route: string): SettingsSub | null => {
@@ -67,11 +68,14 @@ const Main = ({ services, onSignedOut }: { services: AppServices; onSignedOut: (
   const { ledger, sync } = services
   const tab = tabOf(route)
   const op = /^\/op\/(.+)$/.exec(route)
+  const goal = /^\/goal\/(.+)$/.exec(route)
   const settingsSub = settingsSubOf(route)
   return (
     <div class={`app${tab ? " has-tabbar" : ""}`}>
       {op ? (
         <OperationScreen ledger={ledger} id={decodeURIComponent(op[1]!)} />
+      ) : goal ? (
+        <GoalScreen ledger={ledger} id={decodeURIComponent(goal[1]!)} />
       ) : tab === "dashboard" ? (
         <DashboardScreen ledger={ledger} />
       ) : tab === "settings" || settingsSub ? (

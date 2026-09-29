@@ -22,11 +22,12 @@ const normalize = (text: string) => text.toLocaleLowerCase("ru").trim()
 /** «1500,00» → «1500»: чтобы «150» находило и «1500», и «150,00». */
 const amountText = (kopecks: number) => formatDecimal(kopecks).replace(/,00$/, "")
 
-/** По чему ищется операция: описание и сумма, у операций вне расходов и доходов — ещё вид и человек. */
+/** По чему ищется операция: описание и сумма, у операций вне расходов и доходов — ещё вид, человек и цель. */
 const searchText = (ctx: LedgerContext, record: RecordOf<"operations">) => {
   const text = `${normalize(record.data.description)} ${amountText(record.data.amount)}`
   if (!isMovement(record.data.kind)) return text
-  return `${text} ${OPERATION_KIND_TEXT[record.data.kind]} ${normalize(ctx.toView(record).person ?? "")}`
+  const view = ctx.toView(record)
+  return `${text} ${OPERATION_KIND_TEXT[record.data.kind]} ${normalize(view.person ?? view.goalName ?? "")}`
 }
 
 /**
