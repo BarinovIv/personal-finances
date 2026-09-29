@@ -59,6 +59,8 @@ export const GridIcon = ({ size = 18 }: { size?: number }) => <SfSymbol name="sq
 
 export const DownloadIcon = ({ size = 18 }: { size?: number }) => <SfSymbol name="square_arrow_down" size={size} />
 
+export const DebtIcon = ({ size = 18 }: { size?: number }) => <SfSymbol name="money_rubl" size={size} />
+
 export const PhoneIcon = ({ size = 18 }: { size?: number }) => <SfSymbol name="device_phone_portrait" size={size} />
 
 export const CloudIcon = ({ size = 16 }: { size?: number }) => <SfSymbol name="cloud" size={size} />

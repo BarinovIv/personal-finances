@@ -11,6 +11,7 @@ import { SwipeBack } from "../components/SwipeBack"
 import { CheckIcon, CloseIcon, ForwardIcon, RefundIcon, TrashIcon } from "../icons"
 import { goBack, useLedgerVersion } from "../state"
 import { limitNotes, showToast } from "../toast"
+import { DebtRepayments, isDebtOperation } from "./Debt"
 
 const problemText: Record<UpdateProblem, string> = {
   "not-found": "Операция уже удалена.",
@@ -261,6 +262,7 @@ const ViewCard = ({ ledger, op, onEdit }: { ledger: Ledger; op: OperationView; o
         </div>
         {movement && <p class="section-footer">Не расход и не доход: в дашборд и категории не попадает, но меняет свободные деньги.</p>}
         {info && <RefundsList ledger={ledger} info={info} onOpenForm={() => setRefundOpen(true)} />}
+        {isDebtOperation(op) && <DebtRepayments ledger={ledger} debt={op} />}
         <div class="card-list">
           <button type="button" class="row row-button action-row destructive" onClick={() => setDeleteOpen(true)}>
             <TrashIcon size={18} />
