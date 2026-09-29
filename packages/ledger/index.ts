@@ -17,6 +17,14 @@ export type {
   SubmitEntriesResult,
   SubmitResult
 } from "./src/entry"
+export type {
+  DeleteGoalProblem,
+  DeleteGoalResult,
+  GoalInput,
+  GoalProblem,
+  GoalResult,
+  GoalView
+} from "./src/goals"
 export { openLedger, type Ledger, type LedgerOptions, type LedgerSyncPort } from "./src/ledger"
 export type {
   OperationPatch,

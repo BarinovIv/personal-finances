@@ -129,6 +129,7 @@ export class LedgerContext {
       category: this.operationCategory(record),
       refundOf: data.refundOf,
       goalId: data.goalId ?? null,
+      goalName: (data.goalId ? this.records.get("goals", data.goalId)?.data.name : undefined) ?? null,
       // у погашения человек его долга, даже если долг потом поправили
       person: (debt ? debt.data.person : data.person) ?? null,
       repaymentOf: data.repaymentOf ?? null,

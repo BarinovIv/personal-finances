@@ -2,6 +2,7 @@ import {
   recordKey,
   type CategoryData,
   type Collection,
+  type GoalData,
   type OperationData,
   type RecurringData,
   type SettingsData,
@@ -14,6 +15,7 @@ interface DataOf {
   categories: CategoryData
   recurring: RecurringData
   settings: SettingsData
+  goals: GoalData
 }
 
 export type RecordOf<C extends Collection> = SyncRecord<C, DataOf[C]>

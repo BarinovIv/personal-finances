@@ -7,6 +7,7 @@ import { CategoryBadge } from "../components/CategoryBadge"
 import { LargeTitle } from "../components/LargeTitle"
 import { signedAmount } from "../components/OperationRow"
 import { BackIcon, ForwardIcon, RepeatIcon } from "../icons"
+import { GoalsBlock } from "./Goals"
 import { dashboardMemory, useLedgerVersion } from "../state"
 
 const MUTED_SECTOR = "var(--chart-muted)"
@@ -378,6 +379,7 @@ export const DashboardScreen = ({ ledger }: { ledger: Ledger }) => {
       <Donut d={d} selected={selected} />
       <UpcomingBlock d={d} today={today} />
       <CategoryList d={d} selected={selected} onSelect={select} today={today} />
+      <GoalsBlock ledger={ledger} />
       <Trend d={d} />
     </LargeTitle>
   )

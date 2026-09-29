@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { Ledger, MovementInput } from "@fin/ledger"
-import { add, makeLedger, testClock } from "./support"
+import { add, addGoal, makeLedger, testClock } from "./support"
 
 /** 29 сентября: зарплатный период 20.09–04.10, до его конца 6 дней, включая сегодня. */
 const on29th = () => makeLedger({ clock: testClock("2026-09-29T12:00:00+03:00") })
@@ -33,27 +33,29 @@ describe("операции вне расходов и доходов", () => {
 
   it("«Снято 10 000» → свободные деньги в периоде её даты +10 000, другие периоды не меняются", async () => {
     const { ledger } = await on29th()
-    await move(ledger, { kind: "saved", goalId: "vacation", amount: 3000000, date: "2026-08-10" })
+    const vacation = (await addGoal(ledger, { name: "Отпуск", target: 100000000 })).id
+    await move(ledger, { kind: "saved", goalId: vacation, amount: 3000000, date: "2026-08-10" })
     await add(ledger, "+зарплата 50000", { date: "2026-09-05" })
     const previous = () => ledger.dashboard({ mode: "pay", offset: -1 })
     const current = () => ledger.dashboard({ mode: "pay", offset: 0 })
     expect(previous().free).toBe(5000000)
 
-    await move(ledger, { kind: "withdrawn", goalId: "vacation", amount: 1000000, date: "2026-09-10" })
+    await move(ledger, { kind: "withdrawn", goalId: vacation, amount: 1000000, date: "2026-09-10" })
     expect(previous().free).toBe(6000000)
     expect(previous().income).toBe(5000000)
     expect(previous().expenses).toBe(0)
     expect(current().free).toBe(0)
-    expect(ledger.goalSavings("vacation")).toBe(2000000)
+    expect(ledger.goalSavings(vacation)).toBe(2000000)
   })
 
   it("отложено и одолжил уменьшают, снято, занял и мне вернули увеличивают, я вернул уменьшает свободные деньги", async () => {
     const { ledger } = await on29th()
+    const car = (await addGoal(ledger, { name: "Машина", target: 100000000 })).id
     const free = () => ledger.dashboard({ mode: "pay", offset: 0 }).free
     await add(ledger, "+зарплата 100000", { date: "2026-09-20" })
-    await move(ledger, { kind: "saved", goalId: "car", amount: 3000000, date: "2026-09-21" })
+    await move(ledger, { kind: "saved", goalId: car, amount: 3000000, date: "2026-09-21" })
     expect(free()).toBe(7000000)
-    await move(ledger, { kind: "withdrawn", goalId: "car", amount: 500000, date: "2026-09-22" })
+    await move(ledger, { kind: "withdrawn", goalId: car, amount: 500000, date: "2026-09-22" })
     expect(free()).toBe(7500000)
     const lent = await move(ledger, { kind: "lent", person: "Петя", amount: 200000, date: "2026-09-23" })
     expect(free()).toBe(7300000)
@@ -68,9 +70,10 @@ describe("операции вне расходов и доходов", () => {
 
   it("сегодняшняя операция вне расходов и доходов сразу меняет сумму на день, а не «сегодня осталось»", async () => {
     const { ledger } = await on29th()
+    const car = (await addGoal(ledger, { name: "Машина", target: 100000000 })).id
     await add(ledger, "+зарплата 60000", { date: "2026-09-20" })
     expect(ledger.dashboard({ mode: "pay", offset: 0 }).allowance).toMatchObject({ perDay: 1000000, leftToday: 1000000 })
-    await move(ledger, { kind: "saved", goalId: "car", amount: 1200000 })
+    await move(ledger, { kind: "saved", goalId: car, amount: 1200000 })
     expect(ledger.dashboard({ mode: "pay", offset: 0 }).allowance).toMatchObject({ perDay: 800000, leftToday: 800000 })
     await move(ledger, { kind: "borrowed", person: "Маша", amount: 600000 })
     expect(ledger.dashboard({ mode: "pay", offset: 0 }).allowance).toMatchObject({ perDay: 900000, leftToday: 900000 })
@@ -78,13 +81,14 @@ describe("операции вне расходов и доходов", () => {
 
   it("видны в ленте в своём дне; в итоги дня как расходы и доходы не входят", async () => {
     const { ledger } = await on29th()
+    const car = (await addGoal(ledger, { name: "Машина", target: 100000000 })).id
     await add(ledger, "кофе 250", { date: "2026-09-27" })
     await move(ledger, { kind: "lent", person: "Петя", amount: 200000, date: "2026-09-27", description: "на билеты" })
-    await move(ledger, { kind: "saved", goalId: "car", amount: 500000 })
+    await move(ledger, { kind: "saved", goalId: car, amount: 500000 })
 
     const [today, before] = ledger.days()
     expect(today).toMatchObject({ date: "2026-09-29", expenseTotal: 0, incomeTotal: 0 })
-    expect(today!.items).toMatchObject([{ kind: "saved", goalId: "car", category: null, amount: 500000 }])
+    expect(today!.items).toMatchObject([{ kind: "saved", goalId: car, category: null, amount: 500000 }])
     expect(before).toMatchObject({ date: "2026-09-27", expenseTotal: 25000, incomeTotal: 0 })
     expect(before!.items.map((o) => [o.kind, o.description, o.person, o.category?.name ?? null])).toEqual([
       ["lent", "на билеты", "Петя", null],
@@ -130,13 +134,15 @@ describe("операции вне расходов и доходов", () => {
 
   it("снять с цели больше накопленного нельзя", async () => {
     const { ledger } = await on29th()
-    expect(await ledger.addMovement({ kind: "withdrawn", goalId: "car", amount: 100 })).toEqual({ ok: false, problem: "too-much" })
-    await move(ledger, { kind: "saved", goalId: "car", amount: 300000 })
-    await move(ledger, { kind: "saved", goalId: "flat", amount: 900000 })
-    expect(await ledger.addMovement({ kind: "withdrawn", goalId: "car", amount: 300001 })).toEqual({ ok: false, problem: "too-much" })
-    await move(ledger, { kind: "withdrawn", goalId: "car", amount: 300000 })
-    expect(ledger.goalSavings("car")).toBe(0)
-    expect(ledger.goalSavings("flat")).toBe(900000)
+    const car = (await addGoal(ledger, { name: "Машина", target: 100000000 })).id
+    const flat = (await addGoal(ledger, { name: "Квартира", target: 100000000 })).id
+    expect(await ledger.addMovement({ kind: "withdrawn", goalId: car, amount: 100 })).toEqual({ ok: false, problem: "too-much" })
+    await move(ledger, { kind: "saved", goalId: car, amount: 300000 })
+    await move(ledger, { kind: "saved", goalId: flat, amount: 900000 })
+    expect(await ledger.addMovement({ kind: "withdrawn", goalId: car, amount: 300001 })).toEqual({ ok: false, problem: "too-much" })
+    await move(ledger, { kind: "withdrawn", goalId: car, amount: 300000 })
+    expect(ledger.goalSavings(car)).toBe(0)
+    expect(ledger.goalSavings(flat)).toBe(900000)
   })
 
   it("операция «Отменить» после создания удаляет её", async () => {
@@ -205,18 +211,19 @@ describe("правка операций вне расходов и доходо�
 
   it("погашений не больше долга, долг не меньше погашенного, с цели не снято больше накопленного", async () => {
     const { ledger } = await on29th()
+    const car = (await addGoal(ledger, { name: "Машина", target: 100000000 })).id
     const lent = await move(ledger, { kind: "lent", person: "Петя", amount: 200000 })
     const repaid = await move(ledger, { kind: "repaid-to-me", debtId: lent.id, amount: 150000 })
     expect(await ledger.updateOperation(lent.id, { amount: 100000 })).toEqual({ ok: false, problem: "below-repayments" })
     expect(await ledger.updateOperation(repaid.id, { amount: 200001 })).toEqual({ ok: false, problem: "bad-amount" })
     expect(await ledger.updateOperation(repaid.id, { amount: 200000 })).toMatchObject({ ok: true })
 
-    const saved = await move(ledger, { kind: "saved", goalId: "car", amount: 300000 })
-    const withdrawn = await move(ledger, { kind: "withdrawn", goalId: "car", amount: 200000 })
+    const saved = await move(ledger, { kind: "saved", goalId: car, amount: 300000 })
+    const withdrawn = await move(ledger, { kind: "withdrawn", goalId: car, amount: 200000 })
     expect(await ledger.updateOperation(saved.id, { amount: 199999 })).toEqual({ ok: false, problem: "bad-amount" })
     expect(await ledger.updateOperation(withdrawn.id, { amount: 300001 })).toEqual({ ok: false, problem: "bad-amount" })
     expect(await ledger.updateOperation(withdrawn.id, { amount: 300000 })).toMatchObject({ ok: true })
-    expect(ledger.goalSavings("car")).toBe(0)
+    expect(ledger.goalSavings(car)).toBe(0)
   })
 })
 

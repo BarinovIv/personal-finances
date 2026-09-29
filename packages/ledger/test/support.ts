@@ -31,6 +31,13 @@ export const add = async (ledger: Ledger, line: string, choice: Parameters<Ledge
   return result.operation
 }
 
+/** Создаёт цель накопления; падает, если не создалась. */
+export const addGoal = async (ledger: Ledger, input: Parameters<Ledger["addGoal"]>[0]) => {
+  const result = await ledger.addGoal(input)
+  if (!result.ok) throw new Error(`Цель «${input.name}» не создалась: ${result.problem}`)
+  return result.goal
+}
+
 export const categoryId = (ledger: Ledger, name: string) => {
   const found = [...ledger.categories("expense"), ...ledger.categories("income")].find((c) => c.name === name)
   if (!found) throw new Error(`Нет категории «${name}»`)

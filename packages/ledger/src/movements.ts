@@ -69,7 +69,8 @@ export const goalSavings = (ctx: LedgerContext, goalId: string, except?: string)
     .filter((r) => r.data.goalId === goalId && r.id !== except)
     .reduce((sum, r) => sum + (r.data.kind === "saved" ? r.data.amount : r.data.kind === "withdrawn" ? -r.data.amount : 0), 0)
 
-const byDateDesc = (a: OperationData, b: OperationData) =>
+/** Сначала новые: по дате, в один день — по времени создания. */
+export const byDateDesc =(a: OperationData, b: OperationData) =>
   a.date === b.date ? b.createdAt - a.createdAt : a.date < b.date ? 1 : -1
 
 /** Погашения долга; для операций, которые не долг, — undefined. */
@@ -126,11 +127,14 @@ export const addMovement = async (ctx: LedgerContext, input: MovementInput): Pro
   let limit = Infinity
   switch (input.kind) {
     case "saved":
-    case "withdrawn":
-      if (!input.goalId) return { ok: false, problem: "no-goal" }
+    case "withdrawn": {
+      // цель — живая запись коллекции целей; на архивной цели можно и отложить, и снять
+      const goal = input.goalId ? ctx.records.get("goals", input.goalId) : undefined
+      if (!goal || goal.deleted) return { ok: false, problem: "no-goal" }
       if (input.kind === "withdrawn") limit = goalSavings(ctx, input.goalId)
       refs = { goalId: input.goalId }
       break
+    }
     case "lent":
     case "borrowed": {
       const person = input.person.trim()

@@ -250,6 +250,15 @@ const ViewCard = ({ ledger, op, onEdit }: { ledger: Ledger; op: OperationView; o
               </span>
             </a>
           )}
+          {op.goalId && (
+            <a class="row row-button info-row" href={`#/goal/${encodeURIComponent(op.goalId)}`}>
+              <span class="row-label">Цель</span>
+              <span class="row-value">{op.goalName ?? "—"}</span>
+              <span class="row-chevron">
+                <ForwardIcon size={16} />
+              </span>
+            </a>
+          )}
           {op.repaymentOf && (
             <a class="row row-button info-row" href={`#/op/${op.repaymentOf}`}>
               <span class="row-label">Долг</span>
