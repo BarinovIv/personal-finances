@@ -1,6 +1,5 @@
-import { SETTINGS_ID, type SettingsData } from "@fin/domain"
+import { SETTINGS_ID, type PeriodMode, type SettingsData } from "@fin/domain"
 import type { LedgerContext } from "./context"
-import type { PeriodMode } from "./periods"
 
 export interface Settings {
   /** Дни зарплаты, по возрастанию. */
