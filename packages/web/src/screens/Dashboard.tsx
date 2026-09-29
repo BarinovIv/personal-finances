@@ -5,7 +5,7 @@ import { CategoryBadge } from "../components/CategoryBadge"
 import { LargeTitle } from "../components/LargeTitle"
 import { signedAmount } from "../components/OperationRow"
 import { BackIcon, ForwardIcon, RepeatIcon } from "../icons"
-import { useLedgerVersion } from "../state"
+import { dashboardMemory, useLedgerVersion } from "../state"
 
 const MUTED_SECTOR = "var(--line)"
 const paletteVar = (color: string) => `var(--palette-${color})`
@@ -188,8 +188,18 @@ const Trend = ({ d }: { d: Dashboard }) => {
 export const DashboardScreen = ({ ledger }: { ledger: Ledger }) => {
   useLedgerVersion(ledger)
   const [mode, setMode] = useState<PeriodMode>(ledger.dashboardMode())
-  const [offset, setOffset] = useState(0)
-  const [selected, setSelected] = useState<string | null>(null)
+  // офсет и выбранная категория живут в dashboardMemory на время сессии: открыв операцию и вернувшись
+  // назад, пользователь должен увидеть тот же период и ту же раскрытую категорию, а не сброс на дефолт.
+  const [offset, setOffsetState] = useState(dashboardMemory.offset)
+  const [selected, setSelectedState] = useState<string | null>(dashboardMemory.selected)
+  const setOffset = (next: number) => {
+    dashboardMemory.offset = next
+    setOffsetState(next)
+  }
+  const setSelected = (next: string | null) => {
+    dashboardMemory.selected = next
+    setSelectedState(next)
+  }
   const d = ledger.dashboard({ mode, offset })
   const select = (id: string) => setSelected(selected === id ? null : id)
   const switchMode = (next: PeriodMode) => {
