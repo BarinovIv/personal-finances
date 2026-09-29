@@ -39,6 +39,7 @@ import {
   type RecurringResult,
   type RecurringView
 } from "./recurring"
+import { searchOperations, type SearchSummary } from "./search"
 import { dashboardMode, readSettings, setDashboardMode, setPaydays, type Settings } from "./settings"
 import type { LedgerStore } from "./store"
 import type { CategoryView, DayGroup, OperationView } from "./views"
@@ -90,6 +91,8 @@ export interface Ledger {
   submit(line: string, choice?: EntryChoice): Promise<SubmitResult>
   /** Операции по дням, сначала новые. */
   days(): ReadonlyArray<DayGroup>
+  /** Поиск по ленте: подстрока в описании или сумме, при необходимости — в одной категории. */
+  search(query: string, categoryId?: string | null): SearchSummary
   operation(id: string): OperationView | undefined
   updateOperation(id: string, patch: OperationPatch): Promise<UpdateResult>
   deleteOperation(id: string): Promise<void>
@@ -149,6 +152,7 @@ export const openLedger = async (options: LedgerOptions): Promise<Ledger> => {
     preview: (line, choice) => previewEntry(ctx, line, choice),
     submit: (line, choice) => submitEntry(ctx, line, choice),
     days: () => listDays(ctx),
+    search: (query, categoryId) => searchOperations(ctx, query, categoryId ?? null),
     operation: (id) => {
       const record = records.get("operations", id)
       return record && !record.deleted ? ctx.toView(record) : undefined

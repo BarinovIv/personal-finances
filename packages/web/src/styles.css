@@ -157,12 +157,56 @@ a {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  border-bottom: 1px solid var(--line);
+  background: var(--accent);
+  color: #fff;
 }
 
 .composer label {
   font-size: 13px;
-  color: var(--muted);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.composer .hint {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.composer .hint.error {
+  color: #fff;
+  font-weight: 600;
+}
+
+.composer .flash {
+  color: #fff;
+  font-weight: 600;
+}
+
+.composer-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.icon-button.on-accent {
+  color: #fff;
+}
+
+.composer-spent {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 14px;
+  padding: 2px 2px 0;
+  min-height: 32px;
+  text-align: left;
+}
+
+.composer-spent strong {
+  font-size: 16px;
+  color: #fff;
 }
 
 .line-input {
@@ -239,6 +283,7 @@ a {
   white-space: nowrap;
   font-size: 16px;
   font-weight: 600;
+  color: #fff;
 }
 
 .round-button {
@@ -339,12 +384,16 @@ a {
   color: var(--ink);
   border: 0;
   border-top: 1px solid var(--line-soft);
-  background: transparent;
+  background: var(--surface);
   width: 100%;
   text-align: left;
+  position: relative;
+  z-index: 1;
+  transition: transform 0.2s ease;
 }
 
-.op-row:first-child {
+.op-row-wrap:first-child .op-row,
+.op-row-wrap:first-child .op-row-quick-delete {
   border-top-color: transparent;
 }
 
@@ -1316,4 +1365,138 @@ select.text-input {
 
 .icon-swatch[aria-pressed="true"] {
   color: #fff;
+}
+
+/* Поиск по ленте */
+.search-panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  transition: grid-template-rows 0.25s ease;
+}
+
+.search-panel.open {
+  grid-template-rows: 1fr;
+}
+
+.search-panel-inner {
+  overflow: hidden;
+}
+
+.search-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px 8px;
+}
+
+.search-row .text-input {
+  flex: 1;
+}
+
+.filter-chips {
+  display: flex;
+  gap: 8px;
+  padding: 0 16px 12px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.filter-chips .chip[aria-pressed="true"] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+}
+
+.search-summary {
+  padding: 6px 2px 4px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .search-panel {
+    transition: none;
+  }
+}
+
+/* Строка ленты: свайв влево открывает «Удалить», появление/исчезание анимированы */
+.op-row-wrap {
+  display: flex;
+  align-items: stretch;
+  animation: fin-row-in 0.2s ease;
+}
+
+.op-row-wrap.leaving {
+  animation: fin-row-out 0.2s ease forwards;
+}
+
+.op-row-swipe {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.op-row-delete {
+  position: absolute;
+  inset: 0 0 0 auto;
+  width: 84px;
+  border: 0;
+  background: var(--danger);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  font-size: 12px;
+}
+
+/* Постоянная кнопка удаления — доступна без свайпа, в том числе с компьютера */
+.op-row-quick-delete {
+  flex: 0 0 36px;
+  border: 0;
+  border-top: 1px solid var(--line-soft);
+  background: transparent;
+  color: var(--faint);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.op-row-quick-delete:hover {
+  color: var(--danger);
+}
+
+@keyframes fin-row-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes fin-row-out {
+  from {
+    max-height: 80px;
+    opacity: 1;
+  }
+  to {
+    max-height: 0;
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .op-row-wrap,
+  .op-row-wrap.leaving,
+  .op-row {
+    animation: none;
+    transition: none;
+  }
 }
