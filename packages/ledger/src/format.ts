@@ -1,4 +1,4 @@
-import { addDays, dateParts, type IsoDate } from "@fin/domain"
+import { addDays, dateParts, type IsoDate, type OperationKind } from "@fin/domain"
 
 export const MONTHS_GENITIVE = [
   "января",
@@ -37,6 +37,19 @@ export const dayMonth = (date: IsoDate, today: IsoDate): string => {
   const { year, month, day } = dateParts(date)
   const base = `${day} ${MONTHS_GENITIVE[month - 1]}`
   return year === dateParts(today).year ? base : `${base} ${year}`
+}
+
+/** Вид операции словами, со строчной буквы: для CSV, поиска и подписей в ленте. */
+export const OPERATION_KIND_TEXT: Record<OperationKind, string> = {
+  expense: "расход",
+  income: "доход",
+  refund: "возврат",
+  saved: "отложено",
+  withdrawn: "снято",
+  lent: "одолжил",
+  borrowed: "занял",
+  "repaid-to-me": "мне вернули",
+  "repaid-by-me": "я вернул"
 }
 
 /** «Сегодня», «Вчера» или дата. */

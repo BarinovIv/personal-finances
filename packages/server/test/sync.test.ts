@@ -99,3 +99,63 @@ describe("синхронизация: сервер", () => {
       expect(stale.json.changes).toEqual([op("a", 200, 25000, true)])
     }))
 })
+
+describe("синхронизация: операции вне расходов и доходов", () => {
+  const movement = (id: string, data: Record<string, unknown>) => ({
+    collection: "operations",
+    id,
+    updatedAt: 100,
+    deleted: false,
+    data: {
+      amount: 200000,
+      description: "",
+      categoryId: "",
+      date: "2026-09-28",
+      createdAt: 1,
+      categorizedAt: 1,
+      refundOf: null,
+      recurringId: null,
+      ...data
+    }
+  })
+  const all = [
+    movement("saved", { kind: "saved", goalId: "car" }),
+    movement("withdrawn", { kind: "withdrawn", goalId: "car" }),
+    movement("lent", { kind: "lent", person: "Петя" }),
+    movement("back", { kind: "repaid-to-me", repaymentOf: "lent" }),
+    movement("borrowed", { kind: "borrowed", person: "Маша", description: "на ремонт" }),
+    movement("paid", { kind: "repaid-by-me", repaymentOf: "borrowed" })
+  ]
+
+  it.scoped("сервер принимает все виды и отдаёт их другому устройству без изменений", () =>
+    Effect.gen(function* () {
+      const phone = yield* signedIn
+      const mac = phone.device()
+      yield* mac.post("/api/login", { password: "верный-пароль" })
+
+      expect((yield* sync(phone, 0, all)).status).toBe(200)
+      expect((yield* sync(mac, 0)).json).toEqual({ cursor: 6, changes: all, hasMore: false })
+    }))
+
+  it.scoped("старые операции без новых полей читаются без изменений", () =>
+    Effect.gen(function* () {
+      const server = yield* signedIn
+      yield* sync(server, 0, [op("a", 100, 25000), all[2]])
+      const pulled = yield* sync(server, 0)
+      expect(pulled.json.changes).toEqual([op("a", 100, 25000), all[2]])
+      expect(Object.keys(pulled.json.changes[0].data)).not.toContain("person")
+    }))
+
+  it.scoped("без цели, человека или долга у своего вида — 400", () =>
+    Effect.gen(function* () {
+      const server = yield* signedIn
+      for (const bad of [
+        movement("x", { kind: "saved" }),
+        movement("x", { kind: "lent", person: " " }),
+        movement("x", { kind: "repaid-to-me" }),
+        movement("x", { kind: "gift", person: "Петя" })
+      ]) {
+        expect((yield* sync(server, 0, [bad])).status).toBe(400)
+      }
+    }))
+})

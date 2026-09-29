@@ -26,7 +26,7 @@ describe("свои категории", () => {
     const op = await add(ledger, "кофе 250")
     await ledger.sync.acknowledge(ledger.sync.pending())
     expect(await ledger.renameCategory(categoryId(ledger, "Кафе"), "Кофейни")).toEqual({ ok: true })
-    expect(ledger.operation(op.id)!.category.name).toBe("Кофейни")
+    expect(ledger.operation(op.id)!.category?.name).toBe("Кофейни")
     expect(ledger.dashboard({ mode: "month", offset: 0 }).categories[0]!.name).toBe("Кофейни")
     expect(ledger.sync.pending().map((r) => r.collection)).toEqual(["categories"])
     expect(await ledger.renameCategory(categoryId(ledger, "Кофейни"), "Продукты")).toEqual({
@@ -63,7 +63,7 @@ describe("свои категории", () => {
     clock.advance(1000)
 
     expect(await ledger.deleteCategory(categoryId(ledger, "Одежда"), { moveTo: hobby.category.id })).toEqual({ ok: true })
-    expect(ledger.operation(tishka.id)!.category.name).toBe("Гардероб")
+    expect(ledger.operation(tishka.id)!.category?.name).toBe("Гардероб")
     expect(ledger.preview("тишка 500").categoryId).toBe(hobby.category.id)
     expect(ledger.dashboard({ mode: "month", offset: 0 }).categories).toMatchObject([
       { name: "Гардероб", amount: 1050000 + 400000 - 100000 }

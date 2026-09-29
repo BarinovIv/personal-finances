@@ -62,6 +62,22 @@ describe("суммы за период", () => {
     ])
     expect(periodTotals(ops, { start: "2026-08-01", end: "2026-08-31" }).expenses).toBe(500000)
   })
+
+  it("операции вне расходов и доходов не входят в расходы, доходы и категории, но двигают деньги периода", () => {
+    const ops = [
+      op("coffee", { kind: "expense", amount: 20000, date: "2026-09-03" }),
+      op("saved", { kind: "saved", amount: 3000000, date: "2026-09-04", categoryId: "", goalId: "car" }),
+      op("withdrawn", { kind: "withdrawn", amount: 1000000, date: "2026-09-05", categoryId: "", goalId: "car" }),
+      op("lent", { kind: "lent", amount: 200000, date: "2026-09-06", categoryId: "", person: "Петя" }),
+      op("back", { kind: "repaid-to-me", amount: 50000, date: "2026-09-07", categoryId: "", repaymentOf: "lent" }),
+      op("borrowed", { kind: "borrowed", amount: 500000, date: "2026-09-08", categoryId: "", person: "Маша" }),
+      op("paid", { kind: "repaid-by-me", amount: 100000, date: "2026-09-09", categoryId: "", repaymentOf: "borrowed" }),
+      op("october", { kind: "lent", amount: 70000, date: "2026-10-01", categoryId: "", person: "Петя" })
+    ]
+    const totals = periodTotals(ops, september)
+    expect(totals).toMatchObject({ expenses: 20000, income: 0, movements: -1750000 })
+    expect(totals.categories.map((c) => c.categoryId)).toEqual(["food"])
+  })
 })
 
 describe("живые операции", () => {
@@ -75,5 +91,15 @@ describe("живые операции", () => {
       op("salary", { kind: "income", amount: 15000000, date: "2026-09-05" })
     ]
     expect(liveOperations(records).map((r) => r.id)).toEqual(["shoes", "shoes-refund", "salary"])
+  })
+
+  it("без погашений удалённого долга", () => {
+    const records = [
+      { ...op("lent", { kind: "lent", amount: 200000, date: "2026-09-06", categoryId: "", person: "Петя" }), deleted: true },
+      op("back", { kind: "repaid-to-me", amount: 50000, date: "2026-09-07", categoryId: "", repaymentOf: "lent" }),
+      op("borrowed", { kind: "borrowed", amount: 500000, date: "2026-09-08", categoryId: "", person: "Маша" }),
+      op("paid", { kind: "repaid-by-me", amount: 100000, date: "2026-09-09", categoryId: "", repaymentOf: "borrowed" })
+    ]
+    expect(liveOperations(records).map((r) => r.id)).toEqual(["borrowed", "paid"])
   })
 })

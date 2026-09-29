@@ -254,7 +254,9 @@ const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) 
     } else {
       const op = ops[0]!
       const taught = first.categorySource === "manual"
-      done = taught ? `Запомнил: «${op.description}» → ${op.category.name}` : `Добавлено: ${op.description} · ${op.category.name}`
+      // строка ввода создаёт только расходы и доходы — у них категория есть всегда
+      const category = op.category!.name
+      done = taught ? `Запомнил: «${op.description}» → ${category}` : `Добавлено: ${op.description} · ${category}`
     }
     // «Отменить» удаляет всё сохранённое строкой и возвращает её в поле — поправить опечатку и сохранить заново
     const line = text

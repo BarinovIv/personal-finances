@@ -11,8 +11,22 @@ const IsoDate = Schema.String.pipe(Schema.pattern(/^\d{4}-\d{2}-\d{2}$/))
 const Kopecks = Schema.Int.pipe(Schema.positive())
 const CategoryKind = Schema.Literal("expense", "income")
 
+/**
+ * Операция. Поля операций вне расходов и доходов необязательны: записи, созданные до их появления, читаются без изменений.
+ * Цель, человек или долг обязательны у своего вида операции.
+ */
 export const OperationData = Schema.Struct({
-  kind: Schema.Literal("expense", "income", "refund"),
+  kind: Schema.Literal(
+    "expense",
+    "income",
+    "refund",
+    "saved",
+    "withdrawn",
+    "lent",
+    "borrowed",
+    "repaid-to-me",
+    "repaid-by-me"
+  ),
   amount: Kopecks,
   description: Schema.String,
   categoryId: Schema.String,
@@ -20,8 +34,27 @@ export const OperationData = Schema.Struct({
   createdAt: Schema.Number,
   categorizedAt: Schema.Number,
   refundOf: Schema.NullOr(Schema.String),
-  recurringId: Schema.NullOr(Schema.String)
-})
+  recurringId: Schema.NullOr(Schema.String),
+  goalId: Schema.optional(Schema.String),
+  person: Schema.optional(Schema.String),
+  repaymentOf: Schema.optional(Schema.String)
+}).pipe(
+  Schema.filter((data) => {
+    switch (data.kind) {
+      case "saved":
+      case "withdrawn":
+        return Boolean(data.goalId) || "нет цели"
+      case "lent":
+      case "borrowed":
+        return Boolean(data.person?.trim()) || "нет человека"
+      case "repaid-to-me":
+      case "repaid-by-me":
+        return Boolean(data.repaymentOf) || "нет долга"
+      default:
+        return true
+    }
+  })
+)
 
 export const CategoryData = Schema.Struct({
   kind: CategoryKind,

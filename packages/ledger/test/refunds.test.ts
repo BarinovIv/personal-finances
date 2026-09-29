@@ -78,7 +78,7 @@ describe("возвраты", () => {
     await add(ledger, "кофе 250")
     const today = ledger.days()[0]!
     expect(today.expenseTotal).toBe(25000 - 100000)
-    expect(today.items.map((o) => [o.kind, o.description, o.category.name])).toEqual([
+    expect(today.items.map((o) => [o.kind, o.description, o.category?.name])).toEqual([
       ["expense", "кофе", "Кафе"],
       ["refund", "джинсы", "Одежда"]
     ])

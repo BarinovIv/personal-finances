@@ -1,3 +1,4 @@
+import { isMovement, movementEffect, parentOperation } from "./movements"
 import { inPeriod, type Period } from "./periods"
 import type { OperationData, OperationRecord } from "./records"
 
@@ -15,18 +16,25 @@ export interface PeriodTotals {
   readonly income: number
   /** Расходы по категориям, по убыванию суммы. Доходы сюда не входят. */
   readonly categories: ReadonlyArray<CategoryTotal>
+  /**
+   * Операции вне расходов и доходов: сколько денег они принесли (плюс) или забрали (минус), копейки.
+   * В расходы, доходы и категории они не входят, но двигают свободные деньги.
+   */
+  readonly movements: number
 }
 
 /**
  * Живые операции из всех записей, включая удалённые. Возврат удалённого расхода тоже не живой: так бывает,
- * если расход удалили на одном устройстве, а возврат оформили на другом до синхронизации.
+ * если расход удалили на одном устройстве, а возврат оформили на другом до синхронизации. Так же с погашением
+ * удалённого долга.
  */
 export const liveOperations = (records: ReadonlyArray<OperationRecord>): Array<OperationRecord> => {
   const byId = new Map(records.map((r) => [r.id, r]))
   return records.filter((r) => {
     if (r.deleted) return false
-    if (r.data.kind !== "refund" || !r.data.refundOf) return true
-    const original = byId.get(r.data.refundOf)
+    const parent = parentOperation(r.data)
+    if (!parent) return true
+    const original = byId.get(parent)
     return original !== undefined && !original.deleted
   })
 }
@@ -50,11 +58,16 @@ export const periodTotals = (operations: ReadonlyArray<OperationRecord>, period:
   }
 
   let income = 0
+  let movements = 0
   const byCategory = new Map<string, { amount: number; operations: Array<OperationRecord> }>()
   for (const record of operations) {
     if (!inPeriod(period, record.data.date)) continue
     if (record.data.kind === "income") {
       income += record.data.amount
+      continue
+    }
+    if (isMovement(record.data.kind)) {
+      movements += movementEffect(record.data)
       continue
     }
     const categoryId = categoryOf(record)
@@ -67,5 +80,5 @@ export const periodTotals = (operations: ReadonlyArray<OperationRecord>, period:
   const categories = [...byCategory.entries()]
     .map(([categoryId, c]): CategoryTotal => ({ categoryId, amount: c.amount, operations: c.operations }))
     .sort((a, b) => b.amount - a.amount)
-  return { expenses: categories.reduce((sum, c) => sum + c.amount, 0), income, categories }
+  return { expenses: categories.reduce((sum, c) => sum + c.amount, 0), income, categories, movements }
 }
