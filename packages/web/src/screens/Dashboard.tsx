@@ -1,6 +1,6 @@
 import { formatMoney } from "@fin/domain"
 import { dayMonth, type Dashboard, type DashboardCategory, type Ledger, type PeriodMode } from "@fin/ledger"
-import { useState } from "preact/hooks"
+import { useEffect, useRef, useState } from "preact/hooks"
 import { CategoryBadge } from "../components/CategoryBadge"
 import { LargeTitle } from "../components/LargeTitle"
 import { signedAmount } from "../components/OperationRow"
@@ -9,6 +9,52 @@ import { useLedgerVersion } from "../state"
 
 const MUTED_SECTOR = "var(--line)"
 const paletteVar = (color: string) => `var(--palette-${color})`
+
+const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches
+const easeOutCubic = (t: number) => 1 - (1 - t) ** 3
+
+/** Число «перетекает» к новому значению; без анимации, если пользователь просит её уменьшить. */
+const useAnimatedNumber = (target: number, duration = 450) => {
+  const [value, setValue] = useState(target)
+  const valueRef = useRef(target)
+  useEffect(() => {
+    valueRef.current = value
+  })
+  useEffect(() => {
+    if (reducedMotion()) return setValue(target)
+    const from = valueRef.current
+    if (from === target) return
+    let raf = 0
+    const start = performance.now()
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / duration)
+      setValue(Math.round(from + (target - from) * easeOutCubic(t)))
+      if (t < 1) raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [target])
+  return value
+}
+
+/** 0→1 при каждой смене `key` — сектора кольца «дорастают» на новый период. */
+const useGrowProgress = (key: string, duration = 450) => {
+  const [progress, setProgress] = useState(1)
+  useEffect(() => {
+    if (reducedMotion()) return setProgress(1)
+    setProgress(0)
+    let raf = 0
+    const start = performance.now()
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / duration)
+      setProgress(easeOutCubic(t))
+      if (t < 1) raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [key])
+  return progress
+}
 
 const shortMoney = (kopecks: number) => {
   const rub = kopecks / 100
@@ -19,6 +65,7 @@ const shortMoney = (kopecks: number) => {
 const Summary = ({ d }: { d: Dashboard }) => {
   const { comparison } = d
   const change = comparison.change
+  const expenses = useAnimatedNumber(d.expenses)
   const compareText =
     change === null
       ? `${comparison.label}: расходов не было`
@@ -29,8 +76,8 @@ const Summary = ({ d }: { d: Dashboard }) => {
     <section class="summary">
       <div class="summary-main">
         <span class="summary-caption">Расходы</span>
-        <span class="summary-total num">{formatMoney(d.expenses)}</span>
-        <span class={`summary-compare ${change !== null && change > 0 ? "up" : "down"}`}>{compareText}</span>
+        <span class="summary-total num">{formatMoney(expenses)}</span>
+        <span class={`compare-badge ${change !== null && change > 0 ? "up" : "down"}`}>{compareText}</span>
       </div>
       <div class="summary-grid">
         <div class="summary-cell">
@@ -46,18 +93,23 @@ const Summary = ({ d }: { d: Dashboard }) => {
   )
 }
 
-const Donut = ({ d, selected, onSelect }: { d: Dashboard; selected: string | null; onSelect: (id: string) => void }) => {
+const Donut = ({ d, selected }: { d: Dashboard; selected: string | null }) => {
   const positive = d.categories.filter((c) => c.amount > 0)
   const total = positive.reduce((s, c) => s + c.amount, 0)
+  const progress = useGrowProgress(`${d.period.start}:${d.period.end}`)
+  const sel = d.categories.find((c) => c.id === selected)
+  const value = useAnimatedNumber(sel ? sel.amount : d.expenses)
   let acc = 0
-  const stops = positive.map((c) => {
+  const stops: Array<string> = []
+  for (const c of positive) {
     const from = (acc / total) * 100
     acc += c.amount
     const to = (acc / total) * 100
+    const grown = from + (to - from) * progress
     const color = !selected || selected === c.id ? paletteVar(c.color) : MUTED_SECTOR
-    return `${color} ${from.toFixed(2)}% ${to.toFixed(2)}%`
-  })
-  const sel = d.categories.find((c) => c.id === selected)
+    stops.push(`${color} ${from.toFixed(2)}% ${grown.toFixed(2)}%`)
+    if (grown < to) stops.push(`${MUTED_SECTOR} ${grown.toFixed(2)}% ${to.toFixed(2)}%`)
+  }
   if (d.categories.length === 0) return null
   return (
     <section class="donut-card" aria-label="Доли категорий">
@@ -69,23 +121,8 @@ const Donut = ({ d, selected, onSelect }: { d: Dashboard; selected: string | nul
       >
         <div class="donut-hole">
           <span class="donut-caption">{sel ? sel.name : "Всего"}</span>
-          <span class="donut-value num">{formatMoney(sel ? sel.amount : d.expenses)}</span>
+          <span class="donut-value num">{formatMoney(value)}</span>
         </div>
-      </div>
-      <div class="legend">
-        {d.categories.map((c) => (
-          <button
-            type="button"
-            class="legend-item"
-            aria-pressed={selected === c.id}
-            style={{ color: !selected || selected === c.id ? "var(--ink)" : "var(--faint)" }}
-            onClick={() => onSelect(c.id)}
-          >
-            <CategoryBadge category={c} size={20} />
-            <span class="legend-name">{c.name}</span>
-            <span class="num">{c.share === null ? "—" : `${Math.round(c.share * 100)}%`}</span>
-          </button>
-        ))}
       </div>
     </section>
   )
@@ -144,10 +181,11 @@ const UpcomingBlock = ({ d, today }: { d: Dashboard; today: string }) => {
   if (!d.isCurrent || d.upcoming.items.length === 0) return null
   return (
     <section class="upcoming">
-      <div class="upcoming-head">
+      <a href="#/settings" class="upcoming-head">
         <h2>Предстоящие списания</h2>
         <span class="num upcoming-total">{formatMoney(d.upcoming.total)}</span>
-      </div>
+        <ForwardIcon size={16} />
+      </a>
       {d.upcoming.items.map((u) => (
         <div class="upcoming-row" key={`${u.templateId}:${u.date}`}>
           <RepeatIcon />
@@ -174,7 +212,7 @@ const Trend = ({ d }: { d: Dashboard }) => {
               class="trend-bar"
               style={{
                 height: `${Math.max(4, Math.round((Math.max(0, t.amount) / max) * 96))}px`,
-                background: t.current ? "var(--accent)" : "#CFC9BE"
+                background: t.current ? "var(--accent)" : "var(--line)"
               }}
             />
             <span class="trend-label">{t.label}</span>
@@ -195,16 +233,37 @@ export const DashboardScreen = ({ ledger }: { ledger: Ledger }) => {
   const switchMode = (next: PeriodMode) => {
     setMode(next)
     setOffset(0)
-    setSelected(null)
+    // выбранная категория переживает смену вида периода — сбрасывается только смена самого периода
     void ledger.setDashboardMode(next)
   }
   const go = (delta: number) => {
+    if (delta > 0 && d.isCurrent) return
     setOffset(offset + delta)
     setSelected(null)
   }
+  const goToCurrent = () => {
+    setOffset(0)
+    setSelected(null)
+  }
+
+  const touchRef = useRef<{ x: number; y: number } | null>(null)
+  const onTouchStart = (e: TouchEvent) => {
+    const t = e.touches[0]
+    touchRef.current = t ? { x: t.clientX, y: t.clientY } : null
+  }
+  const onTouchEnd = (e: TouchEvent) => {
+    const start = touchRef.current
+    touchRef.current = null
+    const t = e.changedTouches[0]
+    if (!start || !t) return
+    const dx = t.clientX - start.x
+    const dy = t.clientY - start.y
+    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.3) return
+    go(dx < 0 ? 1 : -1)
+  }
 
   return (
-    <LargeTitle title="Дашборд">
+    <LargeTitle title="Дашборд" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
       <div class="segmented" role="group" aria-label="Вид периода">
         <button type="button" aria-pressed={mode === "pay"} onClick={() => switchMode("pay")}>
           Зарплатный период
@@ -221,12 +280,17 @@ export const DashboardScreen = ({ ledger }: { ledger: Ledger }) => {
           <span class="period-label">{d.period.label}</span>
           {d.progress && <span class="row-sub">{d.progress}</span>}
         </div>
-        <button type="button" class="icon-button" aria-label="Следующий период" onClick={() => go(1)}>
+        <button type="button" class="icon-button" aria-label="Следующий период" disabled={d.isCurrent} onClick={() => go(1)}>
           <ForwardIcon size={22} />
         </button>
       </div>
+      {!d.isCurrent && (
+        <button type="button" class="current-period-button" onClick={goToCurrent}>
+          К текущему периоду
+        </button>
+      )}
       <Summary d={d} />
-      <Donut d={d} selected={selected} onSelect={select} />
+      <Donut d={d} selected={selected} />
       <UpcomingBlock d={d} today={ledger.today()} />
       <CategoryList d={d} selected={selected} onSelect={select} today={ledger.today()} />
       <Trend d={d} />
