@@ -755,6 +755,22 @@ a {
   justify-content: center;
 }
 
+.icon-button:disabled {
+  opacity: 0.3;
+}
+
+.current-period-button {
+  align-self: center;
+  height: 32px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 16px;
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+  font-size: 13px;
+  font-weight: 600;
+}
+
 .period-title {
   flex: 1;
   display: flex;
@@ -795,15 +811,22 @@ a {
   letter-spacing: -0.5px;
 }
 
-.summary-compare {
-  font-size: 14px;
+.compare-badge {
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 4px 10px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
 }
 
-.summary-compare.down {
+.compare-badge.down {
+  background: rgba(156, 197, 181, 0.18);
   color: #9cc5b5;
 }
 
-.summary-compare.up {
+.compare-badge.up {
+  background: rgba(242, 184, 160, 0.18);
   color: #f2b8a0;
 }
 
@@ -836,8 +859,8 @@ a {
 .donut-card {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 16px;
+  justify-content: center;
+  padding: 20px;
   border-radius: 16px;
   background: var(--surface);
   border: 1px solid var(--line);
@@ -853,7 +876,7 @@ a {
 
 .donut-hole {
   position: absolute;
-  inset: 28px;
+  inset: 20px;
   border-radius: 50%;
   background: var(--surface);
   display: flex;
@@ -873,38 +896,6 @@ a {
   font-size: 17px;
   font-weight: 700;
 }
-
-.legend {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  flex: 1;
-  min-width: 0;
-}
-
-.legend-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 28px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  font-size: 13px;
-  text-align: left;
-}
-
-.legend-item[aria-pressed="true"] .legend-name {
-  font-weight: 600;
-}
-
-.legend-name {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 
 .cat-block {
   display: flex;
@@ -973,6 +964,9 @@ a {
 .bar-fill {
   display: block;
   height: 6px;
+  transition:
+    width 0.4s ease,
+    background 0.2s ease;
 }
 
 .cat-ops {
@@ -1043,13 +1037,16 @@ a {
 
 .trend-value {
   font-size: 11px;
-  color: #4a4742;
+  color: var(--muted);
 }
 
 .trend-bar {
   display: block;
   width: 100%;
   border-radius: 6px 6px 2px 2px;
+  transition:
+    height 0.4s ease,
+    background 0.2s ease;
 }
 
 .trend-label {
@@ -1214,7 +1211,10 @@ select.text-input {
 .upcoming-head {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  color: inherit;
 }
 
 .upcoming-total {
@@ -1227,7 +1227,7 @@ select.text-input {
   align-items: center;
   gap: 8px;
   font-size: 14px;
-  color: #4a4742;
+  color: var(--ink);
 }
 
 .row.inactive .row-title,
@@ -1291,6 +1291,13 @@ select.text-input {
 @media (prefers-reduced-motion: reduce) {
   .large-title-bar,
   .large-title-bar h1 {
+    transition: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bar-fill,
+  .trend-bar {
     transition: none;
   }
 }
