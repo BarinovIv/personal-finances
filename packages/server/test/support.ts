@@ -73,7 +73,7 @@ export const defaultConfig: AppConfigShape = {
   staticDir: staticFixture({ "index.html": "<!doctype html><title>Учёт</title>" }),
   password: Option.some("верный-пароль"),
   secureCookies: true,
-  backup: Option.none()
+  telegram: Option.none()
 }
 
 export const IPHONE_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1"
