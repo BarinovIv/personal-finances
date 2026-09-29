@@ -1,15 +1,21 @@
 import type { ComponentChildren } from "preact"
+import type { JSX } from "preact"
 import { useEffect, useRef, useState } from "preact/hooks"
 
 /** Крупный заголовок экрана, сжимающийся при прокрутке; сам экран прокручивается внутри. */
 export const LargeTitle = ({
   title,
   actions,
-  children
+  children,
+  onTouchStart,
+  onTouchEnd
 }: {
   title: string
   actions?: ComponentChildren
   children: ComponentChildren
+  /** Для свайпа по содержимому экрана (например, листания периодов на дашборде). */
+  onTouchStart?: JSX.TouchEventHandler<HTMLDivElement>
+  onTouchEnd?: JSX.TouchEventHandler<HTMLDivElement>
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null)
   const [collapsed, setCollapsed] = useState(false)
@@ -30,7 +36,9 @@ export const LargeTitle = ({
           {actions}
         </div>
       </header>
-      <div class="page">{children}</div>
+      <div class="page" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+        {children}
+      </div>
     </div>
   )
 }
