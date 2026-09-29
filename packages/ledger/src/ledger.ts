@@ -35,6 +35,14 @@ import {
   type RefundsInfo,
   type UpdateResult
 } from "./operations"
+import {
+  addMovement,
+  goalSavings,
+  repaymentsOf,
+  type MovementInput,
+  type MovementResult,
+  type RepaymentsInfo
+} from "./movements"
 import { Records } from "./records"
 import {
   addRecurring,
@@ -115,6 +123,15 @@ export interface Ledger {
   refunds(expenseId: string): RefundsInfo | undefined
   /** Оформить возврат: по умолчанию вся ещё не возвращённая сумма, сегодня. `undo` в результате удаляет его. */
   addRefund(expenseId: string, options?: { amount?: number; date?: IsoDate }): Promise<RefundResult>
+  /**
+   * Операция вне расходов и доходов: «Отложено», «Снято», «Одолжил», «Занял» или погашение долга.
+   * По умолчанию сегодня; погашение — на весь остаток долга. `undo` в результате удаляет её.
+   */
+  addMovement(input: MovementInput): Promise<MovementResult>
+  /** Погашения долга («Одолжил» или «Занял»); для других операций — undefined. */
+  repayments(debtId: string): RepaymentsInfo | undefined
+  /** Накоплено на цели: отложено − снято, копейки. */
+  goalSavings(goalId: string): number
   /** Итоги периода; всё считается на устройстве. */
   dashboard(query: DashboardQuery): Dashboard
   /** Последний выбранный на этом устройстве режим дашборда. */
@@ -176,6 +193,9 @@ export const openLedger = async (options: LedgerOptions): Promise<Ledger> => {
     deleteOperation: (id) => deleteOperation(ctx, id),
     refunds: (id) => refundsOf(ctx, id),
     addRefund: (id, options) => addRefund(ctx, id, options),
+    addMovement: (input) => addMovement(ctx, input),
+    repayments: (id) => repaymentsOf(ctx, id),
+    goalSavings: (goalId) => goalSavings(ctx, goalId),
     dashboard: (query) => buildDashboard(ctx, query),
     dashboardMode: () => dashboardMode(ctx),
     setDashboardMode: (mode) => setDashboardMode(ctx, mode),

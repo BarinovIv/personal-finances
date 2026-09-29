@@ -53,7 +53,7 @@ describe("ввод операции строкой", () => {
       ["26 сентября", 150000]
     ])
     // внутри дня — сначала новые
-    expect(days[0]!.items.map((o) => [o.kind, o.description, o.amount, o.category.name])).toEqual([
+    expect(days[0]!.items.map((o) => [o.kind, o.description, o.amount, o.category?.name])).toEqual([
       ["expense", "молоко", 9990, "Продукты"],
       ["income", "подработка", 1200000, "Подработка"],
       ["expense", "кофе", 25000, "Кафе"]
