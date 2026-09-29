@@ -7,6 +7,14 @@ export interface AppConfigShape {
   readonly password: Option.Option<string>
   /** Добавлять ли к cookie сессии флаг Secure. */
   readonly secureCookies: boolean
+  /** Куда слать ночной бэкап базы. Нет — бэкап выключен. */
+  readonly backup: Option.Option<BackupTarget>
+}
+
+/** Telegram-бот, который присылает файл бэкапа в чат. */
+export interface BackupTarget {
+  readonly telegramToken: string
+  readonly telegramChatId: string
 }
 
 export class AppConfig extends Context.Tag("@fin/server/AppConfig")<AppConfig, AppConfigShape>() {}
@@ -19,6 +27,12 @@ export const appConfigFromEnv = Layer.effect(
     const staticDir = yield* Config.string("STATIC_DIR").pipe(Config.withDefault("packages/web/dist"))
     const password = yield* Config.option(Config.nonEmptyString("APP_PASSWORD"))
     const secureCookies = yield* Config.boolean("SECURE_COOKIES").pipe(Config.withDefault(true))
-    return { staticDir, password, secureCookies }
+    const backup = yield* Config.option(
+      Config.all({
+        telegramToken: Config.nonEmptyString("BACKUP_TELEGRAM_TOKEN"),
+        telegramChatId: Config.nonEmptyString("BACKUP_TELEGRAM_CHAT_ID")
+      })
+    )
+    return { staticDir, password, secureCookies, backup }
   })
 )

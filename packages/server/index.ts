@@ -1,6 +1,7 @@
 export { makeWebHandler, router, startup } from "./src/app"
 export { BLOCK_DURATION, MAX_FAILURES, SESSION_COOKIE, SESSION_TTL } from "./src/auth"
-export { AppConfig, appConfigFromEnv, appConfigLayer, type AppConfigShape } from "./src/config"
+export { backupFile, type BackupFile } from "./src/backup"
+export { AppConfig, appConfigFromEnv, appConfigLayer, type AppConfigShape, type BackupTarget } from "./src/config"
 export { Db, dbFile, dbMemory, type DbShape } from "./src/db"
 export { ServerLive } from "./src/main"
 export { generateRecurring } from "./src/recurring"
