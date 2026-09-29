@@ -1,6 +1,16 @@
-import { liveOperations, monthlyLimit, paydaysOf, SETTINGS_ID, todayIn, type CategoryKind, type IsoDate } from "@fin/domain"
+import {
+  liveOperations,
+  monthlyLimit,
+  paydaysOf,
+  SETTINGS_ID,
+  STARTER_CATEGORIES,
+  todayIn,
+  UNKNOWN_CATEGORY_NAME,
+  type CategoryKind,
+  type IsoDate
+} from "@fin/domain"
 import { History } from "./categorize"
-import { STARTER_CATEGORIES, UNKNOWN_CATEGORY_COLOR, UNKNOWN_CATEGORY_ICON } from "./categories"
+import { UNKNOWN_CATEGORY_COLOR, UNKNOWN_CATEGORY_ICON } from "./categories"
 import { normalizeIcon } from "./icons"
 import { normalizePaletteColor } from "./palette"
 import type { RecordOf, Records } from "./records"
@@ -56,7 +66,7 @@ export class LedgerContext {
       this.categories().get(id) ?? {
         id,
         kind,
-        name: "Без категории",
+        name: UNKNOWN_CATEGORY_NAME,
         color: UNKNOWN_CATEGORY_COLOR,
         icon: UNKNOWN_CATEGORY_ICON,
         limit: null

@@ -9,7 +9,7 @@ import { testServer } from "./support"
 
 const MSK = (iso: string) => Date.parse(`${iso}+03:00`)
 
-const backup = Option.some({ telegramToken: "123:секрет", telegramChatId: "42" })
+const telegram = Option.some({ telegramToken: "123:секрет", telegramChatId: "42" })
 
 const op = {
   collection: "operations",
@@ -65,7 +65,7 @@ describe("ночной бэкап", () => {
     Effect.gen(function* () {
       const sent = telegramStub()
       yield* TestClock.setTime(MSK("2026-09-28T12:00:00"))
-      const server = yield* testServer({ backup })
+      const server = yield* testServer({ telegram })
       yield* server.post("/api/login", { password: "верный-пароль" })
       yield* server.post("/api/sync", { cursor: 0, changes: [op] })
 
@@ -94,7 +94,7 @@ describe("ночной бэкап", () => {
     Effect.gen(function* () {
       const sent = telegramStub([500])
       yield* TestClock.setTime(MSK("2026-09-28T12:00:00"))
-      const server = yield* testServer({ backup })
+      const server = yield* testServer({ telegram })
       yield* server.get("/api/health")
 
       yield* TestClock.adjust("15 hours")

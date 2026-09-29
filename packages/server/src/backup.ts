@@ -1,11 +1,12 @@
-import { addDays, todayIn } from "@fin/domain"
+import { todayIn } from "@fin/domain"
 import { Clock, Duration, Effect, Option } from "effect"
 import { mkdtempSync, readFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { gzipSync } from "node:zlib"
-import { AppConfig, type BackupTarget } from "./config"
+import { AppConfig } from "./config"
 import { Db } from "./db"
+import { sendDocument, untilMoscowTime } from "./telegram"
 
 export interface BackupFile {
   readonly name: string
@@ -27,41 +28,21 @@ export const backupFile = Effect.gen(function* () {
   return { name: `finances-${todayIn(now)}.sqlite.gz`, bytes } satisfies BackupFile
 })
 
-/** Отправить файл в чат через Telegram Bot API (`sendDocument`, до 50 МБ). */
-export const sendToTelegram = (target: BackupTarget, file: BackupFile) =>
-  Effect.tryPromise(async () => {
-    const form = new FormData()
-    form.append("chat_id", target.telegramChatId)
-    form.append("document", new Blob([file.bytes], { type: "application/gzip" }), file.name)
-    const response = await fetch(`https://api.telegram.org/bot${target.telegramToken}/sendDocument`, {
-      method: "POST",
-      body: form
-    })
-    if (!response.ok) throw new Error(`Telegram ответил ${response.status}: ${await response.text()}`)
-  })
-
 const BACKUP_HOUR = 3
-
-/** До ближайших 03:00 по Москве (UTC+3 без перехода на летнее время). */
-const untilBackupTime = (now: number) => {
-  const today = Date.parse(`${todayIn(now)}T0${BACKUP_HOUR}:00:00+03:00`)
-  const next = today > now ? today : Date.parse(`${addDays(todayIn(now), 1)}T0${BACKUP_HOUR}:00:00+03:00`)
-  return next - now
-}
 
 /** Каждую ночь в 03:00 по Москве шлёт снимок базы в Telegram. Сбой отправки пишется в лог и не роняет сервер. */
 export const nightlyBackup = Effect.gen(function* () {
-  const { backup } = yield* AppConfig
-  if (Option.isNone(backup)) {
+  const { telegram } = yield* AppConfig
+  if (Option.isNone(telegram)) {
     yield* Effect.logWarning("BACKUP_TELEGRAM_TOKEN и BACKUP_TELEGRAM_CHAT_ID не заданы — бэкап базы выключен")
     return
   }
   for (;;) {
     const now = yield* Clock.currentTimeMillis
-    yield* Effect.sleep(Duration.millis(untilBackupTime(now)))
+    yield* Effect.sleep(Duration.millis(untilMoscowTime(now, BACKUP_HOUR)))
     yield* backupFile.pipe(
       Effect.flatMap((file) =>
-        sendToTelegram(backup.value, file).pipe(
+        sendDocument(telegram.value, { ...file, type: "application/gzip" }).pipe(
           Effect.tap(() => Effect.logInfo(`Бэкап отправлен: ${file.name}, ${file.bytes.length} байт`))
         )
       ),

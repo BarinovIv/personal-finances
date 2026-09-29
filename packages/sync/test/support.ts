@@ -54,7 +54,7 @@ export const inProcessServer = async (clock: TestClock) => {
           staticDir: mkdtempSync(join(tmpdir(), "fin-static-")),
           password: Option.some(PASSWORD),
           secureCookies: true,
-          backup: Option.none()
+          telegram: Option.none()
         }),
         dbMemory
       )

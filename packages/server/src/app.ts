@@ -6,6 +6,7 @@ import type { AppConfig } from "./config"
 import type { Db } from "./db"
 import { dailyGeneration, generateRecurring } from "./recurring"
 import { serveStatic } from "./static"
+import { weeklySummary } from "./summary"
 import { syncRoutes } from "./sync"
 
 export const router = HttpRouter.empty.pipe(
@@ -18,13 +19,17 @@ export const router = HttpRouter.empty.pipe(
 
 export type AppServices = AppConfig | Db
 
-/** Что сервер делает при старте, до приёма запросов: пароль, пропущенные регулярные операции, ежедневная генерация, ночной бэкап. */
+/**
+ * Что сервер делает при старте, до приёма запросов: пароль, пропущенные регулярные операции, ежедневная генерация,
+ * ночной бэкап и еженедельная сводка.
+ */
 export const startup = Effect.gen(function* () {
   yield* ensurePassword
   const created = yield* generateRecurring
   if (created > 0) yield* Effect.logInfo(`Регулярные операции при старте: создано ${created}`)
   yield* Effect.forkScoped(dailyGeneration)
   yield* Effect.forkScoped(nightlyBackup)
+  yield* Effect.forkScoped(weeklySummary)
 })
 
 /**
