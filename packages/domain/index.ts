@@ -1,4 +1,6 @@
 export * from "./src/dates"
 export * from "./src/money"
+export * from "./src/periods"
 export * from "./src/records"
 export * from "./src/recurring"
+export * from "./src/totals"
