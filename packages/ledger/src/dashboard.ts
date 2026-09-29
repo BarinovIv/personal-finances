@@ -5,6 +5,7 @@ import {
   dayOfMonth,
   daysBetween,
   inPeriod,
+  limitUsage,
   periodAt,
   periodLength,
   periodTotals,
@@ -33,6 +34,8 @@ export interface DashboardCategory {
   readonly amount: number
   /** Доля от расходов периода (0–1); для нулевой и отрицательной суммы — null. */
   readonly share: number | null
+  /** Лимит на период (в зарплатном — пропорционально дням), копейки; без лимита — null. */
+  readonly limit: number | null
   /** Расходы и возвраты категории за период, сначала новые. */
   readonly operations: ReadonlyArray<OperationView>
 }
@@ -109,6 +112,7 @@ export const buildDashboard = (ctx: LedgerContext, query: DashboardQuery): Dashb
   const ops = ctx.operations()
   const { expenses, income, categories: totals } = periodTotals(ops, period)
   const expensesIn = (range: Period) => periodTotals(ops, range).expenses
+  const limits = new Map(limitUsage(ctx.records.all("categories"), ops, period).map((u) => [u.categoryId, u.limit]))
 
   const categories = totals.map((c): DashboardCategory => {
     const category = ctx.categoryOf(c.categoryId, "expense")
@@ -119,6 +123,7 @@ export const buildDashboard = (ctx: LedgerContext, query: DashboardQuery): Dashb
       icon: category.icon,
       amount: c.amount,
       share: c.amount > 0 && expenses > 0 ? c.amount / expenses : null,
+      limit: limits.get(c.categoryId) ?? null,
       operations: [...c.operations]
         .sort((a, b) => (a.data.date === b.data.date ? b.data.createdAt - a.data.createdAt : a.data.date < b.data.date ? 1 : -1))
         .map((r) => ctx.toView(r))

@@ -22,7 +22,7 @@ import { ArrowUpIcon, SearchIcon } from "../icons"
 import { allowanceItems } from "../allowance"
 import { plural } from "../format"
 import { navigate, useLedgerVersion } from "../state"
-import { showToast } from "../toast"
+import { limitNotes, showToast } from "../toast"
 
 const problemText: Record<EntryPreviewProblem, string> = {
   "no-amount": "Не вижу сумму — добавьте число, например «кофе 250».",
@@ -261,6 +261,7 @@ const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) 
     const lineChoice = choice
     showToast({
       text: done,
+      notes: limitNotes(result.warnings),
       action: {
         label: "Отменить",
         run: () => {
