@@ -1,6 +1,6 @@
 import { formatMoney } from "@fin/domain"
-import { dayLabel, type EntryChoice, type EntryPreviewProblem, type Ledger } from "@fin/ledger"
-import { useState } from "preact/hooks"
+import { dayLabel, type EntryChoice, type EntryPreviewProblem, type Ledger, type OperationView } from "@fin/ledger"
+import { useEffect, useRef, useState } from "preact/hooks"
 import type { Sync } from "@fin/sync"
 import { CategoryBadge } from "../components/CategoryBadge"
 import { CategoryGrid } from "../components/CategoryGrid"
@@ -8,12 +8,64 @@ import { OperationRow } from "../components/OperationRow"
 import { Sheet } from "../components/Sheet"
 import { SyncBadge } from "../components/SyncBadge"
 import { CheckIcon } from "../icons"
-import { useLedgerVersion } from "../state"
+import { navigate, useLedgerVersion } from "../state"
+import { showToast } from "../toast"
 
 const problemText: Record<EntryPreviewProblem, string> = {
   "no-amount": "Не вижу сумму — добавьте число, например «кофе 250».",
   "no-description": "Добавьте описание — что это было?",
   "no-category": "Выберите категорию."
+}
+
+const plural = (n: number, one: string, few: string, many: string) => {
+  const mod10 = n % 10
+  const mod100 = n % 100
+  if (mod10 === 1 && mod100 !== 11) return one
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few
+  return many
+}
+
+const SearchIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <circle cx="11" cy="11" r="7" />
+    <path d="m20 20-3.2-3.2" />
+  </svg>
+)
+
+const CloseIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M6 6l12 12M18 6 6 18" />
+  </svg>
+)
+
+/** Удаляет операцию с задержкой на анимацию исчезновения; в окне задержки можно отменить. */
+const useRemoveWithUndo = (ledger: Ledger) => {
+  const [leaving, setLeaving] = useState<ReadonlySet<string>>(new Set())
+  const remove = (op: OperationView) => {
+    let cancelled = false
+    setLeaving((prev) => new Set(prev).add(op.id))
+    const unmark = () =>
+      setLeaving((prev) => {
+        const next = new Set(prev)
+        next.delete(op.id)
+        return next
+      })
+    showToast({
+      text: `Удалено: ${op.description}`,
+      action: {
+        label: "Отменить",
+        run: () => {
+          cancelled = true
+          unmark()
+        }
+      }
+    })
+    setTimeout(() => {
+      unmark()
+      if (!cancelled) void ledger.deleteOperation(op.id)
+    }, 200)
+  }
+  return { leaving, remove }
 }
 
 export const EntryScreen = ({ ledger, sync }: { ledger: Ledger; sync: Sync }) => {
@@ -23,6 +75,11 @@ export const EntryScreen = ({ ledger, sync }: { ledger: Ledger; sync: Sync }) =>
   const [pickerOpen, setPickerOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [flash, setFlash] = useState("")
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [query, setQuery] = useState("")
+  const [filterCategory, setFilterCategory] = useState<string | null>(null)
+  const searchInput = useRef<HTMLInputElement>(null)
+  const { leaving, remove } = useRemoveWithUndo(ledger)
 
   const preview = ledger.preview(text, choice)
   const has = text.trim() !== ""
@@ -32,6 +89,11 @@ export const EntryScreen = ({ ledger, sync }: { ledger: Ledger; sync: Sync }) =>
     ? ledger.categories(preview.kind).find((c) => c.id === preview.categoryId)
     : undefined
   const today = ledger.today()
+  const currentPeriod = ledger.dashboard({ mode: ledger.dashboardMode(), offset: 0 })
+
+  useEffect(() => {
+    if (searchOpen) searchInput.current?.focus()
+  }, [searchOpen])
 
   const reset = () => {
     setText("")
@@ -55,12 +117,25 @@ export const EntryScreen = ({ ledger, sync }: { ledger: Ledger; sync: Sync }) =>
     reset()
   }
 
+  const closeSearch = () => {
+    setSearchOpen(false)
+    setQuery("")
+    setFilterCategory(null)
+  }
+
+  const categories = [...ledger.categories("expense"), ...ledger.categories("income")]
+
   return (
     <div class="screen">
       <div class="composer">
         <div class="composer-head">
           <label for="line">Что потратил или получил?</label>
-          <SyncBadge sync={sync} />
+          <div class="composer-tools">
+            <button type="button" class="icon-button on-accent" aria-label="Поиск" onClick={() => setSearchOpen(!searchOpen)}>
+              <SearchIcon />
+            </button>
+            <SyncBadge sync={sync} />
+          </div>
         </div>
         <input
           id="line"
@@ -112,10 +187,7 @@ export const EntryScreen = ({ ledger, sync }: { ledger: Ledger; sync: Sync }) =>
                 }}
               />
             </label>
-            <span
-              class="amount-preview num"
-              style={{ color: preview.amount ? (preview.kind === "income" ? "var(--accent)" : "var(--ink)") : "var(--faint)" }}
-            >
+            <span class="amount-preview num">
               {preview.amount ? formatMoney(preview.amount, { sign: preview.kind === "income" ? "+" : "−" }) : "сумма?"}
             </span>
             <button type="button" class="round-button" aria-label="Добавить" disabled={!canAdd} onClick={() => void add()}>
@@ -148,13 +220,102 @@ export const EntryScreen = ({ ledger, sync }: { ledger: Ledger; sync: Sync }) =>
         )}
         {error && <div class="hint error">{error}</div>}
         {flash && <div class="flash">{flash}</div>}
+        <button type="button" class="composer-spent" onClick={() => navigate("/dashboard")}>
+          <span>Потрачено за период</span>
+          <strong class="num">{formatMoney(currentPeriod.expenses)}</strong>
+        </button>
       </div>
-      <DayList ledger={ledger} />
+      <div class={`search-panel${searchOpen ? " open" : ""}`}>
+        <div class="search-panel-inner">
+          <div class="search-row">
+            <input
+              ref={searchInput}
+              class="text-input"
+              type="search"
+              placeholder="Поиск по описанию или сумме"
+              value={query}
+              onInput={(e) => setQuery(e.currentTarget.value)}
+            />
+            <button type="button" class="icon-button" aria-label="Закрыть поиск" onClick={closeSearch}>
+              <CloseIcon />
+            </button>
+          </div>
+          <div class="filter-chips" role="group" aria-label="Фильтр по категории">
+            <button type="button" class="chip" aria-pressed={filterCategory === null} onClick={() => setFilterCategory(null)}>
+              <span>Все</span>
+            </button>
+            {categories.map((c) => (
+              <button
+                type="button"
+                class="chip"
+                key={c.id}
+                aria-pressed={filterCategory === c.id}
+                onClick={() => setFilterCategory(filterCategory === c.id ? null : c.id)}
+              >
+                <CategoryBadge category={c} size={20} />
+                <span>{c.name}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+      {searchOpen ? (
+        <SearchResults ledger={ledger} query={query} categoryId={filterCategory} leaving={leaving} onDelete={remove} />
+      ) : (
+        <DayList ledger={ledger} leaving={leaving} onDelete={remove} />
+      )}
     </div>
   )
 }
 
-const DayList = ({ ledger }: { ledger: Ledger }) => {
+const SearchResults = ({
+  ledger,
+  query,
+  categoryId,
+  leaving,
+  onDelete
+}: {
+  ledger: Ledger
+  query: string
+  categoryId: string | null
+  leaving: ReadonlySet<string>
+  onDelete: (op: OperationView) => void
+}) => {
+  const result = ledger.search(query, categoryId)
+  return (
+    <div class="days">
+      <div class="search-summary">
+        {result.count} {plural(result.count, "операция", "операции", "операций")} · {formatMoney(result.total)}
+      </div>
+      {result.count === 0 ? (
+        <div class="empty">Ничего не нашлось</div>
+      ) : (
+        result.days.map((day) => (
+          <section class="day" key={day.date}>
+            <div class="day-head">
+              <span>{day.label}</span>
+            </div>
+            <div class="card-list">
+              {day.items.map((op) => (
+                <OperationRow key={op.id} op={op} onDelete={() => onDelete(op)} leaving={leaving.has(op.id)} />
+              ))}
+            </div>
+          </section>
+        ))
+      )}
+    </div>
+  )
+}
+
+const DayList = ({
+  ledger,
+  leaving,
+  onDelete
+}: {
+  ledger: Ledger
+  leaving: ReadonlySet<string>
+  onDelete: (op: OperationView) => void
+}) => {
   const days = ledger.days()
   if (days.length === 0) return <div class="empty">Пока нет операций</div>
   return (
@@ -167,7 +328,7 @@ const DayList = ({ ledger }: { ledger: Ledger }) => {
           </div>
           <div class="card-list">
             {day.items.map((op) => (
-              <OperationRow key={op.id} op={op} />
+              <OperationRow key={op.id} op={op} onDelete={() => onDelete(op)} leaving={leaving.has(op.id)} />
             ))}
           </div>
         </section>
