@@ -1,6 +1,8 @@
 import type { CategoryKind } from "@fin/domain"
 import type { CategoryProblem, CategoryView, DeleteCategoryProblem, Ledger } from "@fin/ledger"
 import { useState } from "preact/hooks"
+import { CategoryBadge } from "../components/CategoryBadge"
+import { CategoryStylePicker } from "../components/CategoryStylePicker"
 import { showToast } from "../toast"
 
 const problemText: Record<CategoryProblem | DeleteCategoryProblem, string> = {
@@ -23,6 +25,7 @@ const plural = (n: number) => {
 const CategoryRow = ({ ledger, category }: { ledger: Ledger; category: CategoryView }) => {
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState(category.name)
+  const [style, setStyle] = useState({ color: category.color, icon: category.icon })
   const [moveTo, setMoveTo] = useState("")
   const [error, setError] = useState<string | null>(null)
   const usage = ledger.categoryUsage(category.id)
@@ -31,7 +34,7 @@ const CategoryRow = ({ ledger, category }: { ledger: Ledger; category: CategoryV
   if (!editing) {
     return (
       <div class="row">
-        <span class="dot" style={{ background: category.color }} />
+        <CategoryBadge category={category} />
         <div class="row-main">
           <span class="row-title">{category.name}</span>
           {usage > 0 && <span class="row-sub">{`${usage} ${plural(usage)}`}</span>}
@@ -43,9 +46,12 @@ const CategoryRow = ({ ledger, category }: { ledger: Ledger; category: CategoryV
     )
   }
 
-  const rename = async () => {
-    const result = await ledger.renameCategory(category.id, name)
-    if (!result.ok) return setError(problemText[result.problem])
+  const save = async () => {
+    const renamed = await ledger.renameCategory(category.id, name)
+    if (!renamed.ok) return setError(problemText[renamed.problem])
+    if (style.color !== category.color || style.icon !== category.icon) {
+      await ledger.setCategoryStyle(category.id, style)
+    }
     setEditing(false)
   }
   const remove = async () => {
@@ -69,10 +75,11 @@ const CategoryRow = ({ ledger, category }: { ledger: Ledger; category: CategoryV
               setError(null)
             }}
           />
-          <button type="button" class="secondary-button" onClick={() => void rename()}>
+          <button type="button" class="secondary-button" onClick={() => void save()}>
             Сохранить
           </button>
         </div>
+        <CategoryStylePicker color={style.color} icon={style.icon} onChange={(patch) => setStyle({ ...style, ...patch })} />
         {usage > 0 && (
           <label class="field">
             <span>При удалении перенести {`${usage} ${plural(usage)}`} в</span>
@@ -103,13 +110,17 @@ const CategoryRow = ({ ledger, category }: { ledger: Ledger; category: CategoryV
   )
 }
 
+const NEW_CATEGORY_STYLE = { color: "gray", icon: "dots" }
+
 const KindList = ({ ledger, kind, title }: { ledger: Ledger; kind: CategoryKind; title: string }) => {
   const [name, setName] = useState("")
+  const [style, setStyle] = useState(NEW_CATEGORY_STYLE)
   const [error, setError] = useState<string | null>(null)
   const add = async () => {
-    const result = await ledger.addCategory(kind, name)
+    const result = await ledger.addCategory(kind, name, style)
     if (!result.ok) return setError(problemText[result.problem])
     setName("")
+    setStyle(NEW_CATEGORY_STYLE)
   }
   return (
     <div class="section">
@@ -141,6 +152,9 @@ const KindList = ({ ledger, kind, title }: { ledger: Ledger; kind: CategoryKind;
           Добавить
         </button>
       </form>
+      {name.trim() && (
+        <CategoryStylePicker color={style.color} icon={style.icon} onChange={(patch) => setStyle({ ...style, ...patch })} />
+      )}
       {error && <span class="hint error">{error}</span>}
     </div>
   )

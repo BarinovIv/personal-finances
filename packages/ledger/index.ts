@@ -1,5 +1,7 @@
 export type { CategorySource } from "./src/categorize"
-export type { CategoryProblem, DeleteCategoryProblem } from "./src/category-admin"
+export type { CategoryProblem, CategoryStyle, DeleteCategoryProblem } from "./src/category-admin"
+export { CATEGORY_ICONS } from "./src/icons"
+export { PALETTE_COLORS, type PaletteColor } from "./src/palette"
 export type { Comparison, Dashboard, DashboardCategory, DashboardQuery, TrendBar } from "./src/dashboard"
 export type { Period, PeriodMode } from "./src/periods"
 export type { EntryChoice, EntryPreview, EntryPreviewProblem, SubmitResult } from "./src/entry"

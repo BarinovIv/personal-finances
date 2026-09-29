@@ -8,8 +8,8 @@ import { deflateSync } from "node:zlib"
 const out = join(dirname(fileURLToPath(import.meta.url)), "..", "public", "icons")
 mkdirSync(out, { recursive: true })
 
-const BG = [0x2f, 0x5d, 0x50]
-const FG = [0xf5, 0xf3, 0xee]
+const BG = [0x0e, 0xa9, 0x68]
+const FG = [0xff, 0xff, 0xff]
 
 const crcTable = Array.from({ length: 256 }, (_, n) => {
   let c = n

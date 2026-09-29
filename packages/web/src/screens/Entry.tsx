@@ -2,8 +2,10 @@ import { formatMoney } from "@fin/domain"
 import { dayLabel, type EntryChoice, type EntryPreviewProblem, type Ledger } from "@fin/ledger"
 import { useState } from "preact/hooks"
 import type { Sync } from "@fin/sync"
+import { CategoryBadge } from "../components/CategoryBadge"
 import { CategoryGrid } from "../components/CategoryGrid"
 import { OperationRow } from "../components/OperationRow"
+import { Sheet } from "../components/Sheet"
 import { SyncBadge } from "../components/SyncBadge"
 import { CheckIcon } from "../icons"
 import { useLedgerVersion } from "../state"
@@ -94,7 +96,7 @@ export const EntryScreen = ({ ledger, sync }: { ledger: Ledger; sync: Sync }) =>
         {has && (
           <div class="recognized">
             <button type="button" class="chip" onClick={() => setPickerOpen(!pickerOpen)}>
-              <span class="dot" style={{ background: category?.color ?? "#B8B2A7" }} />
+              <CategoryBadge category={category ?? { color: "gray", icon: "dots", name: "" }} size={24} />
               <span>{category?.name ?? "Категория?"}</span>
             </button>
             <label class="chip">
@@ -122,25 +124,27 @@ export const EntryScreen = ({ ledger, sync }: { ledger: Ledger; sync: Sync }) =>
           </div>
         )}
         {has && (needPick || pickerOpen) && (
-          <div class="picker">
-            <div class="picker-title">
-              {needPick
-                ? `Куда отнести «${preview.description}»?`
-                : preview.kind === "income"
-                  ? "Категория дохода"
-                  : "Категория расхода"}
+          <Sheet onClose={() => setPickerOpen(false)}>
+            <div class="picker">
+              <div class="picker-title">
+                {needPick
+                  ? `Куда отнести «${preview.description}»?`
+                  : preview.kind === "income"
+                    ? "Категория дохода"
+                    : "Категория расхода"}
+              </div>
+              <CategoryGrid
+                categories={ledger.categories(preview.kind)}
+                selected={preview.categoryId}
+                onPick={(categoryId) => {
+                  setChoice({ ...choice, categoryId })
+                  setPickerOpen(false)
+                  setError(null)
+                }}
+              />
+              {needPick && <div class="hint">Выбор запомнится — в следующий раз подставлю сам.</div>}
             </div>
-            <CategoryGrid
-              categories={ledger.categories(preview.kind)}
-              selected={preview.categoryId}
-              onPick={(categoryId) => {
-                setChoice({ ...choice, categoryId })
-                setPickerOpen(false)
-                setError(null)
-              }}
-            />
-            {needPick && <div class="hint">Выбор запомнится — в следующий раз подставлю сам.</div>}
-          </div>
+          </Sheet>
         )}
         {error && <div class="hint error">{error}</div>}
         {flash && <div class="flash">{flash}</div>}

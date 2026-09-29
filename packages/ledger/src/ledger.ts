@@ -4,7 +4,9 @@ import {
   categoryUsage,
   deleteCategory,
   renameCategory,
+  setCategoryStyle,
   type CategoryProblem,
+  type CategoryStyle,
   type DeleteCategoryProblem
 } from "./category-admin"
 import { LedgerContext } from "./context"
@@ -69,9 +71,12 @@ export interface Ledger {
   categories(kind: CategoryKind): ReadonlyArray<CategoryView>
   addCategory(
     kind: CategoryKind,
-    name: string
+    name: string,
+    style?: CategoryStyle
   ): Promise<{ ok: true; category: CategoryView } | { ok: false; problem: CategoryProblem }>
   renameCategory(id: string, name: string): Promise<{ ok: true } | { ok: false; problem: CategoryProblem }>
+  /** Правка цвета и/или иконки категории. */
+  setCategoryStyle(id: string, style: CategoryStyle): Promise<{ ok: true } | { ok: false; problem: "not-found" }>
   /** Сколько операций и регулярных операций в категории. */
   categoryUsage(id: string): number
   /** Непустая категория удаляется только с переносом операций в `moveTo`. */
@@ -136,8 +141,9 @@ export const openLedger = async (options: LedgerOptions): Promise<Ledger> => {
   return {
     today: () => ctx.today(),
     categories: (kind) => [...ctx.categories().values()].filter((c) => c.kind === kind),
-    addCategory: (kind, name) => addCategory(ctx, kind, name),
+    addCategory: (kind, name, style) => addCategory(ctx, kind, name, style),
     renameCategory: (id, name) => renameCategory(ctx, id, name),
+    setCategoryStyle: (id, style) => setCategoryStyle(ctx, id, style),
     categoryUsage: (id) => categoryUsage(ctx, id),
     deleteCategory: (id, options) => deleteCategory(ctx, id, options),
     preview: (line, choice) => previewEntry(ctx, line, choice),

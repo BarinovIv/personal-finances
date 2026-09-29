@@ -4,7 +4,9 @@ export interface CategoryView {
   readonly id: string
   readonly kind: CategoryKind
   readonly name: string
+  /** Название цвета из палитры (ADR-0004), не hex. */
   readonly color: string
+  readonly icon: string
 }
 
 export interface OperationView {

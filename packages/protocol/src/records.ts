@@ -26,7 +26,8 @@ export const OperationData = Schema.Struct({
 export const CategoryData = Schema.Struct({
   kind: CategoryKind,
   name: Schema.String,
-  color: Schema.String
+  color: Schema.String,
+  icon: Schema.optional(Schema.String)
 })
 
 export const RecurringData = Schema.Struct({

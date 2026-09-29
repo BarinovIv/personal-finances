@@ -1,22 +1,74 @@
 :root {
-  --bg: #f5f3ee;
+  --bg: #f2f2f7;
   --surface: #ffffff;
-  --ink: #1c1b19;
-  --muted: #5f5c56;
-  --faint: #8a857c;
-  --line: #e4e0d8;
-  --line-soft: #efebe4;
-  --chip-line: #dad5cb;
-  --accent: #2f5d50;
-  --accent-dark: #234a3f;
-  --accent-soft: #e3eee9;
-  --danger: #9b2c2c;
-  --disabled: #c9c4ba;
-  --segment: #e9e5dd;
-  font-family: Onest, system-ui, -apple-system, sans-serif;
+  --ink: #1c1c1e;
+  --muted: #6b6b70;
+  --faint: #9a9aa0;
+  --line: #e3e3e8;
+  --line-soft: #ececf0;
+  --chip-line: #d8d8de;
+  --accent: #0ea968;
+  --accent-dark: #0b7f4e;
+  --accent-soft: #dff5ea;
+  --danger: #d93b3b;
+  --disabled: #c7c7cc;
+  --segment: #e5e5ea;
+
+  /* Палитра цветов категорий (ADR-0004): хранится название, оттенок задаёт тема. */
+  --palette-red: #d93b3b;
+  --palette-orange: #e07b39;
+  --palette-yellow: #b9932b;
+  --palette-green: #2f9e58;
+  --palette-teal: #1e8f82;
+  --palette-blue: #2f6fb0;
+  --palette-indigo: #5865c4;
+  --palette-purple: #8449a8;
+  --palette-pink: #c13f79;
+  --palette-brown: #8a6a3d;
+  --palette-gray: #6b6862;
+
+  color-scheme: light dark;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "SF Pro Text",
+    "SF Pro Display",
+    system-ui,
+    sans-serif;
   color: var(--ink);
   background: var(--bg);
   -webkit-text-size-adjust: 100%;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #000000;
+    --surface: #1c1c1e;
+    --ink: #f2f2f7;
+    --muted: #98989d;
+    --faint: #68686c;
+    --line: #38383a;
+    --line-soft: #2c2c2e;
+    --chip-line: #48484a;
+    --accent: #35d488;
+    --accent-dark: #6fe3ae;
+    --accent-soft: #123326;
+    --danger: #ff6961;
+    --disabled: #3a3a3c;
+    --segment: #0a0a0b;
+
+    --palette-red: #ff6961;
+    --palette-orange: #ffa85c;
+    --palette-yellow: #ffd426;
+    --palette-green: #32d74b;
+    --palette-teal: #4dd9c7;
+    --palette-blue: #64b5f6;
+    --palette-indigo: #8a93e8;
+    --palette-purple: #c58cec;
+    --palette-pink: #ff7ab2;
+    --palette-brown: #c7a36b;
+    --palette-gray: #98958d;
+  }
 }
 
 * {
@@ -172,12 +224,13 @@ a {
   cursor: pointer;
 }
 
-.dot {
-  width: 10px;
-  height: 10px;
+.cat-badge {
   flex-shrink: 0;
-  border-radius: 5px;
-  display: inline-block;
+  border-radius: 50%;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .amount-preview {
@@ -210,10 +263,6 @@ a {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 12px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 16px;
 }
 
 .picker-title {
@@ -404,7 +453,7 @@ a {
 
 /* Настройки */
 .page {
-  padding: calc(16px + env(safe-area-inset-top)) 16px 24px;
+  padding: 16px 16px 24px;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -495,7 +544,8 @@ a {
   gap: 4px;
   min-height: 56px;
   padding: env(safe-area-inset-top) 8px 0;
-  border-bottom: 1px solid var(--line);
+  background: var(--accent);
+  color: #fff;
   flex-shrink: 0;
 }
 
@@ -507,6 +557,7 @@ a {
   gap: 4px;
   text-decoration: none;
   font-size: 16px;
+  color: inherit;
 }
 
 .screen-title {
@@ -773,10 +824,6 @@ a {
   white-space: nowrap;
 }
 
-.dot.small {
-  width: 8px;
-  height: 8px;
-}
 
 .cat-block {
   display: flex;
@@ -1124,4 +1171,149 @@ select.text-input {
 .field > span {
   font-size: 13px;
   color: var(--muted);
+}
+
+/* Большой заголовок, сжимающийся при прокрутке */
+.large-title-bar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--accent);
+  color: #fff;
+  padding: calc(10px + env(safe-area-inset-top)) 16px 14px;
+  transition:
+    padding 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.large-title-bar h1 {
+  margin: 0;
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  transition: font-size 0.2s ease;
+}
+
+.large-title-bar.collapsed {
+  padding-bottom: 10px;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.12);
+}
+
+.large-title-bar.collapsed h1 {
+  font-size: 20px;
+}
+
+.large-title-bar .sync-status {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .large-title-bar,
+  .large-title-bar h1 {
+    transition: none;
+  }
+}
+
+/* Выезжающая снизу панель */
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 20;
+  animation: fin-fade-in 0.2s ease;
+}
+
+.sheet {
+  position: fixed;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  width: min(560px, 100%);
+  z-index: 21;
+  background: var(--surface);
+  border-radius: 20px 20px 0 0;
+  padding: 8px 16px calc(16px + env(safe-area-inset-bottom));
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.25);
+  animation: fin-sheet-in 0.25s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.sheet-handle {
+  width: 36px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--chip-line);
+  margin: 6px auto 14px;
+}
+
+@keyframes fin-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fin-sheet-in {
+  from {
+    transform: translate(-50%, 100%);
+  }
+  to {
+    transform: translate(-50%, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet-backdrop,
+  .sheet {
+    animation: none;
+  }
+}
+
+/* Выбор цвета и иконки категории */
+.style-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.swatch-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.swatch {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  padding: 0;
+}
+
+.swatch[aria-pressed="true"] {
+  border-color: var(--ink);
+}
+
+.icon-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.icon-swatch {
+  height: 36px;
+  border-radius: 10px;
+  border: 0;
+  background: var(--line-soft);
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-swatch[aria-pressed="true"] {
+  color: #fff;
 }
