@@ -4,7 +4,14 @@ export { CATEGORY_ICONS } from "./src/icons"
 export { PALETTE_COLORS, type PaletteColor } from "./src/palette"
 export type { Comparison, Dashboard, DashboardCategory, DashboardQuery, TrendBar } from "./src/dashboard"
 export type { Period, PeriodMode } from "./src/periods"
-export type { EntryChoice, EntryPreview, EntryPreviewProblem, SubmitResult } from "./src/entry"
+export type {
+  EntriesChoice,
+  EntryChoice,
+  EntryPreview,
+  EntryPreviewProblem,
+  SubmitEntriesResult,
+  SubmitResult
+} from "./src/entry"
 export { openLedger, type Ledger, type LedgerOptions, type LedgerSyncPort } from "./src/ledger"
 export type {
   OperationPatch,
