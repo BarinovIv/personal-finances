@@ -1,7 +1,7 @@
 import {
   addDays,
-  occurrencesBetween,
-  recurringOperationId,
+  pendingOccurrences,
+  upcomingCharges,
   type CategoryKind,
   type IsoDate,
   type Period,
@@ -53,17 +53,16 @@ export interface Upcoming {
 
 const STATUS_ORDER: Record<RecurringStatus, number> = { active: 0, paused: 1, ended: 2 }
 
-/** Ещё не созданная операция шаблона: дата не раньше `from` и ещё нет операции за этот месяц. */
-const pendingOccurrences = (ctx: LedgerContext, record: RecordOf<"recurring">, from: IsoDate, to: IsoDate) =>
-  occurrencesBetween(record.data, from, to).filter(
-    (o) => !ctx.records.get("operations", recurringOperationId(record.id, o.month))
-  )
+/** Есть ли уже операция, в том числе удалённая. */
+const hasOperation = (ctx: LedgerContext) => (id: string) => ctx.records.get("operations", id) !== undefined
 
 const toView = (ctx: LedgerContext, record: RecordOf<"recurring">): RecurringView => {
   const { data } = record
   const today = ctx.today()
   const next =
-    data.status === "active" ? (pendingOccurrences(ctx, record, today, addDays(today, 366))[0]?.date ?? null) : null
+    data.status === "active"
+      ? (pendingOccurrences(record.id, data, hasOperation(ctx), today, addDays(today, 366))[0]?.date ?? null)
+      : null
   return {
     id: record.id,
     kind: data.kind,
@@ -138,21 +137,14 @@ export const endRecurring = (ctx: LedgerContext, id: string) => change(ctx, id, 
 
 /** Предстоящие списания: регулярные расходы, которые ещё появятся до конца текущего периода. */
 export const upcomingIn = (ctx: LedgerContext, period: Period): Upcoming => {
-  const today = ctx.today()
-  if (today < period.start || today > period.end) return { items: [], total: 0 }
-  const items: Array<UpcomingItem> = []
-  for (const record of ctx.records.live("recurring")) {
-    if (record.data.status !== "active" || record.data.kind !== "expense") continue
-    for (const o of pendingOccurrences(ctx, record, today, period.end)) {
-      items.push({
-        templateId: record.id,
-        description: record.data.description,
-        date: o.date,
-        amount: record.data.amount,
-        category: ctx.categoryOf(record.data.categoryId, "expense")
-      })
-    }
-  }
-  items.sort((a, b) => (a.date === b.date ? 0 : a.date < b.date ? -1 : 1))
+  const items = upcomingCharges(ctx.records.live("recurring"), hasOperation(ctx), period, ctx.today()).map(
+    ({ template, date }): UpcomingItem => ({
+      templateId: template.id,
+      description: template.data.description,
+      date,
+      amount: template.data.amount,
+      category: ctx.categoryOf(template.data.categoryId, "expense")
+    })
+  )
   return { items, total: items.reduce((sum, i) => sum + i.amount, 0) }
 }

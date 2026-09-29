@@ -3,7 +3,7 @@ export type { CategoryProblem, CategoryStyle, DeleteCategoryProblem } from "./sr
 export { CATEGORY_ICONS } from "./src/icons"
 export { PALETTE_COLORS, type PaletteColor } from "./src/palette"
 export type { Comparison, Dashboard, DashboardCategory, DashboardQuery, TrendBar } from "./src/dashboard"
-export type { Period, PeriodMode } from "@fin/domain"
+export type { DailyAllowance, Period, PeriodMode } from "@fin/domain"
 export type {
   EntriesChoice,
   EntryChoice,

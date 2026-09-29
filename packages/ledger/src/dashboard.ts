@@ -1,5 +1,6 @@
 import {
   addDays,
+  dailyAllowance,
   dateParts,
   dayOfMonth,
   daysBetween,
@@ -7,6 +8,7 @@ import {
   periodAt,
   periodLength,
   periodTotals,
+  type DailyAllowance,
   type IsoDate,
   type Period,
   type PeriodMode
@@ -74,6 +76,8 @@ export interface Dashboard {
   readonly trend: ReadonlyArray<TrendBar>
   /** Регулярные расходы, которые ещё появятся до конца текущего периода; для других периодов пусто. */
   readonly upcoming: Upcoming
+  /** Можно тратить в день и сегодня осталось — только для текущего периода. */
+  readonly allowance: DailyAllowance | null
 }
 
 const TREND_LENGTH = 6
@@ -137,6 +141,8 @@ export const buildDashboard = (ctx: LedgerContext, query: DashboardQuery): Dashb
     }
   }
 
+  const upcoming = upcomingIn(ctx, period)
+
   const trend: Array<TrendBar> = []
   for (let i = TREND_LENGTH - 1; i >= 0; i--) {
     const p = periodAt(mode, today, paydays, offset - i)
@@ -159,6 +165,7 @@ export const buildDashboard = (ctx: LedgerContext, query: DashboardQuery): Dashb
       change: before > 0 ? Math.round(((current - before) / before) * 100) : null
     },
     trend,
-    upcoming: upcomingIn(ctx, period)
+    upcoming,
+    allowance: dailyAllowance(ops, period, today, upcoming.total)
   }
 }
