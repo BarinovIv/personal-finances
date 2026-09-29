@@ -12,19 +12,18 @@ const isGoalKind = (kind: MovementKind) => kind === "saved" || kind === "withdra
 
 /**
  * Заголовок операции: описание; у возврата — «Возврат: …».
- * У операций вне расходов и доходов: у долгов и погашений — человек, у целей — вид операции.
+ * У операций вне расходов и доходов: у долгов и погашений — человек, у целей — название цели.
  */
 export const operationTitle = (op: OperationView): string => {
   if (op.kind === "refund") return `Возврат: ${op.description}`
   if (!isMovement(op.kind)) return op.description
-  return isGoalKind(op.kind) ? kindLabel(op.kind) : (op.person ?? kindLabel(op.kind))
+  return (isGoalKind(op.kind) ? op.goalName : op.person) ?? kindLabel(op.kind)
 }
 
-/** Подпись под заголовком: категория, а у операций вне расходов и доходов — вид операции или описание. */
+/** Подпись под заголовком: категория, а у операций вне расходов и доходов — вид операции и описание. */
 export const operationSubtitle = (op: OperationView): string => {
   if (op.category) return op.category.name + (op.recurringId ? " · регулярная" : "")
   if (!isMovement(op.kind)) return ""
-  if (isGoalKind(op.kind)) return op.description || "Цель накопления"
   return kindLabel(op.kind) + (op.description ? ` · ${op.description}` : "")
 }
 

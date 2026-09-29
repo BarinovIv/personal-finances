@@ -7,13 +7,14 @@ import { LargeTitle } from "../components/LargeTitle"
 import { SwipeBack } from "../components/SwipeBack"
 import { SyncBadge } from "../components/SyncBadge"
 import { lastActive } from "../format"
-import { CalendarIcon, DebtIcon, DownloadIcon, ForwardIcon, GridIcon, LogoutIcon, LoopIcon, PhoneIcon } from "../icons"
+import { CalendarIcon, DebtIcon, DownloadIcon, ForwardIcon, GridIcon, LogoutIcon, LoopIcon, PhoneIcon, StarIcon } from "../icons"
 import { goBack, useLedgerVersion } from "../state"
 import { CategoriesSection } from "./Categories"
 import { DebtsSection } from "./Debts"
+import { GoalsSection } from "./Goals"
 import { RecurringSection } from "./Recurring"
 
-export type SettingsSub = "paydays" | "recurring" | "categories" | "debts" | "export" | "devices"
+export type SettingsSub = "paydays" | "recurring" | "categories" | "goals" | "debts" | "export" | "devices"
 
 const Paydays = ({ ledger }: { ledger: Ledger }) => {
   const current = ledger.settings().paydays.join(", ")
@@ -145,6 +146,7 @@ const SUB_TITLE: Record<SettingsSub, string> = {
   paydays: "Дни зарплаты",
   recurring: "Регулярные операции",
   categories: "Категории",
+  goals: "Цели",
   debts: "Долги",
   export: "Выгрузка",
   devices: "Устройства"
@@ -164,6 +166,7 @@ const SUB_ICON: Record<SettingsSub, { icon: ComponentChildren; color: string }> 
   paydays: { icon: <CalendarIcon />, color: "green" },
   recurring: { icon: <LoopIcon />, color: "indigo" },
   categories: { icon: <GridIcon />, color: "orange" },
+  goals: { icon: <StarIcon />, color: "teal" },
   debts: { icon: <DebtIcon />, color: "teal" },
   export: { icon: <DownloadIcon />, color: "blue" },
   devices: { icon: <PhoneIcon />, color: "gray" }
@@ -171,7 +174,7 @@ const SUB_ICON: Record<SettingsSub, { icon: ComponentChildren; color: string }> 
 
 /** Группы меню, как в «Настройках» iOS: учёт отдельно, данные и устройства отдельно. */
 const MENU_GROUPS: ReadonlyArray<ReadonlyArray<SettingsSub>> = [
-  ["paydays", "recurring", "categories"],
+  ["paydays", "recurring", "categories", "goals"],
   ["debts"],
   ["export", "devices"]
 ]
@@ -225,6 +228,12 @@ export const SettingsScreen = (props: {
       return (
         <SettingsSubPage sub="categories">
           <CategoriesSection ledger={props.ledger} />
+        </SettingsSubPage>
+      )
+    case "goals":
+      return (
+        <SettingsSubPage sub="goals">
+          <GoalsSection ledger={props.ledger} />
         </SettingsSubPage>
       )
     case "debts":

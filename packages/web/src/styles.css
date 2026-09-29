@@ -2277,6 +2277,107 @@ select.text-input {
   color: #fff;
 }
 
+/* ───────────── Цели ───────────── */
+
+.goals-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 4px 2px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.goals-head h2 {
+  flex: 1;
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.goals-head svg {
+  color: var(--faint);
+}
+
+.card-list > .goal-row {
+  --separator-inset: 58px;
+}
+
+.goal-row .row-main {
+  gap: 4px;
+}
+
+.goal-row-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.goal-row-line .row-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.goal-percent {
+  font-size: 15px;
+  color: var(--muted);
+}
+
+.goal-reached {
+  display: inline-flex;
+  margin-left: 6px;
+  color: var(--accent);
+}
+
+.goal-bar {
+  display: block;
+  align-self: stretch;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--fill);
+  overflow: hidden;
+}
+
+.goal-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  transition:
+    width 0.7s var(--spring-smooth),
+    background-color 0.2s ease;
+}
+
+.goal-hero .goal-bar {
+  width: min(100%, 280px);
+  align-self: center;
+  height: 8px;
+  margin-top: 6px;
+  border-radius: 4px;
+}
+
+.goal-hero-target {
+  font-size: 15px;
+  color: var(--muted);
+}
+
+.goal-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  font-size: 15px;
+  color: var(--muted);
+}
+
+.goal-status.reached {
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.goal-status.overdue {
+  color: var(--danger);
+}
+
 /* ───────────── Прочее ───────────── */
 
 .sync-status {

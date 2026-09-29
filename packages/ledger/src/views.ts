@@ -23,6 +23,8 @@ export interface OperationView {
   readonly refundOf: string | null
   /** Для «Отложено» и «Снято» — цель. */
   readonly goalId: string | null
+  /** Название цели, даже удалённой; пока цель не пришла с другого устройства — null. */
+  readonly goalName: string | null
   /** Для «Одолжил» и «Занял» — человек; у погашения — человек его долга. */
   readonly person: string | null
   /** Для погашения — долг («Одолжил» или «Занял»). */

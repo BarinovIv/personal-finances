@@ -4,7 +4,7 @@ import type { IsoDate } from "./dates"
  * Всё, что синхронизируется, — записи с временем последней правки и признаком удаления (ADR-0001).
  * Удаление — тоже правка: запись остаётся с `deleted: true`.
  */
-export type Collection = "operations" | "categories" | "recurring" | "settings"
+export type Collection = "operations" | "categories" | "recurring" | "settings" | "goals"
 
 export interface SyncRecord<C extends Collection = Collection, D = unknown> {
   readonly collection: C
@@ -96,9 +96,25 @@ export interface SettingsData {
   readonly paydays: ReadonlyArray<number>
 }
 
+/** Цель накопления. Накоплено на ней — сумма операций «Отложено» минус «Снято» с её `goalId`. */
+export interface GoalData {
+  readonly name: string
+  /** Название пиктограммы из встроенного набора, как у категорий. */
+  readonly icon: string
+  /** Целевая сумма, копейки. */
+  readonly target: number
+  /** Необязательный срок: к этой дате хочется накопить. */
+  readonly deadline: IsoDate | null
+  /** Цель в архиве: пропадает с дашборда, остаётся в списке целей. */
+  readonly archived: boolean
+  /** Когда цель создана, мс. Порядок в списке не меняется от правок. */
+  readonly createdAt: number
+}
+
 export const SETTINGS_ID = "settings"
 
 export type OperationRecord = SyncRecord<"operations", OperationData>
 export type CategoryRecord = SyncRecord<"categories", CategoryData>
 export type RecurringRecord = SyncRecord<"recurring", RecurringData>
 export type SettingsRecord = SyncRecord<"settings", SettingsData>
+export type GoalRecord = SyncRecord<"goals", GoalData>

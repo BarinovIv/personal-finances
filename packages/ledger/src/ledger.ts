@@ -13,6 +13,19 @@ import {
 } from "./category-admin"
 import { LedgerContext } from "./context"
 import { exportCsv } from "./csv"
+import {
+  addGoal,
+  archiveGoal,
+  deleteGoal,
+  goalHistory,
+  goalOf,
+  listGoals,
+  updateGoal,
+  type DeleteGoalResult,
+  type GoalInput,
+  type GoalResult,
+  type GoalView
+} from "./goals"
 import { randomId } from "./ids"
 import { debtPeople, debtsOverview, type DebtsOverview } from "./debts"
 import { buildDashboard, type Dashboard, type DashboardQuery } from "./dashboard"
@@ -137,6 +150,19 @@ export interface Ledger {
   repayments(debtId: string): RepaymentsInfo | undefined
   /** Накоплено на цели: отложено − снято, копейки. */
   goalSavings(goalId: string): number
+  /** Цели накоплений: сначала действующие, потом архивные; `archived: false` — только действующие, как на дашборде. */
+  goals(filter?: { readonly archived?: boolean }): ReadonlyArray<GoalView>
+  goal(id: string): GoalView | undefined
+  /** Новая цель; синхронизируется. */
+  addGoal(input: GoalInput): Promise<GoalResult>
+  /** Правка названия, иконки, целевой суммы и срока; `deadline: null` убирает срок. */
+  updateGoal(id: string, patch: Partial<GoalInput>): Promise<GoalResult>
+  /** Убрать в архив (true) или вернуть из архива (false). */
+  archiveGoal(id: string, archived: boolean): Promise<GoalResult>
+  /** Удаляется только цель, на которой ничего не накоплено; `undo` в результате возвращает её. */
+  deleteGoal(id: string): Promise<DeleteGoalResult>
+  /** «Отложено» и «Снято» цели, сначала новые. */
+  goalHistory(id: string): ReadonlyArray<OperationView>
   /** Долги по людям с сальдо («Петя должен мне 1 500») и отдельно закрытые. «Петя» и «петя» — один человек. */
   debts(): DebtsOverview
   /** Подсказки для поля «Кто» у долга: уже встречавшиеся люди, сначала недавние. */
@@ -206,6 +232,13 @@ export const openLedger = async (options: LedgerOptions): Promise<Ledger> => {
     addMovement: (input) => addMovement(ctx, input),
     repayments: (id) => repaymentsOf(ctx, id),
     goalSavings: (goalId) => goalSavings(ctx, goalId),
+    goals: (filter) => listGoals(ctx, filter),
+    goal: (id) => goalOf(ctx, id),
+    addGoal: (input) => addGoal(ctx, input),
+    updateGoal: (id, patch) => updateGoal(ctx, id, patch),
+    archiveGoal: (id, archived) => archiveGoal(ctx, id, archived),
+    deleteGoal: (id) => deleteGoal(ctx, id),
+    goalHistory: (id) => goalHistory(ctx, id),
     debts: () => debtsOverview(ctx),
     debtPeople: () => debtPeople(ctx),
     dashboard: (query) => buildDashboard(ctx, query),

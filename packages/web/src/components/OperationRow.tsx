@@ -104,6 +104,7 @@ const sameOperation = (a: OperationView, b: OperationView) =>
     a.recurringId === b.recurringId &&
     a.person === b.person &&
     a.goalId === b.goalId &&
+    a.goalName === b.goalName &&
     sameCategory(a.category, b.category))
 
 /**
