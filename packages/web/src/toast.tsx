@@ -29,7 +29,7 @@ export const ToastHost = () => {
   }, [])
   if (!toast) return null
   return (
-    <div class="toast" role="status">
+    <div class="toast glass" role="status">
       <span>{toast.text}</span>
       {toast.action && (
         <button

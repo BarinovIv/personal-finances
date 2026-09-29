@@ -1,20 +1,32 @@
-import type { Sync, SyncStatus } from "@fin/sync"
+import type { Sync, SyncState } from "@fin/sync"
+import { memo } from "preact/compat"
 import { useEffect, useState } from "preact/hooks"
 import { CloudIcon } from "../icons"
 
-export const useSyncStatus = (sync: Sync): SyncStatus => {
-  const [status, setStatus] = useState(sync.status())
-  useEffect(() => sync.subscribe(setStatus), [sync])
-  return status
+/**
+ * Состояние синхронизации. Статус приходит новым объектом на каждое изменение журнала и каждый обмен
+ * с сервером — храним только состояние, чтобы перерисовываться, лишь когда оно действительно сменилось.
+ */
+const useSyncState = (sync: Sync): SyncState => {
+  const [state, setState] = useState(() => sync.status().state)
+  useEffect(() => sync.subscribe((status) => setState(status.state)), [sync])
+  return state
 }
 
-export const SyncBadge = ({ sync }: { sync: Sync }) => {
-  const status = useSyncStatus(sync)
-  const pending = status.state !== "synced"
+/** Когда всё синхронизировано — только тихий значок; текст появляется, если что-то не так. */
+export const SyncBadge = memo(({ sync }: { sync: Sync }) => {
+  const state = useSyncState(sync)
+  if (state === "synced") {
+    return (
+      <span class="sync-status" role="status" aria-label="синхронизировано" title="синхронизировано">
+        <CloudIcon size={16} />
+      </span>
+    )
+  }
   return (
-    <span class={`sync-status ${pending ? "pending" : ""}`} role="status">
+    <span class="sync-status pending" role="status">
       <CloudIcon size={14} />
-      {status.state === "synced" ? "синхронизировано" : status.state === "pending" ? "ждёт сети" : "нужен вход"}
+      {state === "pending" ? "ждёт сети" : "нужен вход"}
     </span>
   )
-}
+})

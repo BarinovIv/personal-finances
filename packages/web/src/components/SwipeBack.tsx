@@ -6,6 +6,9 @@ const EDGE = 24
 /** Доля ширины экрана, после которой отпущенный палец завершает возврат, а не пружинит назад. */
 const THRESHOLD = 0.35
 
+/** Кривая, которой iOS двигает экраны навигации и панели. */
+const IOS_EASE = "cubic-bezier(0.32, 0.72, 0, 1)"
+
 const prefersReducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches
 
 /**
@@ -20,8 +23,9 @@ export const SwipeBack = ({ onBack, children }: { onBack: () => void; children: 
   const reset = (animate: boolean) => {
     const el = ref.current
     if (!el) return
-    el.style.transition = animate && !prefersReducedMotion() ? "transform 0.2s ease-out" : "none"
+    el.style.transition = animate && !prefersReducedMotion() ? `transform 0.45s ${IOS_EASE}` : "none"
     el.style.transform = ""
+    el.classList.remove("dragging")
   }
 
   const onPointerDown = (e: PointerEvent) => {
@@ -45,6 +49,7 @@ export const SwipeBack = ({ onBack, children }: { onBack: () => void; children: 
       if (dx < 4) return
       tracking.current = true
       el.style.transition = "none"
+      el.classList.add("dragging")
     }
     if (dx > 0) el.style.transform = `translateX(${dx}px)`
   }
@@ -62,9 +67,9 @@ export const SwipeBack = ({ onBack, children }: { onBack: () => void; children: 
         onBack()
         return
       }
-      el.style.transition = "transform 0.2s ease-out"
+      el.style.transition = `transform 0.28s ${IOS_EASE}`
       el.style.transform = `translateX(${width}px)`
-      window.setTimeout(onBack, 200)
+      window.setTimeout(onBack, 280)
       return
     }
     reset(true)

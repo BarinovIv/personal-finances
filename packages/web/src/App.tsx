@@ -1,6 +1,6 @@
 import type { SessionState } from "@fin/sync"
-import { useEffect, useState } from "preact/hooks"
-import { useSyncStatus } from "./components/SyncBadge"
+import type { ComponentChildren } from "preact"
+import { useEffect, useRef, useState } from "preact/hooks"
 import { ChartIcon, PenIcon, SlidersIcon } from "./icons"
 import { DashboardScreen } from "./screens/Dashboard"
 import { EntryScreen } from "./screens/Entry"
@@ -20,21 +20,25 @@ const settingsSubOf = (route: string): SettingsSub | null => {
   return (SETTINGS_SUBS as ReadonlyArray<string>).includes(sub ?? "") ? (sub as SettingsSub) : null
 }
 
-const TabBar = ({ current }: { current: Tab | null }) => (
-  <nav class="tabbar">
-    <a href="#/" aria-current={current === "entry" ? "page" : undefined}>
-      <PenIcon />
-      <span>Ввод</span>
-    </a>
-    <a href="#/dashboard" aria-current={current === "dashboard" ? "page" : undefined}>
-      <ChartIcon />
-      <span>Дашборд</span>
-    </a>
-    <a href="#/settings" aria-current={current === "settings" ? "page" : undefined}>
-      <SlidersIcon />
-      <span>Настройки</span>
-    </a>
-  </nav>
+const TABS: ReadonlyArray<{ tab: Tab; href: string; label: string; icon: ComponentChildren }> = [
+  { tab: "entry", href: "#/", label: "Ввод", icon: <PenIcon /> },
+  { tab: "dashboard", href: "#/dashboard", label: "Дашборд", icon: <ChartIcon /> },
+  { tab: "settings", href: "#/settings", label: "Настройки", icon: <SlidersIcon /> }
+]
+
+/** Парящий таббар из «жидкого стекла»; линза выбранной вкладки перетекает к новой на пружине. */
+const TabBar = ({ current }: { current: Tab }) => (
+  <div class="tabbar-dock">
+    <nav class="tabbar glass" aria-label="Разделы" style={{ "--tab-index": String(TABS.findIndex((t) => t.tab === current)) }}>
+      <span class="tabbar-lens" aria-hidden="true" />
+      {TABS.map((t) => (
+        <a key={t.tab} href={t.href} aria-current={current === t.tab ? "page" : undefined}>
+          {t.icon}
+          <span>{t.label}</span>
+        </a>
+      ))}
+    </nav>
+  </div>
 )
 
 const tabOf = (route: string): Tab | null => {
@@ -46,18 +50,26 @@ const tabOf = (route: string): Tab | null => {
 
 const Main = ({ services, onSignedOut }: { services: AppServices; onSignedOut: () => void }) => {
   const route = useRoute()
-  const status = useSyncStatus(services.sync)
-  // истёкшая сессия — на экран входа; очередь изменений остаётся на устройстве
+  // истёкшая сессия — на экран входа; очередь изменений остаётся на устройстве.
+  // Слушаем без состояния: статус меняется на каждую правку и каждый обмен с сервером, а экрану до него дела нет.
+  // Реагируем на переход в «нужен вход», а не на само состояние: сразу после входа статус ещё помнит
+  // отказ сервера до входа, и приложение выкидывало бы обратно на экран входа.
+  const signedOut = useRef(onSignedOut)
+  signedOut.current = onSignedOut
   useEffect(() => {
-    if (status.state === "unauthorized") onSignedOut()
-  }, [status.state])
+    let last = services.sync.status().state
+    return services.sync.subscribe((status) => {
+      if (status.state === "unauthorized" && last !== "unauthorized") signedOut.current()
+      last = status.state
+    })
+  }, [services.sync])
 
   const { ledger, sync } = services
   const tab = tabOf(route)
   const op = /^\/op\/(.+)$/.exec(route)
   const settingsSub = settingsSubOf(route)
   return (
-    <div class="app">
+    <div class={`app${tab ? " has-tabbar" : ""}`}>
       {op ? (
         <OperationScreen ledger={ledger} id={decodeURIComponent(op[1]!)} />
       ) : tab === "dashboard" ? (

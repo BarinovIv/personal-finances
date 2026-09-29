@@ -7,7 +7,7 @@ import { Header } from "../components/Header"
 import { signedAmount } from "../components/OperationRow"
 import { Sheet } from "../components/Sheet"
 import { SwipeBack } from "../components/SwipeBack"
-import { RefundIcon } from "../icons"
+import { CheckIcon, CloseIcon, ForwardIcon, RefundIcon, TrashIcon } from "../icons"
 import { goBack, useLedgerVersion } from "../state"
 import { showToast } from "../toast"
 
@@ -42,27 +42,36 @@ const RefundsList = ({
   return (
     <>
       {info.items.length > 0 && (
-        <section class="refunds">
-          <h2>Возвраты</h2>
-          {info.items.map((r) => (
-            <a class="refund-row" href={`#/op/${r.id}`} key={r.id}>
-              <RefundIcon />
-              <span class="grow-text">{dayLabel(r.date, today)}</span>
-              <span class="num refund-amount">+{formatMoney(r.amount)}</span>
-            </a>
-          ))}
-          <span class="refunds-net">
+        <section class="section">
+          <h2 class="section-header">Возвраты</h2>
+          <div class="card-list">
+            {info.items.map((r) => (
+              <a class="row row-button" href={`#/op/${r.id}`} key={r.id}>
+                <RefundIcon size={18} />
+                <span class="row-main">
+                  <span class="row-title">{dayLabel(r.date, today)}</span>
+                </span>
+                <span class="num refund-amount">+{formatMoney(r.amount)}</span>
+                <span class="row-chevron">
+                  <ForwardIcon size={16} />
+                </span>
+              </a>
+            ))}
+          </div>
+          <p class="section-footer">
             {info.remaining > 0
               ? `Итого потрачено с учётом возвратов: ${formatMoney(info.remaining)}`
               : "Деньги вернули полностью"}
-          </span>
+          </p>
         </section>
       )}
       {info.remaining > 0 && (
-        <button type="button" class="outline-accent-button" onClick={onOpenForm}>
-          <RefundIcon size={18} />
-          <span>Возврат</span>
-        </button>
+        <div class="card-list">
+          <button type="button" class="row row-button action-row" onClick={onOpenForm}>
+            <RefundIcon size={18} />
+            <span>Оформить возврат</span>
+          </button>
+        </div>
       )}
     </>
   )
@@ -84,74 +93,82 @@ const RefundForm = ({
   const [date, setDate] = useState(today)
   const [error, setError] = useState<string | null>(null)
 
-  const submit = async () => {
+  const submit = async (close: () => void) => {
     const kopecks = parseMoney(amount)
     if (kopecks === null) return setError(refundProblemText["bad-amount"])
     const result = await ledger.addRefund(op.id, { amount: kopecks, date })
     if (!result.ok) return setError(refundProblemText[result.problem])
-    onDone()
+    close()
     showToast({ text: `Возврат ${formatMoney(kopecks)} оформлен` })
   }
 
   return (
-    <Sheet onClose={onDone}>
-      <section class="refund-form">
-        <h2>Возврат денег</h2>
-        <label for="op-refund" class="field-label">
-          Сколько вернули, ₽ (можно часть суммы)
-        </label>
-        <input
-          id="op-refund"
-          class="text-input num"
-          type="text"
-          inputMode="decimal"
-          value={amount}
-          onInput={(e) => setAmount(e.currentTarget.value)}
-        />
-        <div class="field-row">
-          <label for="op-refund-date" class="field-label">
-            Дата возврата
-          </label>
-          <input
-            id="op-refund-date"
-            class="chip date-chip"
-            type="date"
-            value={date}
-            max={today}
-            onChange={(e) => e.currentTarget.value && setDate(e.currentTarget.value)}
-          />
-        </div>
-        <span class="hint">
-          Расходы на «{op.category.name}» уменьшатся в периоде даты возврата. В доходы возврат не попадёт.
-        </span>
-        {error && <div class="hint error">{error}</div>}
-        <div class="actions-row">
-          <button type="button" class="secondary-button grow" onClick={onDone}>
-            Отмена
-          </button>
-          <button type="button" class="accent-button grow" onClick={() => void submit()}>
-            Оформить возврат
-          </button>
-        </div>
-      </section>
+    <Sheet label="Возврат денег" onClose={onDone}>
+      {(close) => (
+        <section class="sheet-form">
+          <div class="sheet-title">Возврат денег</div>
+          <div class="card-list">
+            <label class="row input-row">
+              <span class="row-label">Сумма, ₽</span>
+              <input
+                id="op-refund"
+                class="row-input num"
+                type="text"
+                inputMode="decimal"
+                value={amount}
+                onInput={(e) => setAmount(e.currentTarget.value)}
+              />
+            </label>
+            <label class="row input-row">
+              <span class="row-label">Дата</span>
+              <input
+                id="op-refund-date"
+                class="row-input"
+                type="date"
+                value={date}
+                max={today}
+                onChange={(e) => e.currentTarget.value && setDate(e.currentTarget.value)}
+              />
+            </label>
+          </div>
+          <span class="hint">
+            Можно вернуть часть суммы. Расходы на «{op.category.name}» уменьшатся в периоде даты возврата, в доходы возврат
+            не попадёт.
+          </span>
+          {error && <div class="hint error">{error}</div>}
+          <div class="actions-row">
+            <button type="button" class="secondary-button grow" onClick={close}>
+              Отмена
+            </button>
+            <button type="button" class="accent-button grow" onClick={() => void submit(close)}>
+              Оформить
+            </button>
+          </div>
+        </section>
+      )}
     </Sheet>
   )
 }
 
+/** Подтверждение удаления — как action sheet в iOS: разрушительное действие и отдельная «Отмена». */
 const DeleteSheet = ({ op, onConfirm, onClose }: { op: OperationView; onConfirm: () => void; onClose: () => void }) => (
-  <Sheet onClose={onClose}>
-    <p class="delete-sheet-title">Удалить операцию?</p>
-    <p class="hint">
-      «{deletedText(op)}» · {formatMoney(op.amount)}
-    </p>
-    <div class="actions-row">
-      <button type="button" class="secondary-button grow" onClick={onClose}>
-        Отмена
-      </button>
-      <button type="button" class="secondary-button danger-button grow" onClick={onConfirm}>
-        Удалить
-      </button>
-    </div>
+  <Sheet label="Удаление операции" onClose={onClose}>
+    {(close) => (
+      <div class="sheet-form">
+        <div class="sheet-title">Удалить операцию?</div>
+        <p class="hint center">
+          «{deletedText(op)}» · {formatMoney(op.amount)}
+        </p>
+        <div class="stacked-actions">
+          <button type="button" class="secondary-button danger-button" onClick={onConfirm}>
+            Удалить
+          </button>
+          <button type="button" class="secondary-button" onClick={close}>
+            Отмена
+          </button>
+        </div>
+      </div>
+    )}
   </Sheet>
 )
 
@@ -172,32 +189,47 @@ const ViewCard = ({ ledger, op, onEdit }: { ledger: Ledger; op: OperationView; o
       <Header
         title={isRefund ? "Возврат" : "Операция"}
         trailing={
-          <button type="button" class="header-button" onClick={onEdit}>
+          <button type="button" class="glass-button text" onClick={onEdit}>
             Изменить
           </button>
         }
       />
       <div class="page">
         <section class="op-hero">
+          <CategoryBadge category={op.category} size={64} />
           <span class={`op-hero-amount num ${op.kind}`}>{signedAmount(op)}</span>
-          <span class="op-hero-category">
-            <CategoryBadge category={op.category} size={32} />
-            <span>{op.category.name}</span>
-          </span>
-          <span class="op-hero-desc">{op.description}</span>
-          <span class="op-hero-date">{dayLabel(op.date, ledger.today())}</span>
+          <span class="op-hero-desc">{isRefund ? `Возврат: ${op.description}` : op.description}</span>
         </section>
-        {isRefund && op.refundOf && (
-          <a class="refund-row" href={`#/op/${op.refundOf}`}>
-            <RefundIcon />
-            <span class="grow-text">Исходный расход: {op.description}</span>
-          </a>
-        )}
+        <div class="card-list">
+          <div class="row info-row">
+            <span class="row-label">Категория</span>
+            <span class="row-value">
+              <CategoryBadge category={op.category} size={22} />
+              {op.category.name}
+            </span>
+          </div>
+          <div class="row info-row">
+            <span class="row-label">Дата</span>
+            <span class="row-value">{dayLabel(op.date, ledger.today())}</span>
+          </div>
+          {isRefund && op.refundOf && (
+            <a class="row row-button info-row" href={`#/op/${op.refundOf}`}>
+              <span class="row-label">Исходный расход</span>
+              <span class="row-value">{op.description}</span>
+              <span class="row-chevron">
+                <ForwardIcon size={16} />
+              </span>
+            </a>
+          )}
+        </div>
         {info && <RefundsList ledger={ledger} info={info} onOpenForm={() => setRefundOpen(true)} />}
+        <div class="card-list">
+          <button type="button" class="row row-button action-row destructive" onClick={() => setDeleteOpen(true)}>
+            <TrashIcon size={18} />
+            <span>Удалить операцию</span>
+          </button>
+        </div>
       </div>
-      <button type="button" class="delete-row" onClick={() => setDeleteOpen(true)}>
-        Удалить операцию
-      </button>
       {refundOpen && info && <RefundForm ledger={ledger} op={op} info={info} onDone={() => setRefundOpen(false)} />}
       {deleteOpen && <DeleteSheet op={op} onClose={() => setDeleteOpen(false)} onConfirm={() => void remove(ledger, op)} />}
     </>
@@ -232,69 +264,72 @@ const EditForm = ({ ledger, op, onDone }: { ledger: Ledger; op: OperationView; o
       <Header
         title={isRefund ? "Возврат" : "Операция"}
         leading={
-          <button type="button" class="header-button" onClick={onDone}>
-            Отменить
+          <button type="button" class="glass-button" aria-label="Отменить" onClick={onDone}>
+            <CloseIcon size={20} />
           </button>
         }
         trailing={
-          <button type="button" class="header-button" onClick={() => void save()}>
-            Готово
+          <button type="button" class="glass-button prominent" aria-label="Готово" onClick={() => void save()}>
+            <CheckIcon size={20} />
           </button>
         }
       />
       <div class="page form">
-        <div class="field">
-          <label for="op-amount">Сумма, ₽</label>
+        <label class="amount-field">
           <input
             id="op-amount"
-            class="text-input amount-input num"
+            class="amount-input num"
             type="text"
             inputMode="decimal"
+            aria-label="Сумма, ₽"
+            // поле по ширине числа, чтобы «₽» стоял вплотную; ch — ширина цифры
+            style={{ width: `${Math.max(1, amount.length) + 0.2}ch` }}
             value={amount}
             onInput={(e) => setAmount(e.currentTarget.value)}
           />
+          <span class="amount-currency">₽</span>
+        </label>
+        <div class="card-list">
+          {!isRefund && (
+            <label class="row input-row">
+              <span class="row-label">Описание</span>
+              <input
+                id="op-desc"
+                class="row-input"
+                type="text"
+                value={description}
+                onInput={(e) => setDescription(e.currentTarget.value)}
+              />
+            </label>
+          )}
+          <label class="row input-row">
+            <span class="row-label">Дата</span>
+            <input
+              id="op-date"
+              class="row-input"
+              type="date"
+              value={date}
+              max={ledger.today()}
+              onChange={(e) => e.currentTarget.value && setDate(e.currentTarget.value)}
+            />
+          </label>
         </div>
         {!isRefund && (
-          <div class="field">
-            <label for="op-desc">Описание</label>
-            <input
-              id="op-desc"
-              class="text-input"
-              type="text"
-              value={description}
-              onInput={(e) => setDescription(e.currentTarget.value)}
-            />
-          </div>
-        )}
-        {!isRefund && (
-          <div class="field">
-            <span class="field-label">Категория</span>
+          <section class="section">
+            <h2 class="section-header">Категория</h2>
             <CategoryGrid categories={ledger.categories(categoryKind)} selected={categoryId} onPick={setCategoryId} />
             {categoryId !== op.category.id && (
-              <span class="hint accent">
+              <p class="section-footer accent">
                 Запомню: «{description.trim()}» → {categoryName()}. Следующая такая операция попадёт туда же.
-              </span>
+              </p>
             )}
-          </div>
+          </section>
         )}
         {isRefund && (
-          <p class="hint">
+          <p class="section-footer">
             Возврат по расходу «{op.description}» · {op.category.name}
           </p>
         )}
-        <div class="field-row">
-          <label for="op-date" class="field-label">
-            Дата
-          </label>
-          <input
-            id="op-date"
-            class="chip date-chip"
-            type="date"
-            value={date}
-            max={ledger.today()}
-            onChange={(e) => e.currentTarget.value && setDate(e.currentTarget.value)}
-          />
-        </div>
         {error && <div class="hint error">{error}</div>}
       </div>
     </>

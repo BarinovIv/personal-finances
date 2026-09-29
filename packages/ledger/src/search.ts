@@ -19,12 +19,17 @@ const amountText = (kopecks: number) => formatDecimal(kopecks).replace(/,00$/, "
 
 /**
  * Поиск по ленте: подстрока в описании или в сумме операции (в рублях). Пустой запрос —
- * вся лента. `categoryId` при необходимости сужает поиск до одной категории.
+ * вся лента. `categoryIds` сужает поиск до выбранных категорий; пустой список — все категории.
  */
-export const searchOperations = (ctx: LedgerContext, query: string, categoryId: string | null = null): SearchSummary => {
+export const searchOperations = (
+  ctx: LedgerContext,
+  query: string,
+  categoryIds: ReadonlyArray<string> = []
+): SearchSummary => {
   const q = normalize(query)
+  const categories = new Set(categoryIds)
   const matches = ctx.operations().filter((r) => {
-    if (categoryId && r.data.categoryId !== categoryId) return false
+    if (categories.size > 0 && !categories.has(r.data.categoryId)) return false
     if (!q) return true
     return `${normalize(r.data.description)} ${amountText(r.data.amount)}`.includes(q)
   })

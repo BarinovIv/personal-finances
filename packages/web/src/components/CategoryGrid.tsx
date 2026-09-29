@@ -9,7 +9,7 @@ export const CategoryGrid = (props: {
   <div class="cat-grid">
     {props.categories.map((c) => (
       <button type="button" class="cat-option" aria-pressed={c.id === props.selected} onClick={() => props.onPick(c.id)}>
-        <CategoryBadge category={c} size={24} />
+        <CategoryBadge category={c} size={36} />
         <span>{c.name}</span>
       </button>
     ))}

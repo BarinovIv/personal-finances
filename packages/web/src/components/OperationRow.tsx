@@ -1,37 +1,29 @@
 import { formatMoney } from "@fin/domain"
-import type { OperationView } from "@fin/ledger"
+import type { CategoryView, OperationView } from "@fin/ledger"
 import type { JSX } from "preact"
+import { memo } from "preact/compat"
 import { useRef, useState } from "preact/hooks"
 import { CategoryBadge } from "./CategoryBadge"
-import { RefundIcon, RepeatIcon } from "../icons"
+import { RefundIcon, RepeatIcon, TrashIcon } from "../icons"
 
 export const signedAmount = (op: Pick<OperationView, "kind" | "amount">) =>
   formatMoney(op.amount, { sign: op.kind === "expense" ? "−" : "+" })
 
 const REVEAL = 84
 
-const TrashIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-    <path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m2 0-1 13a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1L6 7" />
-  </svg>
-)
+interface OperationRowProps {
+  op: OperationView
+  sub?: string
+  onDelete?: (op: OperationView) => void
+  leaving?: boolean
+}
 
 /**
  * Строка операции. `onDelete`, если задан, включает свайп влево (тянет за пальцем) и
  * постоянную кнопку «Удалить» — доступную и без жеста, с компьютера. `leaving` проигрывает
  * анимацию исчезновения, не убирая строку из списка сразу (даёт время на «Отменить»).
  */
-export const OperationRow = ({
-  op,
-  sub,
-  onDelete,
-  leaving
-}: {
-  op: OperationView
-  sub?: string
-  onDelete?: () => void
-  leaving?: boolean
-}) => {
+const OperationRowView = ({ op, sub, onDelete, leaving }: OperationRowProps) => {
   const [dragX, setDragX] = useState(0)
   const [dragging, setDragging] = useState(false)
   const open = useRef(false)
@@ -60,10 +52,11 @@ export const OperationRow = ({
 
   return (
     <div class={`op-row-wrap${leaving ? " leaving" : ""}`}>
-      <div class="op-row-swipe">
+      {/* красная кнопка видна, только пока строка сдвинута — иначе просвечивает в скруглённом углу карточки */}
+      <div class={`op-row-swipe${dragX !== 0 ? " revealing" : ""}`}>
         {onDelete && (
-          <button type="button" class="op-row-delete" aria-label={`Удалить: ${op.description}`} onClick={onDelete} tabIndex={-1}>
-            <TrashIcon />
+          <button type="button" class="op-row-delete" aria-label={`Удалить: ${op.description}`} onClick={() => onDelete(op)} tabIndex={-1}>
+            <TrashIcon size={20} />
             <span>Удалить</span>
           </button>
         )}
@@ -76,7 +69,7 @@ export const OperationRow = ({
           onPointerUp={endDrag}
           onPointerCancel={endDrag}
         >
-          <CategoryBadge category={op.category} />
+          <CategoryBadge category={op.category} size={40} />
           <span class="op-main">
             <span class="op-desc">
               {op.kind === "refund" && <RefundIcon label="Возврат" />}
@@ -89,10 +82,33 @@ export const OperationRow = ({
         </a>
       </div>
       {onDelete && (
-        <button type="button" class="op-row-quick-delete" aria-label={`Удалить: ${op.description}`} onClick={onDelete}>
+        <button type="button" class="op-row-quick-delete" aria-label={`Удалить: ${op.description}`} onClick={() => onDelete(op)}>
           <TrashIcon />
         </button>
       )}
     </div>
   )
 }
+
+const sameCategory = (a: CategoryView, b: CategoryView) =>
+  a === b || (a.id === b.id && a.name === b.name && a.color === b.color && a.icon === b.icon)
+
+/** Совпадает ли всё, что строка показывает. Журнал на каждый запрос отдаёт новые объекты, поэтому сравниваем по значению. */
+const sameOperation = (a: OperationView, b: OperationView) =>
+  a === b ||
+  (a.id === b.id &&
+    a.kind === b.kind &&
+    a.amount === b.amount &&
+    a.description === b.description &&
+    a.recurringId === b.recurringId &&
+    sameCategory(a.category, b.category))
+
+/**
+ * Строка перерисовывается, только если изменилось то, что она показывает: набор в строке ввода,
+ * открытие поиска или удаление соседней строки её не трогают.
+ */
+export const OperationRow = memo(
+  OperationRowView,
+  (prev, next) =>
+    prev.sub === next.sub && prev.leaving === next.leaving && prev.onDelete === next.onDelete && sameOperation(prev.op, next.op)
+)

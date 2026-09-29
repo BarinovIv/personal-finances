@@ -7,7 +7,7 @@ import { LargeTitle } from "../components/LargeTitle"
 import { SwipeBack } from "../components/SwipeBack"
 import { SyncBadge } from "../components/SyncBadge"
 import { lastActive } from "../format"
-import { ForwardIcon } from "../icons"
+import { CalendarIcon, DownloadIcon, ForwardIcon, GridIcon, LogoutIcon, LoopIcon, PhoneIcon } from "../icons"
 import { goBack, useLedgerVersion } from "../state"
 import { CategoriesSection } from "./Categories"
 import { RecurringSection } from "./Recurring"
@@ -29,53 +29,57 @@ const Paydays = ({ ledger }: { ledger: Ledger }) => {
   }
   return (
     <section class="section">
-      <h2>Дни зарплаты</h2>
-      <p class="section-note">
-        Зарплатный период длится от дня зарплаты до дня накануне следующего. Если такого числа в месяце нет, берётся
-        последний день.
-      </p>
-      <div class="inline-form">
-        <input
-          class="text-input"
-          type="text"
-          inputMode="numeric"
-          aria-label="Дни зарплаты"
-          value={text}
-          onInput={(e) => {
-            setText(e.currentTarget.value)
-            setNote(null)
-          }}
-        />
-        <button type="button" class="secondary-button" disabled={text === current} onClick={() => void save()}>
-          Сохранить
-        </button>
+      <div class="card-list">
+        <label class="row input-row">
+          <span class="row-label">Числа месяца</span>
+          <input
+            class="row-input num"
+            type="text"
+            inputMode="numeric"
+            aria-label="Дни зарплаты"
+            placeholder="5, 20"
+            value={text}
+            onInput={(e) => {
+              setText(e.currentTarget.value)
+              setNote(null)
+            }}
+          />
+        </label>
       </div>
-      {note && <p class="section-note">{note}</p>}
+      <p class="section-footer">
+        {note ??
+          "Зарплатный период длится от дня зарплаты до дня накануне следующего. Если такого числа в месяце нет, берётся последний день."}
+      </p>
+      <button type="button" class="accent-button large" disabled={text === current} onClick={() => void save()}>
+        Сохранить
+      </button>
     </section>
   )
 }
 
 const Export = ({ ledger }: { ledger: Ledger }) => (
   <section class="section">
-    <h2>Выгрузка</h2>
-    <p class="section-note">Все операции, включая возвраты и регулярные, — файл открывается в Excel.</p>
-    <button
-      type="button"
-      class="secondary-button"
-      onClick={() => {
-        const blob = new Blob([ledger.exportCsv()], { type: "text/csv;charset=utf-8" })
-        const url = URL.createObjectURL(blob)
-        const link = document.createElement("a")
-        link.href = url
-        link.download = `finances-${ledger.today()}.csv`
-        document.body.append(link)
-        link.click()
-        link.remove()
-        setTimeout(() => URL.revokeObjectURL(url), 10_000)
-      }}
-    >
-      Скачать всё в CSV
-    </button>
+    <div class="card-list">
+      <button
+        type="button"
+        class="row row-button action-row"
+        onClick={() => {
+          const blob = new Blob([ledger.exportCsv()], { type: "text/csv;charset=utf-8" })
+          const url = URL.createObjectURL(blob)
+          const link = document.createElement("a")
+          link.href = url
+          link.download = `finances-${ledger.today()}.csv`
+          document.body.append(link)
+          link.click()
+          link.remove()
+          setTimeout(() => URL.revokeObjectURL(url), 10_000)
+        }}
+      >
+        <DownloadIcon />
+        <span>Скачать всё в CSV</span>
+      </button>
+    </div>
+    <p class="section-footer">Все операции, включая возвраты и регулярные, — файл открывается в Excel.</p>
   </section>
 )
 
@@ -87,45 +91,52 @@ const Devices = ({ auth, onSignedOut }: { auth: AuthApi; onSignedOut: () => void
   }, [])
 
   return (
-    <section class="section">
-      <h2>Устройства</h2>
-      {sessions === undefined && <p class="section-note">Загружаю…</p>}
-      {sessions === null && <p class="section-note">Список устройств доступен, когда есть связь с сервером.</p>}
-      {sessions && (
-        <div class="card-list">
-          {sessions.map((s) => (
-            <div class="row" key={s.id}>
-              <div class="row-main">
-                <span class="row-title">{s.device}</span>
-                <span class="row-sub">{s.current ? "это устройство" : lastActive(s.lastActiveAt)}</span>
+    <>
+      <section class="section">
+        {sessions === undefined && <p class="section-footer">Загружаю…</p>}
+        {sessions === null && <p class="section-footer">Список устройств доступен, когда есть связь с сервером.</p>}
+        {sessions && (
+          <div class="card-list">
+            {sessions.map((s) => (
+              <div class="row" key={s.id}>
+                <span class="settings-icon" style={{ background: "var(--palette-gray)" }}>
+                  <PhoneIcon />
+                </span>
+                <div class="row-main">
+                  <span class="row-title">{s.device}</span>
+                  <span class="row-sub">{s.current ? "это устройство" : lastActive(s.lastActiveAt)}</span>
+                </div>
+                {!s.current && (
+                  <button
+                    type="button"
+                    class="small-button danger-button"
+                    onClick={async () => {
+                      await auth.revokeSession(s.id)
+                      await load()
+                    }}
+                  >
+                    Отозвать
+                  </button>
+                )}
               </div>
-              {!s.current && (
-                <button
-                  type="button"
-                  class="secondary-button danger-button"
-                  onClick={async () => {
-                    await auth.revokeSession(s.id)
-                    await load()
-                  }}
-                >
-                  Отозвать
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-      <button
-        type="button"
-        class="secondary-button danger-button"
-        onClick={async () => {
-          await auth.logout()
-          onSignedOut()
-        }}
-      >
-        Выйти на этом устройстве
-      </button>
-    </section>
+            ))}
+          </div>
+        )}
+      </section>
+      <div class="card-list">
+        <button
+          type="button"
+          class="row row-button action-row destructive"
+          onClick={async () => {
+            await auth.logout()
+            onSignedOut()
+          }}
+        >
+          <LogoutIcon />
+          <span>Выйти на этом устройстве</span>
+        </button>
+      </div>
+    </>
   )
 }
 
@@ -147,14 +158,39 @@ const SettingsSubPage = ({ sub, children }: { sub: SettingsSub; children: Compon
   </SwipeBack>
 )
 
+const SUB_ICON: Record<SettingsSub, { icon: ComponentChildren; color: string }> = {
+  paydays: { icon: <CalendarIcon />, color: "green" },
+  recurring: { icon: <LoopIcon />, color: "indigo" },
+  categories: { icon: <GridIcon />, color: "orange" },
+  export: { icon: <DownloadIcon />, color: "blue" },
+  devices: { icon: <PhoneIcon />, color: "gray" }
+}
+
+/** Группы меню, как в «Настройках» iOS: учёт отдельно, данные и устройства отдельно. */
+const MENU_GROUPS: ReadonlyArray<ReadonlyArray<SettingsSub>> = [
+  ["paydays", "recurring", "categories"],
+  ["export", "devices"]
+]
+
 const SettingsMenu = ({ sync }: { sync: Sync }) => (
   <LargeTitle title="Настройки" actions={<SyncBadge sync={sync} />}>
     <nav class="settings-menu" aria-label="Разделы настроек">
-      {(Object.keys(SUB_TITLE) as ReadonlyArray<SettingsSub>).map((sub) => (
-        <a class="settings-menu-row" href={`#/settings/${sub}`} key={sub}>
-          <span>{SUB_TITLE[sub]}</span>
-          <ForwardIcon size={16} />
-        </a>
+      {MENU_GROUPS.map((group) => (
+        <div class="card-list" key={group[0]}>
+          {group.map((sub) => (
+            <a class="row row-button settings-row" href={`#/settings/${sub}`} key={sub}>
+              <span class="settings-icon" style={{ background: `var(--palette-${SUB_ICON[sub].color})` }}>
+                {SUB_ICON[sub].icon}
+              </span>
+              <span class="row-main">
+                <span class="row-title">{SUB_TITLE[sub]}</span>
+              </span>
+              <span class="row-chevron">
+                <ForwardIcon size={16} />
+              </span>
+            </a>
+          ))}
+        </div>
       ))}
     </nav>
   </LargeTitle>

@@ -1,8 +1,10 @@
 import { formatDecimal, formatMoney, parseMoney, type CategoryKind } from "@fin/domain"
 import { dayMonth, type Ledger, type RecurringProblem, type RecurringView } from "@fin/ledger"
+import type { ComponentChildren } from "preact"
 import { useState } from "preact/hooks"
 import { CategoryBadge } from "../components/CategoryBadge"
-import { RepeatIcon } from "../icons"
+import { Sheet } from "../components/Sheet"
+import { ForwardIcon, PlusIcon, RepeatIcon } from "../icons"
 
 const problemText: Record<RecurringProblem, string> = {
   "not-found": "Регулярная операция уже удалена.",
@@ -33,8 +35,10 @@ const RecurringForm = (props: {
   ledger: Ledger
   initial: Draft
   editing: boolean
-  onDone: () => void
+  /** Закрыть панель с анимацией — и по «Отмена», и после сохранения. */
+  close: () => void
   onSubmit: (draft: Draft, amount: number) => Promise<{ ok: boolean; problem?: RecurringProblem }>
+  children?: ComponentChildren
 }) => {
   const [draft, setDraft] = useState(props.initial)
   const [error, setError] = useState<string | null>(null)
@@ -49,10 +53,11 @@ const RecurringForm = (props: {
     if (amount === null) return setError(problemText["bad-amount"])
     const result = await props.onSubmit(draft, amount)
     if (!result.ok) return setError(problemText[result.problem ?? "bad-amount"])
-    props.onDone()
+    props.close()
   }
   return (
-    <form class="refund-form" onSubmit={submit}>
+    <form class="sheet-form" onSubmit={submit}>
+      <div class="sheet-title">{props.editing ? "Регулярная операция" : "Новая регулярная операция"}</div>
       {!props.editing && (
         <div class="segmented" role="group" aria-label="Вид операции">
           {(["expense", "income"] as const).map((kind) => (
@@ -66,32 +71,52 @@ const RecurringForm = (props: {
           ))}
         </div>
       )}
-      <label class="field">
-        <span>Описание</span>
-        <input class="text-input" type="text" value={draft.description} onInput={(e) => set({ description: e.currentTarget.value })} />
-      </label>
-      <div class="inline-form">
-        <label class="field grow-field">
-          <span>Сумма, ₽</span>
-          <input class="text-input num" type="text" inputMode="decimal" value={draft.amount} onInput={(e) => set({ amount: e.currentTarget.value })} />
+      <div class="card-list">
+        <label class="row input-row">
+          <span class="row-label">Описание</span>
+          <input
+            class="row-input"
+            type="text"
+            placeholder="Например, Кинопоиск"
+            value={draft.description}
+            onInput={(e) => set({ description: e.currentTarget.value })}
+          />
         </label>
-        <label class="field day-field">
-          <span>Число</span>
-          <input class="text-input num" type="text" inputMode="numeric" value={draft.day} onInput={(e) => set({ day: e.currentTarget.value })} />
+        <label class="row input-row">
+          <span class="row-label">Сумма, ₽</span>
+          <input
+            class="row-input num"
+            type="text"
+            inputMode="decimal"
+            placeholder="0"
+            value={draft.amount}
+            onInput={(e) => set({ amount: e.currentTarget.value })}
+          />
+        </label>
+        <label class="row input-row">
+          <span class="row-label">Число месяца</span>
+          <input
+            class="row-input num"
+            type="text"
+            inputMode="numeric"
+            value={draft.day}
+            onInput={(e) => set({ day: e.currentTarget.value })}
+          />
+        </label>
+        <label class="row input-row">
+          <span class="row-label">Категория</span>
+          <select class="row-input" value={draft.categoryId} onChange={(e) => set({ categoryId: e.currentTarget.value })}>
+            {categories.map((c) => (
+              <option value={c.id}>{c.name}</option>
+            ))}
+          </select>
         </label>
       </div>
-      <label class="field">
-        <span>Категория</span>
-        <select class="text-input" value={draft.categoryId} onChange={(e) => set({ categoryId: e.currentTarget.value })}>
-          {categories.map((c) => (
-            <option value={c.id}>{c.name}</option>
-          ))}
-        </select>
-      </label>
       <span class="hint">Если такого числа в месяце нет, операция появится в последний день месяца.</span>
       {error && <span class="hint error">{error}</span>}
+      {props.children}
       <div class="actions-row">
-        <button type="button" class="secondary-button grow" onClick={props.onDone}>
+        <button type="button" class="secondary-button grow" onClick={props.close}>
           Отмена
         </button>
         <button type="submit" class="accent-button grow">
@@ -105,67 +130,73 @@ const RecurringForm = (props: {
 const RecurringRow = ({ ledger, item }: { ledger: Ledger; item: RecurringView }) => {
   const [editing, setEditing] = useState(false)
   const today = ledger.today()
-  if (editing) {
-    return (
-      <div class="row editing">
-        <div class="row-main stack">
-          <RecurringForm
-            ledger={ledger}
-            editing
-            initial={{
-              kind: item.kind,
-              description: item.description,
-              amount: formatDecimal(item.amount).replace(/,00$/, ""),
-              categoryId: item.category.id,
-              day: String(item.dayOfMonth)
-            }}
-            onDone={() => setEditing(false)}
-            onSubmit={(d, amount) =>
-              ledger.updateRecurring(item.id, {
-                description: d.description,
-                amount,
-                categoryId: d.categoryId,
-                dayOfMonth: Number(d.day)
-              })
-            }
-          />
-          <div class="actions-row">
-            {item.status === "active" && (
-              <button type="button" class="secondary-button grow" onClick={() => void ledger.pauseRecurring(item.id)}>
-                Пауза
-              </button>
-            )}
-            {item.status === "paused" && (
-              <button type="button" class="secondary-button grow" onClick={() => void ledger.resumeRecurring(item.id)}>
-                Возобновить
-              </button>
-            )}
-            {item.status !== "ended" && (
-              <button type="button" class="secondary-button danger-button grow" onClick={() => void ledger.endRecurring(item.id)}>
-                Завершить
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-    )
-  }
   return (
-    <div class={`row ${item.status === "active" ? "" : "inactive"}`}>
-      <CategoryBadge category={item.category} />
-      <div class="row-main">
-        <span class="row-title">
-          {item.description} <RepeatIcon />
+    <>
+      <button
+        type="button"
+        class={`row row-button ${item.status === "active" ? "" : "inactive"}`}
+        aria-label={`Изменить: ${item.description}`}
+        onClick={() => setEditing(true)}
+      >
+        <CategoryBadge category={item.category} />
+        <span class="row-main">
+          <span class="row-title">
+            {item.description} <RepeatIcon />
+          </span>
+          <span class="row-sub">
+            {item.category.name} · {statusText(item, today)}
+          </span>
         </span>
-        <span class="row-sub">
-          {item.category.name} · {statusText(item, today)}
+        <span class={`num op-amount ${item.kind}`}>{formatMoney(item.amount, { sign: item.kind === "income" ? "+" : "−" })}</span>
+        <span class="row-chevron">
+          <ForwardIcon size={16} />
         </span>
-      </div>
-      <span class={`num op-amount ${item.kind}`}>{formatMoney(item.amount, { sign: item.kind === "income" ? "+" : "−" })}</span>
-      <button type="button" class="text-button" onClick={() => setEditing(true)}>
-        Изменить
       </button>
-    </div>
+      {editing && (
+        <Sheet label={`Регулярная операция «${item.description}»`} onClose={() => setEditing(false)}>
+          {(close) => (
+            <RecurringForm
+              ledger={ledger}
+              editing
+              close={close}
+              initial={{
+                kind: item.kind,
+                description: item.description,
+                amount: formatDecimal(item.amount).replace(/,00$/, ""),
+                categoryId: item.category.id,
+                day: String(item.dayOfMonth)
+              }}
+              onSubmit={(d, amount) =>
+                ledger.updateRecurring(item.id, {
+                  description: d.description,
+                  amount,
+                  categoryId: d.categoryId,
+                  dayOfMonth: Number(d.day)
+                })
+              }
+            >
+              {item.status !== "ended" && (
+                <div class="actions-row">
+                  {item.status === "active" && (
+                    <button type="button" class="secondary-button grow" onClick={() => void ledger.pauseRecurring(item.id)}>
+                      Пауза
+                    </button>
+                  )}
+                  {item.status === "paused" && (
+                    <button type="button" class="secondary-button grow" onClick={() => void ledger.resumeRecurring(item.id)}>
+                      Возобновить
+                    </button>
+                  )}
+                  <button type="button" class="secondary-button danger-button grow" onClick={() => void ledger.endRecurring(item.id)}>
+                    Завершить
+                  </button>
+                </div>
+              )}
+            </RecurringForm>
+          )}
+        </Sheet>
+      )}
+    </>
   )
 }
 
@@ -174,35 +205,36 @@ export const RecurringSection = ({ ledger }: { ledger: Ledger }) => {
   const items = ledger.recurring()
   return (
     <section class="section">
-      <h2>Регулярные операции</h2>
-      <p class="section-note">Раз в месяц в заданное число операция появляется сама. Правка не меняет уже созданные операции.</p>
-      {items.length > 0 && (
-        <div class="card-list">
-          {items.map((item) => (
-            <RecurringRow key={`${item.id}:${item.status}:${item.amount}:${item.description}`} ledger={ledger} item={item} />
-          ))}
-        </div>
-      )}
-      {adding ? (
-        <RecurringForm
-          ledger={ledger}
-          editing={false}
-          initial={{ kind: "expense", description: "", amount: "", categoryId: "subscriptions", day: String(Number(ledger.today().slice(8))) }}
-          onDone={() => setAdding(false)}
-          onSubmit={(d, amount) =>
-            ledger.addRecurring({
-              kind: d.kind,
-              description: d.description,
-              amount,
-              categoryId: d.categoryId,
-              dayOfMonth: Number(d.day)
-            })
-          }
-        />
-      ) : (
-        <button type="button" class="secondary-button" onClick={() => setAdding(true)}>
-          Добавить регулярную операцию
+      <div class="card-list">
+        {items.map((item) => (
+          <RecurringRow key={`${item.id}:${item.status}:${item.amount}:${item.description}`} ledger={ledger} item={item} />
+        ))}
+        <button type="button" class="row row-button action-row" onClick={() => setAdding(true)}>
+          <PlusIcon />
+          <span>Добавить регулярную операцию</span>
         </button>
+      </div>
+      <p class="section-footer">Раз в месяц в заданное число операция появляется сама. Правка не меняет уже созданные операции.</p>
+      {adding && (
+        <Sheet label="Новая регулярная операция" onClose={() => setAdding(false)}>
+          {(close) => (
+            <RecurringForm
+              ledger={ledger}
+              editing={false}
+              close={close}
+              initial={{ kind: "expense", description: "", amount: "", categoryId: "subscriptions", day: String(Number(ledger.today().slice(8))) }}
+              onSubmit={(d, amount) =>
+                ledger.addRecurring({
+                  kind: d.kind,
+                  description: d.description,
+                  amount,
+                  categoryId: d.categoryId,
+                  dayOfMonth: Number(d.day)
+                })
+              }
+            />
+          )}
+        </Sheet>
       )}
     </section>
   )

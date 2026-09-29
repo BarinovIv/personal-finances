@@ -1,13 +1,14 @@
 import { formatMoney } from "@fin/domain"
 import { dayMonth, type Dashboard, type DashboardCategory, type Ledger, type PeriodMode } from "@fin/ledger"
-import { useEffect, useRef, useState } from "preact/hooks"
+import { memo } from "preact/compat"
+import { useEffect, useMemo, useRef, useState } from "preact/hooks"
 import { CategoryBadge } from "../components/CategoryBadge"
 import { LargeTitle } from "../components/LargeTitle"
 import { signedAmount } from "../components/OperationRow"
 import { BackIcon, ForwardIcon, RepeatIcon } from "../icons"
 import { dashboardMemory, useLedgerVersion } from "../state"
 
-const MUTED_SECTOR = "var(--line)"
+const MUTED_SECTOR = "var(--chart-muted)"
 const paletteVar = (color: string) => `var(--palette-${color})`
 
 const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches
@@ -56,13 +57,49 @@ const useGrowProgress = (key: string, duration = 450) => {
   return progress
 }
 
+/**
+ * Насколько каждый сектор «в фокусе»: 1 — свой цвет, 0 — серый. При выборе категории
+ * веса плавно перетекают, и сектора гаснут и загораются, а не перекрашиваются рывком.
+ */
+const useSectorEmphasis = (ids: ReadonlyArray<string>, selected: string | null, duration = 320) => {
+  const target = (id: string) => (!selected || selected === id ? 1 : 0)
+  const [weights, setWeights] = useState<Record<string, number>>(() => Object.fromEntries(ids.map((id) => [id, target(id)])))
+  const weightsRef = useRef(weights)
+  useEffect(() => {
+    weightsRef.current = weights
+  })
+  useEffect(() => {
+    const to = Object.fromEntries(ids.map((id) => [id, target(id)]))
+    if (reducedMotion()) return setWeights(to)
+    const from = weightsRef.current
+    let raf = 0
+    const start = performance.now()
+    const tick = (now: number) => {
+      const t = easeOutCubic(Math.min(1, (now - start) / duration))
+      setWeights(Object.fromEntries(ids.map((id) => [id, (from[id] ?? to[id]!) + (to[id]! - (from[id] ?? to[id]!)) * t])))
+      if (t < 1) raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [selected, ids.join(",")])
+  return (id: string) => weights[id] ?? target(id)
+}
+
+/** Цвет сектора между серым и своим — по весу из `useSectorEmphasis`. */
+const sectorColor = (color: string, weight: number) =>
+  weight >= 1
+    ? paletteVar(color)
+    : weight <= 0
+      ? MUTED_SECTOR
+      : `color-mix(in srgb, ${paletteVar(color)} ${(weight * 100).toFixed(1)}%, ${MUTED_SECTOR})`
+
 const shortMoney = (kopecks: number) => {
   const rub = kopecks / 100
   if (Math.abs(rub) < 1000) return `${Math.round(rub)}`
   return `${(Math.round(rub / 100) / 10).toLocaleString("ru-RU")}к`
 }
 
-const Summary = ({ d }: { d: Dashboard }) => {
+const Summary = memo(({ d }: { d: Dashboard }) => {
   const { comparison } = d
   const change = comparison.change
   const expenses = useAnimatedNumber(d.expenses)
@@ -91,12 +128,13 @@ const Summary = ({ d }: { d: Dashboard }) => {
       </div>
     </section>
   )
-}
+})
 
 const Donut = ({ d, selected }: { d: Dashboard; selected: string | null }) => {
   const positive = d.categories.filter((c) => c.amount > 0)
   const total = positive.reduce((s, c) => s + c.amount, 0)
   const progress = useGrowProgress(`${d.period.start}:${d.period.end}`)
+  const emphasis = useSectorEmphasis(positive.map((c) => c.id), selected)
   const sel = d.categories.find((c) => c.id === selected)
   const value = useAnimatedNumber(sel ? sel.amount : d.expenses)
   let acc = 0
@@ -106,7 +144,7 @@ const Donut = ({ d, selected }: { d: Dashboard; selected: string | null }) => {
     acc += c.amount
     const to = (acc / total) * 100
     const grown = from + (to - from) * progress
-    const color = !selected || selected === c.id ? paletteVar(c.color) : MUTED_SECTOR
+    const color = sectorColor(c.color, emphasis(c.id))
     stops.push(`${color} ${from.toFixed(2)}% ${grown.toFixed(2)}%`)
     if (grown < to) stops.push(`${MUTED_SECTOR} ${grown.toFixed(2)}% ${to.toFixed(2)}%`)
   }
@@ -177,7 +215,7 @@ const CategoryList = (props: { d: Dashboard; selected: string | null; onSelect: 
   )
 }
 
-const UpcomingBlock = ({ d, today }: { d: Dashboard; today: string }) => {
+const UpcomingBlock = memo(({ d, today }: { d: Dashboard; today: string }) => {
   if (!d.isCurrent || d.upcoming.items.length === 0) return null
   return (
     <section class="upcoming">
@@ -197,9 +235,9 @@ const UpcomingBlock = ({ d, today }: { d: Dashboard; today: string }) => {
       ))}
     </section>
   )
-}
+})
 
-const Trend = ({ d }: { d: Dashboard }) => {
+const Trend = memo(({ d }: { d: Dashboard }) => {
   const max = Math.max(1, ...d.trend.map((t) => t.amount))
   return (
     <section class="trend-card">
@@ -212,7 +250,7 @@ const Trend = ({ d }: { d: Dashboard }) => {
               class="trend-bar"
               style={{
                 height: `${Math.max(4, Math.round((Math.max(0, t.amount) / max) * 96))}px`,
-                background: t.current ? "var(--accent)" : "var(--line)"
+                background: t.current ? "var(--accent)" : MUTED_SECTOR
               }}
             />
             <span class="trend-label">{t.label}</span>
@@ -221,10 +259,10 @@ const Trend = ({ d }: { d: Dashboard }) => {
       </div>
     </section>
   )
-}
+})
 
 export const DashboardScreen = ({ ledger }: { ledger: Ledger }) => {
-  useLedgerVersion(ledger)
+  const version = useLedgerVersion(ledger)
   const [mode, setMode] = useState<PeriodMode>(ledger.dashboardMode())
   // офсет и выбранная категория живут в dashboardMemory на время сессии: открыв операцию и вернувшись
   // назад, пользователь должен увидеть тот же период и ту же раскрытую категорию, а не сброс на дефолт.
@@ -238,7 +276,9 @@ export const DashboardScreen = ({ ledger }: { ledger: Ledger }) => {
     dashboardMemory.selected = next
     setSelectedState(next)
   }
-  const d = ledger.dashboard({ mode, offset })
+  const today = ledger.today()
+  // сводка — самый дорогой расчёт экрана; выбор категории и жесты его не меняют
+  const d = useMemo(() => ledger.dashboard({ mode, offset }), [ledger, version, today, mode, offset])
   const select = (id: string) => setSelected(selected === id ? null : id)
   const switchMode = (next: PeriodMode) => {
     setMode(next)
@@ -283,15 +323,15 @@ export const DashboardScreen = ({ ledger }: { ledger: Ledger }) => {
         </button>
       </div>
       <div class="period-nav">
-        <button type="button" class="icon-button" aria-label="Предыдущий период" onClick={() => go(-1)}>
-          <BackIcon size={22} />
+        <button type="button" class="glass-button" aria-label="Предыдущий период" onClick={() => go(-1)}>
+          <BackIcon size={20} />
         </button>
         <div class="period-title">
           <span class="period-label">{d.period.label}</span>
           {d.progress && <span class="row-sub">{d.progress}</span>}
         </div>
-        <button type="button" class="icon-button" aria-label="Следующий период" disabled={d.isCurrent} onClick={() => go(1)}>
-          <ForwardIcon size={22} />
+        <button type="button" class="glass-button" aria-label="Следующий период" disabled={d.isCurrent} onClick={() => go(1)}>
+          <ForwardIcon size={20} />
         </button>
       </div>
       {!d.isCurrent && (
@@ -301,8 +341,8 @@ export const DashboardScreen = ({ ledger }: { ledger: Ledger }) => {
       )}
       <Summary d={d} />
       <Donut d={d} selected={selected} />
-      <UpcomingBlock d={d} today={ledger.today()} />
-      <CategoryList d={d} selected={selected} onSelect={select} today={ledger.today()} />
+      <UpcomingBlock d={d} today={today} />
+      <CategoryList d={d} selected={selected} onSelect={select} today={today} />
       <Trend d={d} />
     </LargeTitle>
   )

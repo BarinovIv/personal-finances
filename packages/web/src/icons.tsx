@@ -1,79 +1,64 @@
-const Svg = (props: { size?: number; children: preact.ComponentChildren; label?: string; stroke?: string; width?: number }) => (
-  <svg
-    width={props.size ?? 22}
-    height={props.size ?? 22}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke={props.stroke ?? "currentColor"}
-    stroke-width={props.width ?? 1.8}
-    stroke-linecap="round"
-    stroke-linejoin="round"
-    {...(props.label ? { role: "img", "aria-label": props.label } : { "aria-hidden": "true" })}
-  >
-    {props.children}
-  </svg>
-)
+import { SYMBOLS, type SymbolName } from "./symbols"
 
-export const PenIcon = () => (
-  <Svg>
-    <path d="M4 20h4L19 9l-4-4L4 16v4z" />
-    <path d="M13.5 6.5l4 4" />
-  </Svg>
-)
+/** Символ из набора `SYMBOLS` (сетка 56×56), закрашен текущим цветом текста. */
+export const SfSymbol = (props: { name: SymbolName; size?: number; label?: string; color?: string }) => {
+  const shape: { d: string; evenodd?: boolean; transform?: string } = SYMBOLS[props.name]
+  return (
+    <svg
+      width={props.size ?? 22}
+      height={props.size ?? 22}
+      viewBox="0 0 56 56"
+      fill={props.color ?? "currentColor"}
+      {...(props.label ? { role: "img", "aria-label": props.label } : { "aria-hidden": "true" })}
+    >
+      <path d={shape.d} fill-rule={shape.evenodd ? "evenodd" : undefined} transform={shape.transform} />
+    </svg>
+  )
+}
 
-export const ChartIcon = () => (
-  <Svg>
-    <path d="M5 20V11" />
-    <path d="M12 20V4" />
-    <path d="M19 20v-6" />
-  </Svg>
-)
+/* Таббар, как в iOS, — заливные варианты: «square.and.pencil», «chart.pie», «gearshape». */
+export const PenIcon = () => <SfSymbol name="square_pencil_fill" size={25} />
 
-export const SlidersIcon = () => (
-  <Svg>
-    <path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12" />
-    <circle cx="16" cy="6" r="2" />
-    <circle cx="10" cy="12" r="2" />
-    <circle cx="18" cy="18" r="2" />
-  </Svg>
-)
+export const ChartIcon = () => <SfSymbol name="chart_pie_fill" size={25} />
 
-export const CheckIcon = () => (
-  <Svg width={2.2}>
-    <path d="M5 12.5l4.5 4.5L19 7.5" />
-  </Svg>
-)
+export const SlidersIcon = () => <SfSymbol name="gear_alt_fill" size={25} />
 
-export const BackIcon = ({ size = 20 }: { size?: number }) => (
-  <Svg size={size} width={2}>
-    <path d="M15 5l-7 7 7 7" />
-  </Svg>
-)
+export const CheckIcon = ({ size = 22 }: { size?: number }) => <SfSymbol name="checkmark" size={size} />
 
-export const ForwardIcon = ({ size = 20 }: { size?: number }) => (
-  <Svg size={size} width={2}>
-    <path d="M9 5l7 7-7 7" />
-  </Svg>
-)
+export const ArrowUpIcon = ({ size = 20 }: { size?: number }) => <SfSymbol name="arrow_up" size={size} />
+
+export const ChevronDownIcon = ({ size = 14 }: { size?: number }) => <SfSymbol name="chevron_down" size={size} />
+
+export const CloseIcon = ({ size = 18 }: { size?: number }) => <SfSymbol name="xmark" size={size} />
+
+export const SearchIcon = ({ size = 20 }: { size?: number }) => <SfSymbol name="search" size={size} />
+
+export const TrashIcon = ({ size = 18 }: { size?: number }) => <SfSymbol name="trash" size={size} />
+
+export const PlusIcon = ({ size = 18 }: { size?: number }) => <SfSymbol name="plus" size={size} />
+
+export const LogoutIcon = ({ size = 18 }: { size?: number }) => <SfSymbol name="square_arrow_left" size={size} />
+
+export const BackIcon = ({ size = 20 }: { size?: number }) => <SfSymbol name="chevron_left" size={size} />
+
+export const ForwardIcon = ({ size = 20 }: { size?: number }) => <SfSymbol name="chevron_right" size={size} />
 
 export const RefundIcon = ({ size = 15, label }: { size?: number; label?: string }) => (
-  <Svg size={size} width={2} stroke="var(--accent)" {...(label ? { label } : {})}>
-    <path d="M9 14L4 9l5-5" />
-    <path d="M4 9h11a5 5 0 0 1 0 10h-3" />
-  </Svg>
+  <SfSymbol name="arrow_uturn_left" size={size} color="var(--accent)" {...(label ? { label } : {})} />
 )
 
 export const RepeatIcon = ({ size = 14, label }: { size?: number; label?: string }) => (
-  <Svg size={size} width={2} stroke="var(--muted)" {...(label ? { label } : {})}>
-    <path d="M17 2l3 3-3 3" />
-    <path d="M4 11V9a4 4 0 0 1 4-4h16" />
-    <path d="M7 22l-3-3 3-3" />
-    <path d="M20 13v2a4 4 0 0 1-4 4H4" />
-  </Svg>
+  <SfSymbol name="repeat" size={size} color="var(--muted)" {...(label ? { label } : {})} />
 )
 
-export const CloudIcon = ({ size = 16 }: { size?: number }) => (
-  <Svg size={size} width={2}>
-    <path d="M7 18h10a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.1 9.1 4.5 4.5 0 0 0 7 18z" />
-  </Svg>
-)
+export const CalendarIcon = ({ size = 18 }: { size?: number }) => <SfSymbol name="calendar" size={size} />
+
+export const LoopIcon = ({ size = 18 }: { size?: number }) => <SfSymbol name="repeat" size={size} />
+
+export const GridIcon = ({ size = 18 }: { size?: number }) => <SfSymbol name="square_grid_2x2_fill" size={size} />
+
+export const DownloadIcon = ({ size = 18 }: { size?: number }) => <SfSymbol name="square_arrow_down" size={size} />
+
+export const PhoneIcon = ({ size = 18 }: { size?: number }) => <SfSymbol name="device_phone_portrait" size={size} />
+
+export const CloudIcon = ({ size = 16 }: { size?: number }) => <SfSymbol name="cloud" size={size} />

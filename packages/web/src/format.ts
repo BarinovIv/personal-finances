@@ -12,3 +12,12 @@ export const lastActive = (at: number, now = Date.now()): string => {
   if (day === today) return `сегодня в ${time}`
   return dayMonth(day, today)
 }
+
+/** Русское склонение по числу: 1 операция, 2 операции, 5 операций. */
+export const plural = (n: number, one: string, few: string, many: string) => {
+  const mod10 = n % 10
+  const mod100 = n % 100
+  if (mod10 === 1 && mod100 !== 11) return one
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few
+  return many
+}
