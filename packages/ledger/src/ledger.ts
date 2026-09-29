@@ -1,4 +1,4 @@
-import { APP_TIME_ZONE, type CategoryKind, type IsoDate, type SyncRecord } from "@fin/domain"
+import { APP_TIME_ZONE, type CategoryKind, type IsoDate, type PeriodMode, type SyncRecord } from "@fin/domain"
 import {
   addCategory,
   categoryUsage,
@@ -35,7 +35,6 @@ import {
   type RefundsInfo,
   type UpdateResult
 } from "./operations"
-import type { PeriodMode } from "./periods"
 import { Records } from "./records"
 import {
   addRecurring,

@@ -4,11 +4,11 @@ import {
   recurringOperationId,
   type CategoryKind,
   type IsoDate,
+  type Period,
   type RecurringData,
   type RecurringStatus
 } from "@fin/domain"
 import type { LedgerContext } from "./context"
-import type { Period } from "./periods"
 import type { RecordOf } from "./records"
 import type { CategoryView } from "./views"
 

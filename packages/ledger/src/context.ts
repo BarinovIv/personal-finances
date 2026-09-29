@@ -1,12 +1,10 @@
-import { SETTINGS_ID, todayIn, type CategoryKind, type IsoDate } from "@fin/domain"
+import { liveOperations, paydaysOf, SETTINGS_ID, todayIn, type CategoryKind, type IsoDate } from "@fin/domain"
 import { History } from "./categorize"
 import { STARTER_CATEGORIES, UNKNOWN_CATEGORY_COLOR, UNKNOWN_CATEGORY_ICON } from "./categories"
 import { normalizeIcon } from "./icons"
 import { normalizePaletteColor } from "./palette"
 import type { RecordOf, Records } from "./records"
 import type { CategoryView, OperationView } from "./views"
-
-export const DEFAULT_PAYDAYS: ReadonlyArray<number> = [5, 20]
 
 /** Общее для всех частей журнала: записи, часы и производные данные, пересчитываемые при изменениях. */
 export class LedgerContext {
@@ -63,24 +61,12 @@ export class LedgerContext {
     return this.categories().get(categoryId)?.kind === kind
   }
 
-  /**
-   * Живые операции. Возврат удалённого расхода тоже не живой: так бывает, если расход удалили
-   * на одном устройстве, а возврат оформили на другом до синхронизации.
-   */
-  readonly operations = this.cached(() => {
-    const live = this.records.live("operations")
-    return live.filter((r) => {
-      if (r.data.kind !== "refund" || !r.data.refundOf) return true
-      const original = this.records.get("operations", r.data.refundOf)
-      return original !== undefined && !original.deleted
-    })
-  })
+  /** Живые операции: без удалённых и без возвратов удалённого расхода. */
+  readonly operations = this.cached(() => liveOperations(this.records.all("operations")))
 
   /** Дни зарплаты из настроек; по умолчанию 5 и 20. */
   paydays(): ReadonlyArray<number> {
-    const settings = this.records.get("settings", SETTINGS_ID)
-    const days = settings && !settings.deleted ? settings.data.paydays : []
-    return days.length > 0 ? [...days].sort((a, b) => a - b) : DEFAULT_PAYDAYS
+    return paydaysOf(this.records.get("settings", SETTINGS_ID))
   }
 
   /** История подстановок — только живые расходы и доходы. */

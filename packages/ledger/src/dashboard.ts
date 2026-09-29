@@ -1,16 +1,18 @@
-import { addDays, dateParts, dayOfMonth, daysBetween, type IsoDate } from "@fin/domain"
-import type { LedgerContext } from "./context"
 import {
-  contains,
-  periodLabel,
+  addDays,
+  dateParts,
+  dayOfMonth,
+  daysBetween,
+  inPeriod,
+  periodAt,
   periodLength,
-  rangeLabel,
-  shiftPeriod,
-  trendLabel,
+  periodTotals,
+  type IsoDate,
   type Period,
   type PeriodMode
-} from "./periods"
-import type { RecordOf } from "./records"
+} from "@fin/domain"
+import type { LedgerContext } from "./context"
+import { periodLabel, rangeLabel, trendLabel } from "./periods"
 import { upcomingIn, type Upcoming } from "./recurring"
 import type { OperationView } from "./views"
 
@@ -84,13 +86,6 @@ const plural = (n: number, one: string, few: string, many: string) => {
   return many
 }
 
-/** Вклад операции в расходы: расход — плюс, возврат — минус, доход — ноль. */
-const expenseEffect = (record: RecordOf<"operations">) =>
-  record.data.kind === "expense" ? record.data.amount : record.data.kind === "refund" ? -record.data.amount : 0
-
-const expensesIn = (ops: ReadonlyArray<RecordOf<"operations">>, range: Period) =>
-  ops.reduce((sum, r) => (contains(range, r.data.date) ? sum + expenseEffect(r) : sum), 0)
-
 /** Отрезок предыдущего периода, соответствующий [start, today] текущего. */
 const sameStretch = (mode: PeriodMode, period: Period, previous: Period, today: IsoDate): Period => {
   if (mode === "month") {
@@ -105,49 +100,32 @@ export const buildDashboard = (ctx: LedgerContext, query: DashboardQuery): Dashb
   const { mode, offset } = query
   const today = ctx.today()
   const paydays = ctx.paydays()
-  const period = shiftPeriod(mode, today, paydays, offset)
-  const isCurrent = contains(period, today)
+  const period = periodAt(mode, today, paydays, offset)
+  const isCurrent = inPeriod(period, today)
   const ops = ctx.operations()
+  const { expenses, income, categories: totals } = periodTotals(ops, period)
+  const expensesIn = (range: Period) => periodTotals(ops, range).expenses
 
-  let income = 0
-  const byCategory = new Map<string, { amount: number; records: Array<RecordOf<"operations">> }>()
-  for (const record of ops) {
-    if (!contains(period, record.data.date)) continue
-    if (record.data.kind === "income") {
-      income += record.data.amount
-      continue
+  const categories = totals.map((c): DashboardCategory => {
+    const category = ctx.categoryOf(c.categoryId, "expense")
+    return {
+      id: c.categoryId,
+      name: category.name,
+      color: category.color,
+      icon: category.icon,
+      amount: c.amount,
+      share: c.amount > 0 && expenses > 0 ? c.amount / expenses : null,
+      operations: [...c.operations]
+        .sort((a, b) => (a.data.date === b.data.date ? b.data.createdAt - a.data.createdAt : a.data.date < b.data.date ? 1 : -1))
+        .map((r) => ctx.toView(r))
     }
-    const categoryId = ctx.operationCategory(record).id
-    const entry = byCategory.get(categoryId) ?? { amount: 0, records: [] }
-    entry.amount += expenseEffect(record)
-    entry.records.push(record)
-    byCategory.set(categoryId, entry)
-  }
-  const expenses = [...byCategory.values()].reduce((sum, c) => sum + c.amount, 0)
+  })
 
-  const categories = [...byCategory.entries()]
-    .filter(([, c]) => c.amount !== 0 || c.records.length > 0)
-    .map(([id, c]): DashboardCategory => {
-      const category = ctx.categoryOf(id, "expense")
-      return {
-        id,
-        name: category.name,
-        color: category.color,
-        icon: category.icon,
-        amount: c.amount,
-        share: c.amount > 0 && expenses > 0 ? c.amount / expenses : null,
-        operations: c.records
-          .sort((a, b) => (a.data.date === b.data.date ? b.data.createdAt - a.data.createdAt : a.data.date < b.data.date ? 1 : -1))
-          .map((r) => ctx.toView(r))
-      }
-    })
-    .sort((a, b) => b.amount - a.amount)
-
-  const previous = shiftPeriod(mode, today, paydays, offset - 1)
+  const previous = periodAt(mode, today, paydays, offset - 1)
   const currentRange = isCurrent ? { start: period.start, end: today } : period
   const previousRange = isCurrent ? sameStretch(mode, period, previous, today) : previous
-  const current = expensesIn(ops, currentRange)
-  const before = expensesIn(ops, previousRange)
+  const current = expensesIn(currentRange)
+  const before = expensesIn(previousRange)
 
   let progress = ""
   if (isCurrent) {
@@ -161,8 +139,8 @@ export const buildDashboard = (ctx: LedgerContext, query: DashboardQuery): Dashb
 
   const trend: Array<TrendBar> = []
   for (let i = TREND_LENGTH - 1; i >= 0; i--) {
-    const p = shiftPeriod(mode, today, paydays, offset - i)
-    trend.push({ label: trendLabel(mode, p), start: p.start, end: p.end, amount: expensesIn(ops, p), current: i === 0 })
+    const p = periodAt(mode, today, paydays, offset - i)
+    trend.push({ label: trendLabel(mode, p), start: p.start, end: p.end, amount: expensesIn(p), current: i === 0 })
   }
 
   return {
