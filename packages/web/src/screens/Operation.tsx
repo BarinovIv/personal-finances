@@ -1,7 +1,11 @@
 import { formatDecimal, formatMoney, parseMoney } from "@fin/domain"
-import { dayLabel, type Ledger, type OperationView, type RefundProblem, type UpdateProblem } from "@fin/ledger"
-import { useState } from "preact/hooks"
+import { dayLabel, type Ledger, type OperationView, type RefundProblem, type RefundsInfo, type UpdateProblem } from "@fin/ledger"
+import type { ComponentChildren } from "preact"
+import { useEffect, useState } from "preact/hooks"
+import { CategoryBadge } from "../components/CategoryBadge"
 import { CategoryGrid } from "../components/CategoryGrid"
+import { signedAmount } from "../components/OperationRow"
+import { Sheet } from "../components/Sheet"
 import { BackIcon, RefundIcon } from "../icons"
 import { navigate, useLedgerVersion } from "../state"
 import { showToast } from "../toast"
@@ -22,24 +26,43 @@ const refundProblemText: Record<RefundProblem, string> = {
   "too-much": "Нельзя вернуть больше, чем потрачено."
 }
 
-const Refunds = ({ ledger, op }: { ledger: Ledger; op: OperationView }) => {
-  const info = ledger.refunds(op.id)
-  const [open, setOpen] = useState(false)
-  const [amount, setAmount] = useState("")
-  const [date, setDate] = useState(ledger.today())
-  const [error, setError] = useState<string | null>(null)
-  if (!info) return null
+const deletedText = (op: OperationView) => (op.kind === "refund" ? `Возврат: ${op.description}` : op.description)
+
+export const Header = ({
+  title,
+  back = "#/",
+  leading,
+  trailing
+}: {
+  title: string
+  back?: string
+  leading?: ComponentChildren
+  trailing?: ComponentChildren
+}) => (
+  <header class="screen-header">
+    <div class="header-side">
+      {leading ?? (
+        <a href={back} class="back-link">
+          <BackIcon />
+          <span>Назад</span>
+        </a>
+      )}
+    </div>
+    <span class="screen-title">{title}</span>
+    <div class="header-side trailing">{trailing}</div>
+  </header>
+)
+
+const RefundsList = ({
+  ledger,
+  info,
+  onOpenForm
+}: {
+  ledger: Ledger
+  info: RefundsInfo
+  onOpenForm: () => void
+}) => {
   const today = ledger.today()
-
-  const submit = async () => {
-    const kopecks = parseMoney(amount)
-    if (kopecks === null) return setError(refundProblemText["bad-amount"])
-    const result = await ledger.addRefund(op.id, { amount: kopecks, date })
-    if (!result.ok) return setError(refundProblemText[result.problem])
-    setOpen(false)
-    showToast({ text: `Возврат ${formatMoney(kopecks)} оформлен` })
-  }
-
   return (
     <>
       {info.items.length > 0 && (
@@ -59,58 +82,8 @@ const Refunds = ({ ledger, op }: { ledger: Ledger; op: OperationView }) => {
           </span>
         </section>
       )}
-      {open && (
-        <section class="refund-form">
-          <h2>Возврат денег</h2>
-          <label for="op-refund" class="field-label">
-            Сколько вернули, ₽ (можно часть суммы)
-          </label>
-          <input
-            id="op-refund"
-            class="text-input num"
-            type="text"
-            inputMode="decimal"
-            value={amount}
-            onInput={(e) => setAmount(e.currentTarget.value)}
-          />
-          <div class="field-row">
-            <label for="op-refund-date" class="field-label">
-              Дата возврата
-            </label>
-            <input
-              id="op-refund-date"
-              class="chip date-chip"
-              type="date"
-              value={date}
-              max={today}
-              onChange={(e) => e.currentTarget.value && setDate(e.currentTarget.value)}
-            />
-          </div>
-          <span class="hint">
-            Расходы на «{op.category.name}» уменьшатся в периоде даты возврата. В доходы возврат не попадёт.
-          </span>
-          {error && <div class="hint error">{error}</div>}
-          <div class="actions-row">
-            <button type="button" class="secondary-button grow" onClick={() => setOpen(false)}>
-              Отмена
-            </button>
-            <button type="button" class="accent-button grow" onClick={() => void submit()}>
-              Оформить возврат
-            </button>
-          </div>
-        </section>
-      )}
-      {!open && info.remaining > 0 && (
-        <button
-          type="button"
-          class="outline-accent-button"
-          onClick={() => {
-            setAmount(amountText(info.remaining))
-            setDate(today)
-            setError(null)
-            setOpen(true)
-          }}
-        >
+      {info.remaining > 0 && (
+        <button type="button" class="outline-accent-button" onClick={onOpenForm}>
           <RefundIcon size={18} />
           <span>Возврат</span>
         </button>
@@ -119,17 +92,143 @@ const Refunds = ({ ledger, op }: { ledger: Ledger; op: OperationView }) => {
   )
 }
 
-export const Header = ({ title, back = "#/" }: { title: string; back?: string }) => (
-  <header class="screen-header">
-    <a href={back} class="back-link">
-      <BackIcon />
-      <span>Назад</span>
-    </a>
-    <span class="screen-title">{title}</span>
-  </header>
+const RefundForm = ({
+  ledger,
+  op,
+  info,
+  onDone
+}: {
+  ledger: Ledger
+  op: OperationView
+  info: RefundsInfo
+  onDone: () => void
+}) => {
+  const today = ledger.today()
+  const [amount, setAmount] = useState(amountText(info.remaining))
+  const [date, setDate] = useState(today)
+  const [error, setError] = useState<string | null>(null)
+
+  const submit = async () => {
+    const kopecks = parseMoney(amount)
+    if (kopecks === null) return setError(refundProblemText["bad-amount"])
+    const result = await ledger.addRefund(op.id, { amount: kopecks, date })
+    if (!result.ok) return setError(refundProblemText[result.problem])
+    onDone()
+    showToast({ text: `Возврат ${formatMoney(kopecks)} оформлен` })
+  }
+
+  return (
+    <Sheet onClose={onDone}>
+      <section class="refund-form">
+        <h2>Возврат денег</h2>
+        <label for="op-refund" class="field-label">
+          Сколько вернули, ₽ (можно часть суммы)
+        </label>
+        <input
+          id="op-refund"
+          class="text-input num"
+          type="text"
+          inputMode="decimal"
+          value={amount}
+          onInput={(e) => setAmount(e.currentTarget.value)}
+        />
+        <div class="field-row">
+          <label for="op-refund-date" class="field-label">
+            Дата возврата
+          </label>
+          <input
+            id="op-refund-date"
+            class="chip date-chip"
+            type="date"
+            value={date}
+            max={today}
+            onChange={(e) => e.currentTarget.value && setDate(e.currentTarget.value)}
+          />
+        </div>
+        <span class="hint">
+          Расходы на «{op.category.name}» уменьшатся в периоде даты возврата. В доходы возврат не попадёт.
+        </span>
+        {error && <div class="hint error">{error}</div>}
+        <div class="actions-row">
+          <button type="button" class="secondary-button grow" onClick={onDone}>
+            Отмена
+          </button>
+          <button type="button" class="accent-button grow" onClick={() => void submit()}>
+            Оформить возврат
+          </button>
+        </div>
+      </section>
+    </Sheet>
+  )
+}
+
+const DeleteSheet = ({ op, onConfirm, onClose }: { op: OperationView; onConfirm: () => void; onClose: () => void }) => (
+  <Sheet onClose={onClose}>
+    <p class="delete-sheet-title">Удалить операцию?</p>
+    <p class="hint">
+      «{deletedText(op)}» · {formatMoney(op.amount)}
+    </p>
+    <div class="actions-row">
+      <button type="button" class="secondary-button grow" onClick={onClose}>
+        Отмена
+      </button>
+      <button type="button" class="secondary-button danger-button grow" onClick={onConfirm}>
+        Удалить
+      </button>
+    </div>
+  </Sheet>
 )
 
-const Editor = ({ ledger, op }: { ledger: Ledger; op: OperationView }) => {
+const remove = async (ledger: Ledger, op: OperationView) => {
+  await ledger.deleteOperation(op.id)
+  navigate("/")
+  showToast({ text: `Удалено: ${deletedText(op)}`, action: { label: "Отменить", run: () => void ledger.restoreOperation(op.id) } })
+}
+
+const ViewCard = ({ ledger, op, onEdit }: { ledger: Ledger; op: OperationView; onEdit: () => void }) => {
+  const [refundOpen, setRefundOpen] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const isRefund = op.kind === "refund"
+  const info = op.kind === "expense" ? ledger.refunds(op.id) : undefined
+
+  return (
+    <>
+      <Header
+        title={isRefund ? "Возврат" : "Операция"}
+        trailing={
+          <button type="button" class="header-button" onClick={onEdit}>
+            Изменить
+          </button>
+        }
+      />
+      <div class="page">
+        <section class="op-hero">
+          <span class={`op-hero-amount num ${op.kind}`}>{signedAmount(op)}</span>
+          <span class="op-hero-category">
+            <CategoryBadge category={op.category} size={32} />
+            <span>{op.category.name}</span>
+          </span>
+          <span class="op-hero-desc">{op.description}</span>
+          <span class="op-hero-date">{dayLabel(op.date, ledger.today())}</span>
+        </section>
+        {isRefund && op.refundOf && (
+          <a class="refund-row" href={`#/op/${op.refundOf}`}>
+            <RefundIcon />
+            <span class="grow-text">Исходный расход: {op.description}</span>
+          </a>
+        )}
+        {info && <RefundsList ledger={ledger} info={info} onOpenForm={() => setRefundOpen(true)} />}
+      </div>
+      <button type="button" class="delete-row" onClick={() => setDeleteOpen(true)}>
+        Удалить операцию
+      </button>
+      {refundOpen && info && <RefundForm ledger={ledger} op={op} info={info} onDone={() => setRefundOpen(false)} />}
+      {deleteOpen && <DeleteSheet op={op} onClose={() => setDeleteOpen(false)} onConfirm={() => void remove(ledger, op)} />}
+    </>
+  )
+}
+
+const EditForm = ({ ledger, op, onDone }: { ledger: Ledger; op: OperationView; onDone: () => void }) => {
   const [amount, setAmount] = useState(amountText(op.amount))
   const [description, setDescription] = useState(op.description)
   const [categoryId, setCategoryId] = useState(op.category.id)
@@ -137,6 +236,7 @@ const Editor = ({ ledger, op }: { ledger: Ledger; op: OperationView }) => {
   const [error, setError] = useState<string | null>(null)
   const isRefund = op.kind === "refund"
   const categoryKind = op.kind === "income" ? "income" : "expense"
+  const categoryName = () => ledger.categories(categoryKind).find((c) => c.id === categoryId)?.name ?? ""
 
   const save = async () => {
     const kopecks = parseMoney(amount)
@@ -148,19 +248,24 @@ const Editor = ({ ledger, op }: { ledger: Ledger; op: OperationView }) => {
     if (!result.ok) return setError(problemText[result.problem])
     const learned = !isRefund && categoryId !== op.category.id
     showToast({ text: learned ? `Сохранено. Запомню: «${description.trim()}» → ${categoryName()}` : "Сохранено" })
-    navigate("/")
-  }
-
-  const categoryName = () => ledger.categories(categoryKind).find((c) => c.id === categoryId)?.name ?? ""
-
-  const remove = async () => {
-    await ledger.deleteOperation(op.id)
-    navigate("/")
-    showToast({ text: `Удалено: ${op.description}`, action: { label: "Отменить", run: () => void ledger.restoreOperation(op.id) } })
+    onDone()
   }
 
   return (
     <>
+      <Header
+        title={isRefund ? "Возврат" : "Операция"}
+        leading={
+          <button type="button" class="header-button" onClick={onDone}>
+            Отменить
+          </button>
+        }
+        trailing={
+          <button type="button" class="header-button" onClick={() => void save()}>
+            Готово
+          </button>
+        }
+      />
       <div class="page form">
         <div class="field">
           <label for="op-amount">Сумма, ₽</label>
@@ -196,7 +301,11 @@ const Editor = ({ ledger, op }: { ledger: Ledger; op: OperationView }) => {
             )}
           </div>
         )}
-        {isRefund && <p class="hint">Возврат по расходу «{op.description}» · {op.category.name}</p>}
+        {isRefund && (
+          <p class="hint">
+            Возврат по расходу «{op.description}» · {op.category.name}
+          </p>
+        )}
         <div class="field-row">
           <label for="op-date" class="field-label">
             Дата
@@ -211,17 +320,6 @@ const Editor = ({ ledger, op }: { ledger: Ledger; op: OperationView }) => {
           />
         </div>
         {error && <div class="hint error">{error}</div>}
-        {op.kind === "expense" && <Refunds ledger={ledger} op={op} />}
-      </div>
-      <div class="actions">
-        <button type="button" class="primary-button" onClick={() => void save()}>
-          Сохранить
-        </button>
-        <div class="actions-row">
-          <button type="button" class="secondary-button danger-button grow" onClick={() => void remove()}>
-            Удалить
-          </button>
-        </div>
       </div>
     </>
   )
@@ -229,11 +327,27 @@ const Editor = ({ ledger, op }: { ledger: Ledger; op: OperationView }) => {
 
 export const OperationScreen = ({ ledger, id }: { ledger: Ledger; id: string }) => {
   useLedgerVersion(ledger)
+  const [mode, setMode] = useState<"view" | "edit">("view")
+  // при переходе на другую операцию (например, со ссылки исходного расхода) всегда открывается просмотр
+  useEffect(() => setMode("view"), [id])
   const op = ledger.operation(id)
+
+  if (!op) {
+    return (
+      <div class="screen column">
+        <Header title="Операция" />
+        <div class="empty">Операция удалена</div>
+      </div>
+    )
+  }
+
   return (
     <div class="screen column">
-      <Header title={op?.kind === "refund" ? "Возврат" : "Операция"} />
-      {op ? <Editor key={`${op.id}:${op.updatedAt}`} ledger={ledger} op={op} /> : <div class="empty">Операция удалена</div>}
+      {mode === "view" ? (
+        <ViewCard ledger={ledger} op={op} onEdit={() => setMode("edit")} />
+      ) : (
+        <EditForm key={`${op.id}:${op.updatedAt}`} ledger={ledger} op={op} onDone={() => setMode("view")} />
+      )}
     </div>
   )
 }

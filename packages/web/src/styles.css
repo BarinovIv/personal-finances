@@ -549,6 +549,17 @@ a {
   flex-shrink: 0;
 }
 
+.header-side {
+  flex: 1;
+  min-width: 44px;
+  display: flex;
+  align-items: center;
+}
+
+.header-side.trailing {
+  justify-content: flex-end;
+}
+
 .back-link {
   min-height: 44px;
   padding: 0 8px;
@@ -560,12 +571,82 @@ a {
   color: inherit;
 }
 
+.header-button {
+  min-height: 44px;
+  padding: 0 8px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 16px;
+  font-weight: 600;
+}
+
 .screen-title {
-  flex: 1;
+  flex: 1.4;
   text-align: center;
   font-size: 17px;
   font-weight: 600;
-  margin-right: 80px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Карточка операции: режим просмотра */
+.op-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+  padding: 28px 16px 20px;
+}
+
+.op-hero-amount {
+  font-size: 40px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+.op-hero-amount.income,
+.op-hero-amount.refund {
+  color: var(--accent);
+}
+
+.op-hero-category {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.op-hero-desc {
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.op-hero-date {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.delete-row {
+  flex-shrink: 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--danger);
+  font-size: 16px;
+  font-weight: 600;
+  min-height: 52px;
+  width: 100%;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.delete-sheet-title {
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 600;
+  text-align: center;
 }
 
 .form {
