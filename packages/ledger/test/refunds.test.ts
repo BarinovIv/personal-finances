@@ -41,7 +41,7 @@ describe("возвраты", () => {
     if (!refund.ok) throw new Error()
     expect(await ledger.updateOperation(jeans.id, { amount: 200000 })).toEqual({ ok: false, problem: "below-refunds" })
     expect(await ledger.updateOperation(refund.operation.id, { amount: 400001 })).toEqual({ ok: false, problem: "bad-amount" })
-    expect(await ledger.updateOperation(refund.operation.id, { amount: 400000 })).toEqual({ ok: true })
+    expect(await ledger.updateOperation(refund.operation.id, { amount: 400000 })).toMatchObject({ ok: true })
   })
 
   it("джинсы куплены в августе, сданы в сентябре → «Одежда» за сентябрь уменьшается, август не меняется", async () => {
@@ -88,9 +88,9 @@ describe("возвраты", () => {
     const { ledger } = await makeLedger()
     const jeans = await add(ledger, "джинсы 4000")
     await ledger.addRefund(jeans.id, { amount: 100000 })
-    await ledger.deleteOperation(jeans.id)
+    const undo = await ledger.deleteOperation(jeans.id)
     expect(ledger.days()).toEqual([])
-    await ledger.restoreOperation(jeans.id)
+    await undo()
     expect(ledger.refunds(jeans.id)).toMatchObject({ refunded: 100000 })
   })
 

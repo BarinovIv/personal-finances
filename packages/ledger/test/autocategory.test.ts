@@ -73,8 +73,8 @@ describe("автокатегоризация", () => {
     await ledger.updateOperation(old.id, { amount: 30000, date: "2026-09-27" })
     expect(ledger.preview("кофе 1").categoryId).toBe(categoryId(ledger, "Продукты"))
     // удаление и «Отменить» тоже не выбор
-    await ledger.deleteOperation(old.id)
-    await ledger.restoreOperation(old.id)
+    const undo = await ledger.deleteOperation(old.id)
+    await undo()
     expect(ledger.preview("кофе 1").categoryId).toBe(categoryId(ledger, "Продукты"))
   })
 

@@ -34,4 +34,5 @@ export type {
 export type { Settings } from "./src/settings"
 export type { SearchSummary } from "./src/search"
 export { memoryStore, type LedgerStore, type StoreChange, type StoredState } from "./src/store"
+export type { Undo } from "./src/undo"
 export type { CategoryView, DayGroup, OperationView } from "./src/views"

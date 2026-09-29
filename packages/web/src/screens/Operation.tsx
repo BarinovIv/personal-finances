@@ -99,7 +99,7 @@ const RefundForm = ({
     const result = await ledger.addRefund(op.id, { amount: kopecks, date })
     if (!result.ok) return setError(refundProblemText[result.problem])
     close()
-    showToast({ text: `Возврат ${formatMoney(kopecks)} оформлен` })
+    showToast({ text: `Возврат ${formatMoney(kopecks)} оформлен`, action: { label: "Отменить", run: () => void result.undo() } })
   }
 
   return (
@@ -173,9 +173,9 @@ const DeleteSheet = ({ op, onConfirm, onClose }: { op: OperationView; onConfirm:
 )
 
 const remove = async (ledger: Ledger, op: OperationView) => {
-  await ledger.deleteOperation(op.id)
+  const undo = await ledger.deleteOperation(op.id)
   goBack("/")
-  showToast({ text: `Удалено: ${deletedText(op)}`, action: { label: "Отменить", run: () => void ledger.restoreOperation(op.id) } })
+  showToast({ text: `Удалено: ${deletedText(op)}`, action: { label: "Отменить", run: () => void undo() } })
 }
 
 const ViewCard = ({ ledger, op, onEdit }: { ledger: Ledger; op: OperationView; onEdit: () => void }) => {
@@ -255,7 +255,10 @@ const EditForm = ({ ledger, op, onDone }: { ledger: Ledger; op: OperationView; o
     )
     if (!result.ok) return setError(problemText[result.problem])
     const learned = !isRefund && categoryId !== op.category.id
-    showToast({ text: learned ? `Сохранено. Запомню: «${description.trim()}» → ${categoryName()}` : "Сохранено" })
+    showToast({
+      text: learned ? `Сохранено. Запомню: «${description.trim()}» → ${categoryName()}` : "Сохранено",
+      action: { label: "Отменить", run: () => void result.undo() }
+    })
     onDone()
   }
 

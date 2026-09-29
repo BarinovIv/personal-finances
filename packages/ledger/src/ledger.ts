@@ -29,7 +29,6 @@ import {
   addRefund,
   deleteOperation,
   refundsOf,
-  restoreOperation,
   updateOperation,
   type OperationPatch,
   type RefundResult,
@@ -52,6 +51,7 @@ import {
 import { searchOperations, type SearchSummary } from "./search"
 import { dashboardMode, readSettings, setDashboardMode, setPaydays, type Settings } from "./settings"
 import type { LedgerStore } from "./store"
+import type { Undo } from "./undo"
 import type { CategoryView, DayGroup, OperationView } from "./views"
 
 export interface LedgerOptions {
@@ -101,20 +101,20 @@ export interface Ledger {
   submit(line: string, choice?: EntryChoice): Promise<SubmitResult>
   /** Строка ввода с одной или несколькими операциями: «шаурма 340 такси 500». */
   previewEntries(line: string, choice?: EntriesChoice): ReadonlyArray<EntryPreview>
-  /** Сохранить все операции строки ввода — вместе или ни одной. */
+  /** Сохранить все операции строки ввода — вместе или ни одной; `undo` в результате удаляет их все. */
   submitEntries(line: string, choice?: EntriesChoice): Promise<SubmitEntriesResult>
   /** Операции по дням, сначала новые. */
   days(): ReadonlyArray<DayGroup>
   /** Поиск по ленте: подстрока в описании или сумме, при необходимости — только в выбранных категориях. */
   search(query: string, categoryIds?: ReadonlyArray<string>): SearchSummary
   operation(id: string): OperationView | undefined
+  /** Правка из карточки операции; `undo` в результате возвращает прежнее. */
   updateOperation(id: string, patch: OperationPatch): Promise<UpdateResult>
-  deleteOperation(id: string): Promise<void>
-  /** Отменить удаление. */
-  restoreOperation(id: string): Promise<void>
+  /** Удалить операцию вместе с её возвратами; результат — «Отменить». */
+  deleteOperation(id: string): Promise<Undo>
   /** Возвраты расхода; для дохода и возврата — undefined. */
   refunds(expenseId: string): RefundsInfo | undefined
-  /** Оформить возврат: по умолчанию вся ещё не возвращённая сумма, сегодня. */
+  /** Оформить возврат: по умолчанию вся ещё не возвращённая сумма, сегодня. `undo` в результате удаляет его. */
   addRefund(expenseId: string, options?: { amount?: number; date?: IsoDate }): Promise<RefundResult>
   /** Итоги периода; всё считается на устройстве. */
   dashboard(query: DashboardQuery): Dashboard
@@ -175,7 +175,6 @@ export const openLedger = async (options: LedgerOptions): Promise<Ledger> => {
     },
     updateOperation: (id, patch) => updateOperation(ctx, id, patch),
     deleteOperation: (id) => deleteOperation(ctx, id),
-    restoreOperation: (id) => restoreOperation(ctx, id),
     refunds: (id) => refundsOf(ctx, id),
     addRefund: (id, options) => addRefund(ctx, id, options),
     dashboard: (query) => buildDashboard(ctx, query),

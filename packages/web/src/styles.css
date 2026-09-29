@@ -1186,21 +1186,6 @@ select.text-input {
   color: var(--danger);
 }
 
-.flash {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 4px;
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--accent);
-  animation: fin-rise 0.45s var(--spring-bouncy);
-}
-
-.flash svg {
-  flex-shrink: 0;
-}
-
 .picker {
   display: flex;
   flex-direction: column;
