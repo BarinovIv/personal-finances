@@ -1,5 +1,6 @@
 import type { IsoDate, OperationData } from "@fin/domain"
 import type { LedgerContext } from "./context"
+import { writeUndoable, type Undo } from "./undo"
 import type { OperationView } from "./views"
 
 export interface OperationPatch {
@@ -12,7 +13,10 @@ export interface OperationPatch {
 
 export type UpdateProblem = "not-found" | "bad-amount" | "no-description" | "bad-category" | "below-refunds"
 
-export type UpdateResult = { readonly ok: true } | { readonly ok: false; readonly problem: UpdateProblem }
+/** `undo` возвращает прежние сумму, описание, категорию и дату — и подстановку по истории, как до правки. */
+export type UpdateResult =
+  | { readonly ok: true; readonly undo: Undo }
+  | { readonly ok: false; readonly problem: UpdateProblem }
 
 /** Сумма живых возвратов расхода, копейки. `except` — возврат, который сейчас правят. */
 export const refundedAmount = (ctx: LedgerContext, expenseId: string, except?: string): number =>
@@ -54,36 +58,29 @@ export const updateOperation = async (ctx: LedgerContext, id: string, patch: Ope
       return { ok: false, problem: "below-refunds" }
     }
   }
-  await ctx.records.write([{ collection: "operations", id, data }], stamp)
-  return { ok: true }
+  const undo = await writeUndoable(ctx.records, [{ collection: "operations", id, data }], stamp)
+  return { ok: true, undo }
 }
 
-/** Удаление — тоже правка: запись помечается удалённой (ADR-0001). Вместе с расходом удаляются его возвраты. */
-export const deleteOperation = async (ctx: LedgerContext, id: string): Promise<void> => {
+/**
+ * Удаление — тоже правка: запись помечается удалённой (ADR-0001). Вместе с расходом удаляются его возвраты.
+ * `undo` возвращает операцию вместе с возвратами, удалёнными вместе с ней.
+ */
+export const deleteOperation = async (ctx: LedgerContext, id: string): Promise<Undo> => {
   const record = ctx.records.get("operations", id)
-  if (!record || record.deleted) return
+  if (!record || record.deleted) return async () => ({ ok: false })
   const refunds = ctx.records.live("operations").filter((r) => r.data.refundOf === id)
-  await ctx.records.write(
+  return writeUndoable(
+    ctx.records,
     [record, ...refunds].map((r) => ({ collection: "operations" as const, id: r.id, data: r.data, deleted: true }))
-  )
-}
-
-/** «Отменить» удаление: операция и возвраты, удалённые вместе с ней, возвращаются. */
-export const restoreOperation = async (ctx: LedgerContext, id: string): Promise<void> => {
-  const record = ctx.records.get("operations", id)
-  if (!record || !record.deleted) return
-  const deletedTogether = ctx.records
-    .all("operations")
-    .filter((r) => r.deleted && r.data.refundOf === id && r.updatedAt === record.updatedAt)
-  await ctx.records.write(
-    [record, ...deletedTogether].map((r) => ({ collection: "operations" as const, id: r.id, data: r.data }))
   )
 }
 
 export type RefundProblem = "not-refundable" | "bad-amount" | "too-much"
 
 export type RefundResult =
-  | { readonly ok: true; readonly operation: OperationView }
+  /** `undo` удаляет этот возврат. */
+  | { readonly ok: true; readonly operation: OperationView; readonly undo: Undo }
   | { readonly ok: false; readonly problem: RefundProblem }
 
 export interface RefundsInfo {
@@ -132,6 +129,6 @@ export const addRefund = async (
     refundOf: expenseId,
     recurringId: null
   }
-  await ctx.records.write([{ collection: "operations", id, data }], stamp)
-  return { ok: true, operation: ctx.toView(ctx.records.get("operations", id)!) }
+  const undo = await writeUndoable(ctx.records, [{ collection: "operations", id, data }], stamp)
+  return { ok: true, operation: ctx.toView(ctx.records.get("operations", id)!), undo }
 }

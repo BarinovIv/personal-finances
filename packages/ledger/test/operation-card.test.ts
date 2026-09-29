@@ -13,7 +13,7 @@ describe("карточка операции: правка и удаление", 
         categoryId: categoryId(ledger, "Продукты"),
         date: "2026-09-27"
       })
-    ).toEqual({ ok: true })
+    ).toMatchObject({ ok: true })
 
     expect(ledger.operation(op.id)).toMatchObject({
       amount: 32000,
@@ -53,12 +53,12 @@ describe("карточка операции: правка и удаление", 
   it("удаление можно отменить", async () => {
     const { ledger } = await makeLedger()
     const op = await add(ledger, "тишка 10500", { categoryId: categoryId(ledger, "Одежда") })
-    await ledger.deleteOperation(op.id)
+    const undo = await ledger.deleteOperation(op.id)
     expect(ledger.operation(op.id)).toBeUndefined()
     expect(ledger.days()).toEqual([])
     expect(ledger.preview("тишка 1").categoryId).toBeNull()
 
-    await ledger.restoreOperation(op.id)
+    await undo()
     expect(ledger.operation(op.id)!.description).toBe("тишка")
     expect(ledger.preview("тишка 1").categoryId).toBe(categoryId(ledger, "Одежда"))
   })

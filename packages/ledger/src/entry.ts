@@ -2,6 +2,7 @@ import { addDays, type IsoDate, type OperationData } from "@fin/domain"
 import { parseEntryLine, parseEntryLines, type EntryProblem, type ParsedEntryLine } from "@fin/entry-line"
 import { suggestCategory, type CategorySource } from "./categorize"
 import type { LedgerContext } from "./context"
+import { writeUndoable, type Undo } from "./undo"
 import type { OperationView } from "./views"
 
 /** Что пользователь выбрал вручную поверх распознанного из строки ввода. */
@@ -24,7 +25,7 @@ export interface EntryPreview {
 }
 
 export type SubmitResult =
-  | { readonly ok: true; readonly operation: OperationView }
+  | { readonly ok: true; readonly operation: OperationView; readonly undo: Undo }
   | { readonly ok: false; readonly problems: ReadonlyArray<EntryPreviewProblem> }
 
 /** Выбор вручную для строки с несколькими операциями. */
@@ -36,7 +37,8 @@ export interface EntriesChoice {
 }
 
 export type SubmitEntriesResult =
-  | { readonly ok: true; readonly operations: ReadonlyArray<OperationView> }
+  /** `undo` удаляет все операции, сохранённые строкой. */
+  | { readonly ok: true; readonly operations: ReadonlyArray<OperationView>; readonly undo: Undo }
   | { readonly ok: false; readonly index: number; readonly problems: ReadonlyArray<EntryPreviewProblem> }
 
 export const previewEntry = (ctx: LedgerContext, line: string, choice: EntryChoice = {}): EntryPreview =>
@@ -79,7 +81,9 @@ const previewParsed = (ctx: LedgerContext, parsed: ParsedEntryLine, choice: Entr
 
 export const submitEntry = async (ctx: LedgerContext, line: string, choice?: EntryChoice): Promise<SubmitResult> => {
   const result = await saveAll(ctx, [previewEntry(ctx, line, choice)])
-  return result.ok ? { ok: true, operation: result.operations[0]! } : { ok: false, problems: result.problems }
+  return result.ok
+    ? { ok: true, operation: result.operations[0]!, undo: result.undo }
+    : { ok: false, problems: result.problems }
 }
 
 /** Все операции строки сохраняются вместе или ни одна. */
@@ -106,6 +110,6 @@ const saveAll = async (ctx: LedgerContext, previews: ReadonlyArray<EntryPreview>
     }
     return { collection: "operations" as const, id: ctx.newId(), data }
   })
-  await ctx.records.write(changes, stamp)
-  return { ok: true, operations: changes.map((c) => ctx.toView(ctx.records.get("operations", c.id)!)) }
+  const undo = await writeUndoable(ctx.records, changes, stamp)
+  return { ok: true, operations: changes.map((c) => ctx.toView(ctx.records.get("operations", c.id)!)), undo }
 }

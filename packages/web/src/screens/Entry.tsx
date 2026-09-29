@@ -5,7 +5,8 @@ import {
   type EntryPreview,
   type EntryPreviewProblem,
   type Ledger,
-  type OperationView
+  type OperationView,
+  type Undo
 } from "@fin/ledger"
 import { memo } from "preact/compat"
 import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks"
@@ -17,7 +18,7 @@ import { OperationRow } from "../components/OperationRow"
 import { Sheet } from "../components/Sheet"
 import { SyncBadge } from "../components/SyncBadge"
 import { LargeTitle } from "../components/LargeTitle"
-import { ArrowUpIcon, CheckIcon, SearchIcon } from "../icons"
+import { ArrowUpIcon, SearchIcon } from "../icons"
 import { plural } from "../format"
 import { navigate, useLedgerVersion } from "../state"
 import { showToast } from "../toast"
@@ -36,7 +37,10 @@ const NO_CATEGORIES: ReadonlyArray<string> = []
 /** Сколько ждать после последнего нажатия, прежде чем самому предложить выбрать категорию. */
 const AUTO_PICK_DELAY_MS = 2500
 
-/** Удаляет операцию с задержкой на анимацию исчезновения; в окне задержки можно отменить. */
+/**
+ * Удаляет операцию с задержкой на анимацию исчезновения. «Отменить» в окне задержки просто не даёт удалить,
+ * а после него — возвращает операцию вместе с возвратами.
+ */
 const useRemoveWithUndo = (ledger: Ledger) => {
   const [leaving, setLeaving] = useState<ReadonlySet<string>>(new Set())
   // одна функция на всё время жизни экрана — иначе каждая строка ленты перерисовывалась бы вместе с ним
@@ -50,6 +54,12 @@ const useRemoveWithUndo = (ledger: Ledger) => {
           next.delete(op.id)
           return next
         })
+      const deleted = new Promise<Undo | null>((resolve) =>
+        setTimeout(() => {
+          unmark()
+          resolve(cancelled ? null : ledger.deleteOperation(op.id))
+        }, 200)
+      )
       showToast({
         text: `Удалено: ${op.description}`,
         action: {
@@ -57,13 +67,10 @@ const useRemoveWithUndo = (ledger: Ledger) => {
           run: () => {
             cancelled = true
             unmark()
+            void deleted.then((undo) => undo?.())
           }
         }
       })
-      setTimeout(() => {
-        unmark()
-        if (!cancelled) void ledger.deleteOperation(op.id)
-      }, 200)
     },
     [ledger]
   )
@@ -182,7 +189,7 @@ const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) 
   // шторка выбора сама всплывает, только когда строка дописана и набор затих
   const [autoPick, setAutoPick] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [flash, setFlash] = useState("")
+  const input = useRef<HTMLInputElement>(null)
 
   const previews = ledger.previewEntries(text, choice)
   const first = previews[0]!
@@ -227,15 +234,35 @@ const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) 
       return
     }
     const ops = result.operations
+    let done: string
     if (ops.length > 1) {
       const total = ops.reduce((sum, op) => sum + (op.kind === "expense" ? op.amount : 0), 0)
       const count = `${ops.length} ${plural(ops.length, "операция", "операции", "операций")}`
-      setFlash(total > 0 ? `Добавлено: ${count} · ${formatMoney(total, { sign: "−" })}` : `Добавлено: ${count}`)
+      done = total > 0 ? `Добавлено: ${count} · ${formatMoney(total, { sign: "−" })}` : `Добавлено: ${count}`
     } else {
       const op = ops[0]!
       const taught = first.categorySource === "manual"
-      setFlash(taught ? `Запомнил: «${op.description}» → ${op.category.name}` : `Добавлено: ${op.description} · ${op.category.name}`)
+      done = taught ? `Запомнил: «${op.description}» → ${op.category.name}` : `Добавлено: ${op.description} · ${op.category.name}`
     }
+    // «Отменить» удаляет всё сохранённое строкой и возвращает её в поле — поправить опечатку и сохранить заново
+    const line = text
+    const lineChoice = choice
+    showToast({
+      text: done,
+      action: {
+        label: "Отменить",
+        run: () => {
+          // фокус — прямо в нажатии, иначе телефон не откроет клавиатуру
+          input.current?.focus()
+          void result.undo().then(({ ok }) => {
+            if (!ok) return
+            setText(line)
+            setChoice(lineChoice)
+            setError(null)
+          })
+        }
+      }
+    })
     reset()
   }
 
@@ -262,6 +289,7 @@ const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) 
     <div class={`composer${reveal ? " reveal" : ""}`}>
       <div class={`composer-field${has ? " filled" : ""}`}>
         <input
+          ref={input}
           id="line"
           aria-label="Что потратил или получил?"
           class="line-input"
@@ -275,7 +303,6 @@ const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) 
             const value = e.currentTarget.value
             setText(value)
             setError(null)
-            setFlash("")
             if (!value.trim()) {
               setChoice({})
               setPickerFor(null)
@@ -329,11 +356,9 @@ const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) 
           <span class={`amount-preview num ${first.kind}`}>{first.amount ? signed(first) : "сумма?"}</span>
         </div>
       ) : (
-        !flash && (
-          <div class="hint">
-            Например: <b>футболка 1500</b> · <b>+зарплата 95000</b> · <b>вчера такси 450</b> · <b>шаурма 340 такси 500</b>
-          </div>
-        )
+        <div class="hint">
+          Например: <b>футболка 1500</b> · <b>+зарплата 95000</b> · <b>вчера такси 450</b> · <b>шаурма 340 такси 500</b>
+        </div>
       )}
       {picking !== null && picked && (
         <Sheet label="Выбор категории" onClose={() => setPickerFor(null)}>
@@ -362,12 +387,6 @@ const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) 
         </Sheet>
       )}
       {error && <div class="hint error">{error}</div>}
-      {flash && (
-        <div class="flash" key={flash}>
-          <CheckIcon size={16} />
-          <span>{flash}</span>
-        </div>
-      )}
     </div>
   )
 })
