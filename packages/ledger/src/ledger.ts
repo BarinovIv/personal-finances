@@ -4,7 +4,9 @@ import {
   categoryUsage,
   deleteCategory,
   renameCategory,
+  setCategoryLimit,
   setCategoryStyle,
+  type CategoryLimitProblem,
   type CategoryProblem,
   type CategoryStyle,
   type DeleteCategoryProblem
@@ -87,6 +89,8 @@ export interface Ledger {
   renameCategory(id: string, name: string): Promise<{ ok: true } | { ok: false; problem: CategoryProblem }>
   /** Правка цвета и/или иконки категории. */
   setCategoryStyle(id: string, style: CategoryStyle): Promise<{ ok: true } | { ok: false; problem: "not-found" }>
+  /** Лимит категории расходов в месяц, копейки; null убирает лимит. Синхронизируется вместе с категорией. */
+  setCategoryLimit(id: string, limit: number | null): Promise<{ ok: true } | { ok: false; problem: CategoryLimitProblem }>
   /** Сколько операций и регулярных операций в категории. */
   categoryUsage(id: string): number
   /** Непустая категория удаляется только с переносом операций в `moveTo`. */
@@ -160,6 +164,7 @@ export const openLedger = async (options: LedgerOptions): Promise<Ledger> => {
     addCategory: (kind, name, style) => addCategory(ctx, kind, name, style),
     renameCategory: (id, name) => renameCategory(ctx, id, name),
     setCategoryStyle: (id, style) => setCategoryStyle(ctx, id, style),
+    setCategoryLimit: (id, limit) => setCategoryLimit(ctx, id, limit),
     categoryUsage: (id) => categoryUsage(ctx, id),
     deleteCategory: (id, options) => deleteCategory(ctx, id, options),
     preview: (line, choice) => previewEntry(ctx, line, choice),

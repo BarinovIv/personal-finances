@@ -1,5 +1,6 @@
 import type { IsoDate, OperationData } from "@fin/domain"
 import type { LedgerContext } from "./context"
+import { limitWarnings, type LimitWarning } from "./limits"
 import { writeUndoable, type Undo } from "./undo"
 import type { OperationView } from "./views"
 
@@ -13,9 +14,12 @@ export interface OperationPatch {
 
 export type UpdateProblem = "not-found" | "bad-amount" | "no-description" | "bad-category" | "below-refunds"
 
-/** `undo` возвращает прежние сумму, описание, категорию и дату — и подстановку по истории, как до правки. */
+/**
+ * `undo` возвращает прежние сумму, описание, категорию и дату — и подстановку по истории, как до правки.
+ * `warnings` — предупреждения о лимитах категорий, которые задела правка.
+ */
 export type UpdateResult =
-  | { readonly ok: true; readonly undo: Undo }
+  | { readonly ok: true; readonly undo: Undo; readonly warnings: ReadonlyArray<LimitWarning> }
   | { readonly ok: false; readonly problem: UpdateProblem }
 
 /** Сумма живых возвратов расхода, копейки. `except` — возврат, который сейчас правят. */
@@ -58,8 +62,9 @@ export const updateOperation = async (ctx: LedgerContext, id: string, patch: Ope
       return { ok: false, problem: "below-refunds" }
     }
   }
+  const before = ctx.operations()
   const undo = await writeUndoable(ctx.records, [{ collection: "operations", id, data }], stamp)
-  return { ok: true, undo }
+  return { ok: true, undo, warnings: limitWarnings(ctx, before, [data.date]) }
 }
 
 /**

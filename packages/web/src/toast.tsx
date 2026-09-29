@@ -1,9 +1,21 @@
+import type { LimitWarning } from "@fin/ledger"
 import { useEffect, useState } from "preact/hooks"
+
+/** Строка под текстом тоста: «warning» — оранжевым, «danger» — красным. */
+export interface ToastNote {
+  readonly text: string
+  readonly tone: "warning" | "danger"
+}
 
 export interface Toast {
   readonly text: string
+  readonly notes?: ReadonlyArray<ToastNote>
   readonly action?: { readonly label: string; readonly run: () => void }
 }
+
+/** Предупреждения о лимитах категорий — строками под тостом сохранения: превышение красным, 80% — оранжевым. */
+export const limitNotes = (warnings: ReadonlyArray<LimitWarning>): ReadonlyArray<ToastNote> =>
+  warnings.map((w) => ({ text: w.text, tone: w.kind === "over" ? "danger" : "warning" }))
 
 let current: Toast | null = null
 let timer: ReturnType<typeof setTimeout> | undefined
@@ -14,8 +26,8 @@ const set = (toast: Toast | null) => {
   for (const l of listeners) l(toast)
 }
 
-/** Показать сообщение внизу экрана на `ms` миллисекунд. */
-export const showToast = (toast: Toast, ms = 5000) => {
+/** Показать сообщение внизу экрана на `ms` миллисекунд; с предупреждениями — дольше, чтобы их успели прочитать. */
+export const showToast = (toast: Toast, ms = toast.notes?.length ? 8000 : 5000) => {
   clearTimeout(timer)
   set(toast)
   timer = setTimeout(() => set(null), ms)
@@ -30,7 +42,12 @@ export const ToastHost = () => {
   if (!toast) return null
   return (
     <div class="toast glass" role="status">
-      <span>{toast.text}</span>
+      <span class="toast-body">
+        <span>{toast.text}</span>
+        {toast.notes?.map((note) => (
+          <span class={`toast-note ${note.tone}`}>{note.text}</span>
+        ))}
+      </span>
       {toast.action && (
         <button
           type="button"

@@ -9,7 +9,7 @@ import { Sheet } from "../components/Sheet"
 import { SwipeBack } from "../components/SwipeBack"
 import { CheckIcon, CloseIcon, ForwardIcon, RefundIcon, TrashIcon } from "../icons"
 import { goBack, useLedgerVersion } from "../state"
-import { showToast } from "../toast"
+import { limitNotes, showToast } from "../toast"
 
 const problemText: Record<UpdateProblem, string> = {
   "not-found": "Операция уже удалена.",
@@ -257,6 +257,7 @@ const EditForm = ({ ledger, op, onDone }: { ledger: Ledger; op: OperationView; o
     const learned = !isRefund && categoryId !== op.category.id
     showToast({
       text: learned ? `Сохранено. Запомню: «${description.trim()}» → ${categoryName()}` : "Сохранено",
+      notes: limitNotes(result.warnings),
       action: { label: "Отменить", run: () => void result.undo() }
     })
     onDone()

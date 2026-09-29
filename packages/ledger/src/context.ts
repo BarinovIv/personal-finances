@@ -1,4 +1,4 @@
-import { liveOperations, paydaysOf, SETTINGS_ID, todayIn, type CategoryKind, type IsoDate } from "@fin/domain"
+import { liveOperations, monthlyLimit, paydaysOf, SETTINGS_ID, todayIn, type CategoryKind, type IsoDate } from "@fin/domain"
 import { History } from "./categorize"
 import { STARTER_CATEGORIES, UNKNOWN_CATEGORY_COLOR, UNKNOWN_CATEGORY_ICON } from "./categories"
 import { normalizeIcon } from "./icons"
@@ -35,7 +35,7 @@ export class LedgerContext {
   /** Живые категории: стартовый набор поверх записей. Цвет и иконка нормализуются при чтении (ADR-0004). */
   readonly categories = this.cached(() => {
     const map = new Map<string, CategoryView>()
-    for (const starter of STARTER_CATEGORIES) map.set(starter.id, starter)
+    for (const starter of STARTER_CATEGORIES) map.set(starter.id, { ...starter, limit: null })
     for (const record of this.records.all("categories")) {
       if (record.deleted) map.delete(record.id)
       else
@@ -44,7 +44,8 @@ export class LedgerContext {
           kind: record.data.kind,
           name: record.data.name,
           color: normalizePaletteColor(record.data.color),
-          icon: normalizeIcon(record.data.icon, record.data.kind)
+          icon: normalizeIcon(record.data.icon, record.data.kind),
+          limit: monthlyLimit(record.data)
         })
     }
     return map
@@ -52,7 +53,14 @@ export class LedgerContext {
 
   categoryOf(id: string, kind: CategoryKind): CategoryView {
     return (
-      this.categories().get(id) ?? { id, kind, name: "Без категории", color: UNKNOWN_CATEGORY_COLOR, icon: UNKNOWN_CATEGORY_ICON }
+      this.categories().get(id) ?? {
+        id,
+        kind,
+        name: "Без категории",
+        color: UNKNOWN_CATEGORY_COLOR,
+        icon: UNKNOWN_CATEGORY_ICON,
+        limit: null
+      }
     )
   }
 

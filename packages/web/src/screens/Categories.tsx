@@ -1,4 +1,4 @@
-import type { CategoryKind } from "@fin/domain"
+import { formatDecimal, formatMoney, parseMoney, type CategoryKind } from "@fin/domain"
 import type { CategoryProblem, CategoryView, DeleteCategoryProblem, Ledger } from "@fin/ledger"
 import { useState } from "preact/hooks"
 import { CategoryBadge } from "../components/CategoryBadge"
@@ -19,21 +19,55 @@ const problemText: Record<CategoryProblem | DeleteCategoryProblem, string> = {
 
 const operations = (n: number) => `${n} ${plural(n, "операция", "операции", "операций")}`
 
+const LIMIT_PROBLEM = "Лимит — сумма в рублях, например «15 000». Пустое поле — без лимита."
+
+const limitText = (limit: number | null) => (limit === null ? "" : formatDecimal(limit).replace(/,00$/, ""))
+
+/** Текст поля лимита: пусто — без лимита (null), иначе копейки; undefined — не сумма. */
+const parseLimit = (text: string): number | null | undefined => (text.trim() === "" ? null : (parseMoney(text) ?? undefined))
+
+/** Лимит в месяц — только у категорий расходов, рядом с цветом и иконкой. */
+const LimitField = ({ value, onInput }: { value: string; onInput: (value: string) => void }) => (
+  <label class="field">
+    <span>Лимит в месяц · в зарплатном периоде — по числу дней</span>
+    <input
+      class="text-input num"
+      type="text"
+      inputMode="decimal"
+      aria-label="Лимит в месяц"
+      placeholder="Без лимита"
+      value={value}
+      onInput={(e) => onInput(e.currentTarget.value)}
+    />
+  </label>
+)
+
 const CategoryRow = ({ ledger, category }: { ledger: Ledger; category: CategoryView }) => {
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState(category.name)
   const [style, setStyle] = useState({ color: category.color, icon: category.icon })
+  const [limit, setLimit] = useState(limitText(category.limit))
   const [moveTo, setMoveTo] = useState("")
   const [error, setError] = useState<string | null>(null)
   const usage = ledger.categoryUsage(category.id)
   const others = ledger.categories(category.kind).filter((c) => c.id !== category.id)
 
+  const sub = [usage > 0 ? operations(usage) : "", category.limit !== null ? `лимит ${formatMoney(category.limit)}` : ""]
+    .filter(Boolean)
+    .join(" · ")
+
+  // поле лимита заполняется при открытии: `reset` после сохранения видит категорию ещё до правки
+  const open = () => {
+    setLimit(limitText(category.limit))
+    setEditing(true)
+  }
+
   const row = (
-    <button type="button" class="row row-button" aria-label={`Изменить: ${category.name}`} onClick={() => setEditing(true)}>
+    <button type="button" class="row row-button" aria-label={`Изменить: ${category.name}`} onClick={open}>
       <CategoryBadge category={category} />
       <span class="row-main">
         <span class="row-title">{category.name}</span>
-        {usage > 0 && <span class="row-sub">{operations(usage)}</span>}
+        {sub && <span class="row-sub">{sub}</span>}
       </span>
       <span class="row-chevron">
         <ForwardIcon size={16} />
@@ -50,10 +84,15 @@ const CategoryRow = ({ ledger, category }: { ledger: Ledger; category: CategoryV
     setError(null)
   }
   const save = async (close: () => void) => {
+    const nextLimit = parseLimit(limit)
+    if (nextLimit === undefined) return setError(LIMIT_PROBLEM)
     const renamed = await ledger.renameCategory(category.id, name)
     if (!renamed.ok) return setError(problemText[renamed.problem])
     if (style.color !== category.color || style.icon !== category.icon) {
       await ledger.setCategoryStyle(category.id, style)
+    }
+    if (category.kind === "expense" && nextLimit !== category.limit) {
+      await ledger.setCategoryLimit(category.id, nextLimit)
     }
     close()
   }
@@ -84,6 +123,15 @@ const CategoryRow = ({ ledger, category }: { ledger: Ledger; category: CategoryV
               />
             </div>
             <CategoryStylePicker color={style.color} icon={style.icon} onChange={(patch) => setStyle({ ...style, ...patch })} />
+            {category.kind === "expense" && (
+              <LimitField
+                value={limit}
+                onInput={(value) => {
+                  setLimit(value)
+                  setError(null)
+                }}
+              />
+            )}
             {usage > 0 && (
               <label class="field">
                 <span>Чтобы удалить, перенесите операции ({usage}) в</span>
@@ -121,10 +169,14 @@ const NEW_CATEGORY_STYLE = { color: "gray", icon: "dots" }
 const NewCategorySheet = ({ ledger, kind, onDone }: { ledger: Ledger; kind: CategoryKind; onDone: () => void }) => {
   const [name, setName] = useState("")
   const [style, setStyle] = useState(NEW_CATEGORY_STYLE)
+  const [limit, setLimit] = useState("")
   const [error, setError] = useState<string | null>(null)
   const add = async (close: () => void) => {
+    const nextLimit = parseLimit(limit)
+    if (nextLimit === undefined) return setError(LIMIT_PROBLEM)
     const result = await ledger.addCategory(kind, name, style)
     if (!result.ok) return setError(problemText[result.problem])
+    if (kind === "expense" && nextLimit !== null) await ledger.setCategoryLimit(result.category.id, nextLimit)
     close()
   }
   return (
@@ -153,6 +205,15 @@ const NewCategorySheet = ({ ledger, kind, onDone }: { ledger: Ledger; kind: Cate
             />
           </div>
           <CategoryStylePicker color={style.color} icon={style.icon} onChange={(patch) => setStyle({ ...style, ...patch })} />
+          {kind === "expense" && (
+            <LimitField
+              value={limit}
+              onInput={(value) => {
+                setLimit(value)
+                setError(null)
+              }}
+            />
+          )}
           {error && <span class="hint error">{error}</span>}
           <div class="actions-row">
             <button type="button" class="secondary-button grow" onClick={close}>
