@@ -15,7 +15,14 @@ const prefersReducedMotion = () => window.matchMedia("(prefers-reduced-motion: r
  * Свайп от левого края назад: экран тянется за пальцем, дотянутый до порога — уходит,
  * иначе пружинит на место. На компьютере жест недоступен — там для возврата есть кнопка «Назад».
  */
-export const SwipeBack = ({ onBack, children }: { onBack: () => void; children: ComponentChildren }) => {
+export const SwipeBack = ({
+  onBack,
+  children,
+}: {
+  /** `animate: false` — экран уже увёл сам жест, переход назад не должен анимироваться повторно. */
+  onBack: (options: { animate: boolean }) => void
+  children: ComponentChildren
+}) => {
   const ref = useRef<HTMLDivElement>(null)
   const start = useRef<{ x: number; y: number } | null>(null)
   const tracking = useRef(false)
@@ -64,12 +71,12 @@ export const SwipeBack = ({ onBack, children }: { onBack: () => void; children: 
     const width = el.clientWidth || 1
     if (dx > width * THRESHOLD) {
       if (prefersReducedMotion()) {
-        onBack()
+        onBack({ animate: false })
         return
       }
       el.style.transition = `transform 0.28s ${IOS_EASE}`
       el.style.transform = `translateX(${width}px)`
-      window.setTimeout(onBack, 280)
+      window.setTimeout(() => onBack({ animate: false }), 280)
       return
     }
     reset(true)
