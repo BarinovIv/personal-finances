@@ -2,8 +2,10 @@ import { formatDecimal, formatMoney, parseMoney } from "@fin/domain"
 import { dayLabel, type Ledger, type OperationView, type RefundProblem, type UpdateProblem } from "@fin/ledger"
 import { useState } from "preact/hooks"
 import { CategoryGrid } from "../components/CategoryGrid"
-import { BackIcon, RefundIcon } from "../icons"
-import { navigate, useLedgerVersion } from "../state"
+import { Header } from "../components/Header"
+import { SwipeBack } from "../components/SwipeBack"
+import { RefundIcon } from "../icons"
+import { goBack, useLedgerVersion } from "../state"
 import { showToast } from "../toast"
 
 const problemText: Record<UpdateProblem, string> = {
@@ -119,16 +121,6 @@ const Refunds = ({ ledger, op }: { ledger: Ledger; op: OperationView }) => {
   )
 }
 
-export const Header = ({ title, back = "#/" }: { title: string; back?: string }) => (
-  <header class="screen-header">
-    <a href={back} class="back-link">
-      <BackIcon />
-      <span>Назад</span>
-    </a>
-    <span class="screen-title">{title}</span>
-  </header>
-)
-
 const Editor = ({ ledger, op }: { ledger: Ledger; op: OperationView }) => {
   const [amount, setAmount] = useState(amountText(op.amount))
   const [description, setDescription] = useState(op.description)
@@ -148,14 +140,14 @@ const Editor = ({ ledger, op }: { ledger: Ledger; op: OperationView }) => {
     if (!result.ok) return setError(problemText[result.problem])
     const learned = !isRefund && categoryId !== op.category.id
     showToast({ text: learned ? `Сохранено. Запомню: «${description.trim()}» → ${categoryName()}` : "Сохранено" })
-    navigate("/")
+    goBack("/")
   }
 
   const categoryName = () => ledger.categories(categoryKind).find((c) => c.id === categoryId)?.name ?? ""
 
   const remove = async () => {
     await ledger.deleteOperation(op.id)
-    navigate("/")
+    goBack("/")
     showToast({ text: `Удалено: ${op.description}`, action: { label: "Отменить", run: () => void ledger.restoreOperation(op.id) } })
   }
 
@@ -231,9 +223,11 @@ export const OperationScreen = ({ ledger, id }: { ledger: Ledger; id: string }) 
   useLedgerVersion(ledger)
   const op = ledger.operation(id)
   return (
-    <div class="screen column">
-      <Header title={op?.kind === "refund" ? "Возврат" : "Операция"} />
-      {op ? <Editor key={`${op.id}:${op.updatedAt}`} ledger={ledger} op={op} /> : <div class="empty">Операция удалена</div>}
-    </div>
+    <SwipeBack onBack={() => goBack("/")}>
+      <div class="screen column">
+        <Header title={op?.kind === "refund" ? "Возврат" : "Операция"} />
+        {op ? <Editor key={`${op.id}:${op.updatedAt}`} ledger={ledger} op={op} /> : <div class="empty">Операция удалена</div>}
+      </div>
+    </SwipeBack>
   )
 }

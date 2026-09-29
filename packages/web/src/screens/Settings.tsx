@@ -1,12 +1,18 @@
 import type { Ledger } from "@fin/ledger"
 import type { AuthApi, SessionInfo, Sync } from "@fin/sync"
+import type { ComponentChildren } from "preact"
 import { useEffect, useState } from "preact/hooks"
+import { Header } from "../components/Header"
 import { LargeTitle } from "../components/LargeTitle"
+import { SwipeBack } from "../components/SwipeBack"
 import { SyncBadge } from "../components/SyncBadge"
 import { lastActive } from "../format"
-import { useLedgerVersion } from "../state"
+import { ForwardIcon } from "../icons"
+import { goBack, useLedgerVersion } from "../state"
 import { CategoriesSection } from "./Categories"
 import { RecurringSection } from "./Recurring"
+
+export type SettingsSub = "paydays" | "recurring" | "categories" | "export" | "devices"
 
 const Paydays = ({ ledger }: { ledger: Ledger }) => {
   const current = ledger.settings().paydays.join(", ")
@@ -123,15 +129,77 @@ const Devices = ({ auth, onSignedOut }: { auth: AuthApi; onSignedOut: () => void
   )
 }
 
-export const SettingsScreen = (props: { ledger: Ledger; sync: Sync; auth: AuthApi; onSignedOut: () => void }) => {
+const SUB_TITLE: Record<SettingsSub, string> = {
+  paydays: "Дни зарплаты",
+  recurring: "Регулярные операции",
+  categories: "Категории",
+  export: "Выгрузка",
+  devices: "Устройства"
+}
+
+/** Подстраница настроек — отдельный экран с «Назад», как в iOS. */
+const SettingsSubPage = ({ sub, children }: { sub: SettingsSub; children: ComponentChildren }) => (
+  <SwipeBack onBack={() => goBack("/settings")}>
+    <div class="screen column">
+      <Header title={SUB_TITLE[sub]} back="#/settings" />
+      <div class="page">{children}</div>
+    </div>
+  </SwipeBack>
+)
+
+const SettingsMenu = ({ sync }: { sync: Sync }) => (
+  <LargeTitle title="Настройки" actions={<SyncBadge sync={sync} />}>
+    <nav class="settings-menu" aria-label="Разделы настроек">
+      {(Object.keys(SUB_TITLE) as ReadonlyArray<SettingsSub>).map((sub) => (
+        <a class="settings-menu-row" href={`#/settings/${sub}`} key={sub}>
+          <span>{SUB_TITLE[sub]}</span>
+          <ForwardIcon size={16} />
+        </a>
+      ))}
+    </nav>
+  </LargeTitle>
+)
+
+export const SettingsScreen = (props: {
+  ledger: Ledger
+  sync: Sync
+  auth: AuthApi
+  onSignedOut: () => void
+  sub: SettingsSub | null
+}) => {
   useLedgerVersion(props.ledger)
-  return (
-    <LargeTitle title="Настройки" actions={<SyncBadge sync={props.sync} />}>
-      <Paydays ledger={props.ledger} />
-      <RecurringSection ledger={props.ledger} />
-      <CategoriesSection ledger={props.ledger} />
-      <Export ledger={props.ledger} />
-      <Devices auth={props.auth} onSignedOut={props.onSignedOut} />
-    </LargeTitle>
-  )
+  switch (props.sub) {
+    case "paydays":
+      return (
+        <SettingsSubPage sub="paydays">
+          <Paydays ledger={props.ledger} />
+        </SettingsSubPage>
+      )
+    case "recurring":
+      return (
+        <SettingsSubPage sub="recurring">
+          <RecurringSection ledger={props.ledger} />
+        </SettingsSubPage>
+      )
+    case "categories":
+      return (
+        <SettingsSubPage sub="categories">
+          <CategoriesSection ledger={props.ledger} />
+        </SettingsSubPage>
+      )
+    case "export":
+      return (
+        <SettingsSubPage sub="export">
+          <Export ledger={props.ledger} />
+        </SettingsSubPage>
+      )
+    case "devices":
+      return (
+        <SettingsSubPage sub="devices">
+          <Devices auth={props.auth} onSignedOut={props.onSignedOut} />
+        </SettingsSubPage>
+      )
+    default:
+      return <SettingsMenu sync={props.sync} />
+  }
 }
