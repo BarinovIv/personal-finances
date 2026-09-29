@@ -1846,6 +1846,10 @@ select.text-input {
   color: var(--accent);
 }
 
+.cat-amount.over {
+  color: var(--danger);
+}
+
 .chevron {
   display: flex;
   color: var(--faint);
@@ -1870,6 +1874,30 @@ select.text-input {
   transition:
     width 0.7s var(--spring-smooth),
     background-color 0.2s ease;
+}
+
+/* Полоска лимита: заполнение и «из 15 000 ₽» под суммой */
+.cat-limit-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  align-self: stretch;
+  margin-left: 42px;
+}
+
+.cat-limit-line .bar-track {
+  flex: 1;
+  margin-left: 0;
+}
+
+.cat-limit {
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.cat-limit-line.over .cat-limit {
+  color: var(--danger);
 }
 
 .cat-ops {
@@ -2273,8 +2301,26 @@ select.text-input {
   bottom: max(env(safe-area-inset-bottom), 16px);
 }
 
-.toast span {
+.toast-body {
+  display: flex;
   flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+/* Предупреждение о лимите под текстом тоста */
+.toast-note {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.toast-note.warning {
+  color: var(--palette-orange);
+}
+
+.toast-note.danger {
+  color: var(--danger);
 }
 
 .toast button {

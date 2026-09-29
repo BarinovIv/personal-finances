@@ -1,5 +1,6 @@
 export * from "./src/allowance"
 export * from "./src/dates"
+export * from "./src/limits"
 export * from "./src/money"
 export * from "./src/periods"
 export * from "./src/records"
