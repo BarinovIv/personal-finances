@@ -40,6 +40,12 @@ const prefersReducedMotion = () => window.matchMedia("(prefers-reduced-motion: r
 let lastPath = window.location.hash.replace(/^#/, "") || "/"
 /** Сколько раз сменился маршрут за время сессии — по нему судим, есть ли куда возвращаться реальной историей. */
 let routeChanges = 0
+/** Экран уже увёл жест (наш свайп или системный свайп браузера) — вторая анимация перехода не нужна. */
+let skipNextTransition = false
+
+window.addEventListener("popstate", (e) => {
+  if ((e as PopStateEvent & { hasUAVisualTransition?: boolean }).hasUAVisualTransition) skipNextTransition = true
+})
 
 type DocumentWithViewTransitions = Document & {
   startViewTransition?: (callback: () => void) => { finished: Promise<void> }
@@ -49,10 +55,12 @@ type DocumentWithViewTransitions = Document & {
 const withRouteTransition = (nextPath: string, apply: () => void) => {
   const previousPath = lastPath
   lastPath = nextPath
+  const skip = skipNextTransition
+  skipNextTransition = false
   const doc = document as DocumentWithViewTransitions
   // переключение вкладок (Ввод/Дашборд/Настройки) остаётся мгновенным — анимируем только вложенные экраны
   const bothTabs = !isNestedPath(previousPath) && !isNestedPath(nextPath)
-  if (bothTabs || prefersReducedMotion() || !doc.startViewTransition) {
+  if (skip || bothTabs || prefersReducedMotion() || !doc.startViewTransition) {
     apply()
     return
   }
@@ -85,8 +93,10 @@ export const navigate = (path: string) => {
  * Возврат на вложенном экране: реальная история браузера, поэтому пользователь попадает туда,
  * откуда пришёл (лента, дашборд с тем же периодом, настройки), а не всегда на `fallback`.
  * `fallback` — запасной путь, если в этой сессии ещё не было переходов (например, открыли ссылку на операцию напрямую).
+ * `animate: false` — экран уже уехал жестом «назад», повторно его анимировать не нужно.
  */
-export const goBack = (fallback: string) => {
+export const goBack = (fallback: string, { animate = true }: { animate?: boolean } = {}) => {
+  if (!animate) skipNextTransition = true
   if (routeChanges > 0) window.history.back()
   else navigate(fallback)
 }

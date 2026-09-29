@@ -353,7 +353,7 @@ export const OperationScreen = ({ ledger, id }: { ledger: Ledger; id: string }) 
   }
 
   return (
-    <SwipeBack onBack={() => goBack("/")}>
+    <SwipeBack onBack={(options) => goBack("/", options)}>
       <div class="screen column">
         {mode === "view" ? (
           <ViewCard ledger={ledger} op={op} onEdit={() => setMode("edit")} />

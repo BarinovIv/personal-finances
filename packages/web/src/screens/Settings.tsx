@@ -150,7 +150,7 @@ const SUB_TITLE: Record<SettingsSub, string> = {
 
 /** Подстраница настроек — отдельный экран с «Назад», как в iOS. */
 const SettingsSubPage = ({ sub, children }: { sub: SettingsSub; children: ComponentChildren }) => (
-  <SwipeBack onBack={() => goBack("/settings")}>
+  <SwipeBack onBack={(options) => goBack("/settings", options)}>
     <div class="screen column">
       <Header title={SUB_TITLE[sub]} back="#/settings" />
       <div class="page">{children}</div>
