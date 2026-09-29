@@ -13,6 +13,8 @@ export interface DbShape {
   run(sql: string, ...params: Array<SQLInputValue>): Effect.Effect<void>
   /** Выполнить эффект атомарно. */
   transaction<A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, R>
+  /** Согласованная копия всей базы в новый файл (`VACUUM INTO`), в том числе незаписанное из WAL. */
+  snapshot(path: string): Effect.Effect<void>
 }
 
 export class Db extends Context.Tag("@fin/server/Db")<Db, DbShape>() {}
@@ -89,6 +91,10 @@ const make = (path: string) =>
               Effect.tapErrorCause(() => Effect.sync(() => db.exec("ROLLBACK"))),
               Effect.ensuring(Effect.sync(() => depth--))
             )
+          }),
+        snapshot: (path) =>
+          Effect.sync(() => {
+            db.prepare("VACUUM INTO ?").run(path)
           })
       }
     })

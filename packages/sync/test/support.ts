@@ -53,7 +53,8 @@ export const inProcessServer = async (clock: TestClock) => {
         appConfigLayer({
           staticDir: mkdtempSync(join(tmpdir(), "fin-static-")),
           password: Option.some(PASSWORD),
-          secureCookies: true
+          secureCookies: true,
+          backup: Option.none()
         }),
         dbMemory
       )

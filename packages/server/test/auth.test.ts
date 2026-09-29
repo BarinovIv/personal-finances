@@ -159,7 +159,7 @@ describe("хранилище", () => {
     Effect.gen(function* () {
       const db = yield* Db
       yield* makeWebHandler.pipe(
-        Effect.provide(appConfigLayer({ staticDir: ".", password: Option.some(PASSWORD), secureCookies: true }))
+        Effect.provide(appConfigLayer({ staticDir: ".", password: Option.some(PASSWORD), secureCookies: true, backup: Option.none() }))
       )
       const row = yield* db.get<{ password_hash: string }>("SELECT password_hash FROM auth")
       expect(row!.password_hash).toMatch(/^scrypt\$/)

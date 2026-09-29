@@ -35,8 +35,20 @@ PWA: манифест и иконки в `packages/web/public`, service worker �
 | `APP_PASSWORD`   | —                     | Пароль входа. В базе хранится только его хэш (scrypt)         |
 | `DB_PATH`        | `data/finances.sqlite`| Файл SQLite (ADR-0003)                                        |
 | `SECURE_COOKIES` | `true`                | Флаг Secure у cookie сессии; `false` — только для http не на localhost |
+| `BACKUP_TELEGRAM_TOKEN`   | — | Токен Telegram-бота для ночного бэкапа базы                |
+| `BACKUP_TELEGRAM_CHAT_ID` | — | Чат, куда бот шлёт бэкап. Без обеих переменных бэкап выключен |
 
 Локально: `APP_PASSWORD=секрет npm start`.
+
+## Деплой
+
+Приложение работает на Amvera: https://finances.example.com (проект `personal-finances`, регион Moscow-0, тариф «Начальный», один экземпляр — ADR-0003).
+
+- Amvera подключена к этому репозиторию через GitHub-вебхук: пуш в `main` запускает сборку по `Dockerfile` и передеплой. Настройки сборки и запуска — в `amvera.yml`.
+- База лежит на постоянном диске Amvera (`/data/finances.sqlite`) и переживает передеплой.
+- `APP_PASSWORD`, `BACKUP_TELEGRAM_TOKEN` и `BACKUP_TELEGRAM_CHAT_ID` заданы секретами в разделе «Переменные» приложения; остальные переменные заданы в `Dockerfile`.
+- Бэкап: каждую ночь в 03:00 по Москве сервер делает согласованный снимок базы (`VACUUM INTO`), сжимает gzip и шлёт файлом в Telegram. Восстановление: распаковать `finances-ДАТА.sqlite.gz` и загрузить как `/data/finances.sqlite` (вкладка Data в Amvera, старые `-wal`/`-shm` удалить), затем перезапустить приложение. Бэкапы самой Amvera на тарифе «Начальный» не делаются.
+- Логи сборки и приложения — раздел «Логи» в панели Amvera.
 
 ## Устройство кода
 
