@@ -87,7 +87,7 @@ const DebtForm = ({ ledger, initialKind, close }: { ledger: Ledger; initialKind:
     close()
     showToast({
       text: `${kindLabel(kind)}: ${result.operation.person} · ${formatMoney(kopecks)}`,
-      action: { label: "Отменить", run: () => void result.undo() }
+      action: { label: "Отменить", run: () => result.undo() }
     })
   }
 

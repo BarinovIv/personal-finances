@@ -39,7 +39,7 @@ const RepaymentForm = ({
     const rest = ledger.repayments(debt.id)?.remaining ?? 0
     showToast({
       text: `${kindLabel(kind)} ${formatMoney(kopecks)}. ${rest > 0 ? `Осталось ${formatMoney(rest)}` : "Долг закрыт"}`,
-      action: { label: "Отменить", run: () => void result.undo() }
+      action: { label: "Отменить", run: () => result.undo() }
     })
   }
 

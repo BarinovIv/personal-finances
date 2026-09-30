@@ -33,7 +33,7 @@ const MoveSheet = ({ ledger, goal, kind, onDone }: { ledger: Ledger; goal: GoalV
     close()
     showToast({
       text: `${kind === "saved" ? "Отложено" : "Снято"} ${formatMoney(kopecks)} · ${goal.name}`,
-      action: { label: "Отменить", run: () => void result.undo() }
+      action: { label: "Отменить", run: () => result.undo() }
     })
   }
 
@@ -100,7 +100,7 @@ const EditSheet = ({ ledger, goal, onDone }: { ledger: Ledger; goal: GoalView; o
     const result = await ledger.deleteGoal(goal.id)
     if (!result.ok) return
     goBack("/settings/goals")
-    showToast({ text: `Цель «${goal.name}» удалена`, action: { label: "Отменить", run: () => void result.undo() } })
+    showToast({ text: `Цель «${goal.name}» удалена`, action: { label: "Отменить", run: () => result.undo() } })
   }
   return (
     <Sheet label={`Цель «${goal.name}»`} onClose={onDone}>

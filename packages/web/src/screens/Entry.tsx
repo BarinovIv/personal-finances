@@ -14,6 +14,7 @@ import type { Sync } from "@fin/sync"
 import { CategoryBadge } from "../components/CategoryBadge"
 import { CategoryFilter } from "../components/CategoryFilter"
 import { CategoryGrid } from "../components/CategoryGrid"
+import { operationTitle } from "../components/OperationBadge"
 import { OperationRow } from "../components/OperationRow"
 import { Sheet } from "../components/Sheet"
 import { SyncBadge } from "../components/SyncBadge"
@@ -62,13 +63,13 @@ const useRemoveWithUndo = (ledger: Ledger) => {
         }, 200)
       )
       showToast({
-        text: `Удалено: ${op.description}`,
+        text: `Удалено: ${operationTitle(op)}`,
         action: {
           label: "Отменить",
           run: () => {
             cancelled = true
             unmark()
-            void deleted.then((undo) => undo?.())
+            return deleted.then((undo) => undo?.())
           }
         }
       })
@@ -269,11 +270,12 @@ const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) 
         run: () => {
           // фокус — прямо в нажатии, иначе телефон не откроет клавиатуру
           input.current?.focus()
-          void result.undo().then(({ ok }) => {
-            if (!ok) return
+          return result.undo().then((outcome) => {
+            if (!outcome.ok) return outcome
             setText(line)
             setChoice(lineChoice)
             setError(null)
+            return outcome
           })
         }
       }

@@ -107,7 +107,7 @@ const RefundForm = ({
     const result = await ledger.addRefund(op.id, { amount: kopecks, date })
     if (!result.ok) return setError(refundProblemText[result.problem])
     close()
-    showToast({ text: `Возврат ${formatMoney(kopecks)} оформлен`, action: { label: "Отменить", run: () => void result.undo() } })
+    showToast({ text: `Возврат ${formatMoney(kopecks)} оформлен`, action: { label: "Отменить", run: () => result.undo() } })
   }
 
   return (
@@ -183,7 +183,7 @@ const DeleteSheet = ({ op, onConfirm, onClose }: { op: OperationView; onConfirm:
 const remove = async (ledger: Ledger, op: OperationView) => {
   const undo = await ledger.deleteOperation(op.id)
   goBack("/")
-  showToast({ text: `Удалено: ${deletedText(op)}`, action: { label: "Отменить", run: () => void undo() } })
+  showToast({ text: `Удалено: ${deletedText(op)}`, action: { label: "Отменить", run: () => undo() } })
 }
 
 const ViewCard = ({ ledger, op, onEdit }: { ledger: Ledger; op: OperationView; onEdit: () => void }) => {
@@ -315,7 +315,7 @@ const EditForm = ({ ledger, op, onDone }: { ledger: Ledger; op: OperationView; o
     showToast({
       text: learned ? `Сохранено. Запомню: «${description.trim()}» → ${categoryName()}` : "Сохранено",
       notes: limitNotes(result.warnings),
-      action: { label: "Отменить", run: () => void result.undo() }
+      action: { label: "Отменить", run: () => result.undo() }
     })
     onDone()
   }
