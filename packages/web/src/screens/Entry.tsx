@@ -237,19 +237,29 @@ const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) 
     setError(null)
   }
 
-  const pick = (index: number, categoryId: string) => {
+  const pick = (index: number, categoryId: string): EntriesChoice => {
     const categoryIds = previews.map((_, i) => (i === index ? categoryId : (choice.categoryIds?.[i] ?? null)))
-    setChoice({ ...choice, categoryIds })
+    const next = { ...choice, categoryIds }
+    setChoice(next)
     setError(null)
+    return next
   }
 
-  const add = async () => {
-    const result = await ledger.submitEntries(text, choice)
+  const add = async (submittedChoice: EntriesChoice = choice) => {
+    const submittedPreviews = ledger.previewEntries(text, submittedChoice)
+    const submittedFirst = submittedPreviews[0]!
+    const submittedMany = submittedPreviews.length > 1
+    const result = await ledger.submitEntries(text, submittedChoice)
     if (!result.ok) {
       const problem = result.problems[0]!
       // без категории открывается выбор — он сам и есть объяснение
       if (problem === "no-category") setPickerFor(result.index)
-      else setError(many ? `«${previews[result.index]!.description || "…"}»: ${problemText[problem]}` : problemText[problem])
+      else
+        setError(
+          submittedMany
+            ? `«${submittedPreviews[result.index]!.description || "…"}»: ${problemText[problem]}`
+            : problemText[problem]
+        )
       return
     }
     const ops = result.operations
@@ -260,14 +270,14 @@ const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) 
       done = total > 0 ? `Добавлено: ${count} · ${formatMoney(total, { sign: "−" })}` : `Добавлено: ${count}`
     } else {
       const op = ops[0]!
-      const taught = first.categorySource === "manual"
+      const taught = submittedFirst.categorySource === "manual"
       // строка ввода создаёт только расходы и доходы — у них категория есть всегда
       const category = op.category!.name
       done = taught ? `Запомнил: «${op.description}» → ${category}` : `Добавлено: ${op.description} · ${category}`
     }
     // «Отменить» удаляет всё сохранённое строкой и возвращает её в поле — поправить опечатку и сохранить заново
     const line = text
-    const lineChoice = choice
+    const lineChoice = submittedChoice
     showToast({
       text: done,
       notes: limitNotes(result.warnings),
@@ -405,10 +415,9 @@ const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) 
                 categories={ledger.categories(picked.kind)}
                 selected={picked.categoryId}
                 onPick={(categoryId) => {
-                  pick(picking, categoryId)
-                  // держим панель открытой, пока она уезжает — иначе она пропала бы мгновенно
-                  setPickerFor(picking)
+                  const nextChoice = pick(picking, categoryId)
                   close()
+                  void add(nextChoice)
                 }}
               />
               {needsPick(picked) && <div class="hint">Выбор запомнится — в следующий раз подставлю сам.</div>}
