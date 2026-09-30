@@ -13,7 +13,7 @@ import { ToastHost } from "./toast"
 
 type Tab = "entry" | "dashboard" | "settings"
 
-const SETTINGS_SUBS: ReadonlyArray<SettingsSub> = ["paydays", "recurring", "categories", "goals", "debts", "export", "devices"]
+const SETTINGS_SUBS: ReadonlyArray<SettingsSub> = ["paydays", "recurring", "categories", "goals", "debts", "export", "devices", "news"]
 
 /** Подстраница настроек — отдельный вложенный экран, без таббара (как «Операция»). */
 const settingsSubOf = (route: string): SettingsSub | null => {
