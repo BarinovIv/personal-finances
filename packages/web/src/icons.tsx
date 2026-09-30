@@ -63,6 +63,8 @@ export const DownloadIcon = ({ size = 18 }: { size?: number }) => <SfSymbol name
 
 export const DebtIcon = ({ size = 18 }: { size?: number }) => <SfSymbol name="money_rubl" size={size} />
 
+export const NewsIcon = ({ size = 18 }: { size?: number }) => <SfSymbol name="book_fill" size={size} />
+
 export const PhoneIcon = ({ size = 18 }: { size?: number }) => <SfSymbol name="device_phone_portrait" size={size} />
 
 export const CloudIcon = ({ size = 16 }: { size?: number }) => <SfSymbol name="cloud" size={size} />

@@ -7,14 +7,15 @@ import { LargeTitle } from "../components/LargeTitle"
 import { SwipeBack } from "../components/SwipeBack"
 import { SyncBadge } from "../components/SyncBadge"
 import { lastActive } from "../format"
-import { CalendarIcon, DebtIcon, DownloadIcon, ForwardIcon, GridIcon, LogoutIcon, LoopIcon, PhoneIcon, StarIcon } from "../icons"
+import { CalendarIcon, DebtIcon, DownloadIcon, ForwardIcon, GridIcon, LogoutIcon, LoopIcon, NewsIcon, PhoneIcon, StarIcon } from "../icons"
 import { goBack, useLedgerVersion } from "../state"
 import { CategoriesSection } from "./Categories"
 import { DebtsSection } from "./Debts"
 import { GoalsSection } from "./Goals"
 import { RecurringSection } from "./Recurring"
+import { WhatsNewSection } from "./WhatsNew"
 
-export type SettingsSub = "paydays" | "recurring" | "categories" | "goals" | "debts" | "export" | "devices"
+export type SettingsSub = "paydays" | "recurring" | "categories" | "goals" | "debts" | "export" | "devices" | "news"
 
 const Paydays = ({ ledger }: { ledger: Ledger }) => {
   const current = ledger.settings().paydays.join(", ")
@@ -149,7 +150,8 @@ const SUB_TITLE: Record<SettingsSub, string> = {
   goals: "Цели",
   debts: "Долги",
   export: "Выгрузка",
-  devices: "Устройства"
+  devices: "Устройства",
+  news: "Что нового"
 }
 
 /** Подстраница настроек — отдельный экран с «Назад», как в iOS. */
@@ -169,14 +171,16 @@ const SUB_ICON: Record<SettingsSub, { icon: ComponentChildren; color: string }> 
   goals: { icon: <StarIcon />, color: "teal" },
   debts: { icon: <DebtIcon />, color: "purple" },
   export: { icon: <DownloadIcon />, color: "blue" },
-  devices: { icon: <PhoneIcon />, color: "gray" }
+  devices: { icon: <PhoneIcon />, color: "gray" },
+  news: { icon: <NewsIcon />, color: "pink" }
 }
 
 /** Группы меню, как в «Настройках» iOS: учёт отдельно, данные и устройства отдельно. */
 const MENU_GROUPS: ReadonlyArray<ReadonlyArray<SettingsSub>> = [
   ["paydays", "recurring", "categories"],
   ["goals", "debts"],
-  ["export", "devices"]
+  ["export", "devices"],
+  ["news"]
 ]
 
 const SettingsMenu = ({ sync }: { sync: Sync }) => (
@@ -252,6 +256,12 @@ export const SettingsScreen = (props: {
       return (
         <SettingsSubPage sub="devices">
           <Devices auth={props.auth} onSignedOut={props.onSignedOut} />
+        </SettingsSubPage>
+      )
+    case "news":
+      return (
+        <SettingsSubPage sub="news">
+          <WhatsNewSection />
         </SettingsSubPage>
       )
     default:
