@@ -126,7 +126,7 @@ const Summary = memo(({ d }: { d: Dashboard }) => {
           <span class="summary-income num">{formatMoney(d.income, { sign: "+" })}</span>
         </div>
         <div class="summary-cell">
-          <span class="summary-caption">Доходы − расходы</span>
+          <span class="summary-caption">Остаток</span>
           <span class="summary-value num">{formatMoney(d.balance, { sign: d.balance >= 0 ? "+" : "−" })}</span>
         </div>
         {allowance.map((item) => (
