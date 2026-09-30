@@ -209,7 +209,8 @@ const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) 
   const many = previews.length > 1
   const has = text.trim() !== ""
   const needsPick = (p: EntryPreview) => p.description !== "" && p.categoryId === null
-  const canAdd = has && previews.every((p) => p.problems.length === 0)
+  // без категории отправить можно: отправка откроет выбор категории
+  const canAdd = has && previews.every((p) => p.problems.every((problem) => problem === "no-category"))
   const categoryOf = (p: EntryPreview) =>
     p.categoryId ? ledger.categories(p.kind).find((c) => c.id === p.categoryId) : undefined
   const today = ledger.today()
@@ -223,6 +224,11 @@ const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) 
     const timer = window.setTimeout(() => setAutoPick(true), AUTO_PICK_DELAY_MS)
     return () => window.clearTimeout(timer)
   }, [text, awaiting])
+
+  // шторка поверх открытой клавиатуры закрыта ею наполовину — убираем клавиатуру
+  useEffect(() => {
+    if (picking !== null) input.current?.blur()
+  }, [picking !== null])
 
   const reset = () => {
     setText("")
@@ -378,7 +384,14 @@ const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) 
         </div>
       )}
       {picking !== null && picked && (
-        <Sheet label="Выбор категории" onClose={() => setPickerFor(null)}>
+        <Sheet
+          label="Выбор категории"
+          onClose={() => {
+            // закрытая шторка не всплывает снова, пока строку не поправят
+            setPickerFor(null)
+            setAutoPick(false)
+          }}
+        >
           {(close) => (
             <div class="picker">
               <div class="sheet-title">

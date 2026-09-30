@@ -72,7 +72,8 @@ export const RecurringData = Schema.Struct({
   categoryId: Schema.String,
   dayOfMonth: Schema.Int.pipe(Schema.between(1, 31)),
   startDate: IsoDate,
-  status: Schema.Literal("active", "paused", "ended")
+  status: Schema.Literal("active", "paused", "ended"),
+  position: Schema.optional(Schema.Int)
 })
 
 export const SettingsData = Schema.Struct({

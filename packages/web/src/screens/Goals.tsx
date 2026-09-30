@@ -5,7 +5,7 @@ import { useState } from "preact/hooks"
 import { CategoryBadge } from "../components/CategoryBadge"
 import { Sheet } from "../components/Sheet"
 import { CategoryGlyph } from "../categoryIcons"
-import { CheckIcon, ForwardIcon, PlusIcon } from "../icons"
+import { CheckIcon, CloseIcon, ForwardIcon, PlusIcon } from "../icons"
 
 /** У целей нет своего цвета: значок цели всегда одного цвета палитры, иконку выбирает пользователь. */
 const GOAL_COLOR = "teal"
@@ -182,27 +182,27 @@ export const GoalForm = (props: {
         </label>
         <label class="row input-row">
           <span class="row-label">Срок</span>
-          <input
-            class="row-input"
-            type="date"
-            aria-label="Срок"
-            value={draft.deadline}
-            min={props.editing ? undefined : props.ledger.today()}
-            onChange={(e) => set({ deadline: e.currentTarget.value })}
-          />
+          <span class="date-pill">
+            <input
+              class="row-input"
+              type="date"
+              aria-label="Срок"
+              value={draft.deadline}
+              min={props.editing ? undefined : props.ledger.today()}
+              onChange={(e) => set({ deadline: e.currentTarget.value })}
+            />
+            {draft.deadline && (
+              <button type="button" class="date-clear" aria-label="Без срока" onClick={() => set({ deadline: "" })}>
+                <CloseIcon size={10} />
+              </button>
+            )}
+          </span>
         </label>
       </div>
       <span class="hint">
-        {draft.deadline ? (
-          <>
-            Покажу, сколько откладывать в месяц, чтобы успеть к сроку.{" "}
-            <button type="button" class="text-button small" onClick={() => set({ deadline: "" })}>
-              Без срока
-            </button>
-          </>
-        ) : (
-          "Срок необязателен. С ним видно, сколько откладывать в месяц."
-        )}
+        {draft.deadline
+          ? "Покажу, сколько откладывать в месяц, чтобы успеть к сроку."
+          : "Срок необязателен. С ним видно, сколько откладывать в месяц."}
       </span>
       {error && <span class="hint error">{error}</span>}
       {props.children}

@@ -62,11 +62,14 @@ import {
 import { Records } from "./records"
 import {
   addRecurring,
+  deleteRecurring,
   endRecurring,
   listRecurring,
   pauseRecurring,
+  reorderRecurring,
   resumeRecurring,
   updateRecurring,
+  type DeleteRecurringResult,
   type RecurringInput,
   type RecurringResult,
   type RecurringView
@@ -172,7 +175,7 @@ export interface Ledger {
   /** Последний выбранный на этом устройстве режим дашборда. */
   dashboardMode(): PeriodMode
   setDashboardMode(mode: PeriodMode): Promise<void>
-  /** Регулярные операции: сначала действующие. */
+  /** Регулярные операции в порядке, заданном пользователем; без него — сначала действующие. */
   recurring(): ReadonlyArray<RecurringView>
   addRecurring(input: RecurringInput): Promise<RecurringResult>
   /** Правка шаблона не меняет уже созданные операции. */
@@ -181,6 +184,10 @@ export interface Ledger {
   /** Снова действует с сегодняшнего дня. */
   resumeRecurring(id: string): Promise<RecurringResult>
   endRecurring(id: string): Promise<RecurringResult>
+  /** Уже созданные операции остаются; с отменой. */
+  deleteRecurring(id: string): Promise<DeleteRecurringResult>
+  /** Новый порядок списка: все id в нужном порядке. */
+  reorderRecurring(ids: ReadonlyArray<string>): Promise<void>
   settings(): Settings
   /** Дни зарплаты — числа месяца; синхронизируются. */
   setPaydays(days: ReadonlyArray<number>): Promise<{ ok: boolean }>
@@ -250,6 +257,8 @@ export const openLedger = async (options: LedgerOptions): Promise<Ledger> => {
     pauseRecurring: (id) => pauseRecurring(ctx, id),
     resumeRecurring: (id) => resumeRecurring(ctx, id),
     endRecurring: (id) => endRecurring(ctx, id),
+    deleteRecurring: (id) => deleteRecurring(ctx, id),
+    reorderRecurring: (ids) => reorderRecurring(ctx, ids),
     settings: () => readSettings(ctx),
     setPaydays: (days) => setPaydays(ctx, days),
     exportCsv: () => exportCsv(ctx),

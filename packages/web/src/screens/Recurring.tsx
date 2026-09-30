@@ -1,10 +1,11 @@
 import { formatDecimal, formatMoney, parseMoney, type CategoryKind } from "@fin/domain"
 import { dayMonth, type Ledger, type RecurringProblem, type RecurringView } from "@fin/ledger"
-import type { ComponentChildren } from "preact"
-import { useState } from "preact/hooks"
+import type { ComponentChildren, JSX } from "preact"
+import { useEffect, useRef, useState } from "preact/hooks"
 import { CategoryBadge } from "../components/CategoryBadge"
 import { Sheet } from "../components/Sheet"
-import { ForwardIcon, PlusIcon, RepeatIcon } from "../icons"
+import { GripIcon, PlusIcon, RepeatIcon } from "../icons"
+import { showToast } from "../toast"
 
 const problemText: Record<RecurringProblem, string> = {
   "not-found": "Регулярная операция уже удалена.",
@@ -127,31 +128,57 @@ const RecurringForm = (props: {
   )
 }
 
-const RecurringRow = ({ ledger, item }: { ledger: Ledger; item: RecurringView }) => {
+/** Как строка сдвинута во время перетаскивания: своя — за пальцем, соседние — уступают место. */
+interface RowDrag {
+  readonly shift: number
+  readonly lifted: boolean
+  readonly onGripDown: (e: JSX.TargetedPointerEvent<HTMLSpanElement>) => void
+  readonly onGripKey: (e: JSX.TargetedKeyboardEvent<HTMLSpanElement>) => void
+}
+
+const RecurringRow = ({ ledger, item, drag }: { ledger: Ledger; item: RecurringView; drag: RowDrag }) => {
   const [editing, setEditing] = useState(false)
   const today = ledger.today()
+  const remove = async (close: () => void) => {
+    const result = await ledger.deleteRecurring(item.id)
+    if (!result.ok) return
+    close()
+    showToast({ text: `«${item.description}» удалена`, action: { label: "Отменить", run: () => result.undo() } })
+  }
   return (
     <>
-      <button
-        type="button"
-        class={`row row-button ${item.status === "active" ? "" : "inactive"}`}
-        aria-label={`Изменить: ${item.description}`}
-        onClick={() => setEditing(true)}
+      <div
+        class={`recurring-item${drag.lifted ? " lifted" : ""}`}
+        style={drag.shift ? { transform: `translateY(${drag.shift}px)` } : undefined}
       >
-        <CategoryBadge category={item.category} />
-        <span class="row-main">
-          <span class="row-title">
-            {item.description} <RepeatIcon />
+        <button
+          type="button"
+          class={`row row-button ${item.status === "active" ? "" : "inactive"}`}
+          aria-label={`Изменить: ${item.description}`}
+          onClick={() => setEditing(true)}
+        >
+          <CategoryBadge category={item.category} />
+          <span class="row-main">
+            <span class="row-title">
+              {item.description} <RepeatIcon />
+            </span>
+            <span class="row-sub">
+              {item.category.name} · {statusText(item, today)}
+            </span>
           </span>
-          <span class="row-sub">
-            {item.category.name} · {statusText(item, today)}
-          </span>
+          <span class={`num op-amount ${item.kind}`}>{formatMoney(item.amount, { sign: item.kind === "income" ? "+" : "−" })}</span>
+        </button>
+        <span
+          class="drag-handle"
+          role="button"
+          tabIndex={0}
+          aria-label={`Переместить: ${item.description}. Стрелки вверх и вниз`}
+          onPointerDown={drag.onGripDown}
+          onKeyDown={drag.onGripKey}
+        >
+          <GripIcon />
         </span>
-        <span class={`num op-amount ${item.kind}`}>{formatMoney(item.amount, { sign: item.kind === "income" ? "+" : "−" })}</span>
-        <span class="row-chevron">
-          <ForwardIcon size={16} />
-        </span>
-      </button>
+      </div>
       {editing && (
         <Sheet label={`Регулярная операция «${item.description}»`} onClose={() => setEditing(false)}>
           {(close) => (
@@ -175,23 +202,26 @@ const RecurringRow = ({ ledger, item }: { ledger: Ledger; item: RecurringView })
                 })
               }
             >
-              {item.status !== "ended" && (
-                <div class="actions-row">
-                  {item.status === "active" && (
-                    <button type="button" class="secondary-button grow" onClick={() => void ledger.pauseRecurring(item.id)}>
-                      Пауза
-                    </button>
-                  )}
-                  {item.status === "paused" && (
-                    <button type="button" class="secondary-button grow" onClick={() => void ledger.resumeRecurring(item.id)}>
-                      Возобновить
-                    </button>
-                  )}
-                  <button type="button" class="secondary-button danger-button grow" onClick={() => void ledger.endRecurring(item.id)}>
+              <div class="actions-row">
+                {item.status === "active" && (
+                  <button type="button" class="secondary-button grow" onClick={() => void ledger.pauseRecurring(item.id)}>
+                    Пауза
+                  </button>
+                )}
+                {item.status === "paused" && (
+                  <button type="button" class="secondary-button grow" onClick={() => void ledger.resumeRecurring(item.id)}>
+                    Возобновить
+                  </button>
+                )}
+                {item.status !== "ended" && (
+                  <button type="button" class="secondary-button grow" onClick={() => void ledger.endRecurring(item.id)}>
                     Завершить
                   </button>
-                </div>
-              )}
+                )}
+                <button type="button" class="secondary-button danger-button grow" onClick={() => void remove(close)}>
+                  Удалить
+                </button>
+              </div>
             </RecurringForm>
           )}
         </Sheet>
@@ -200,21 +230,111 @@ const RecurringRow = ({ ledger, item }: { ledger: Ledger; item: RecurringView })
   )
 }
 
+const moved = <T,>(list: ReadonlyArray<T>, from: number, to: number): Array<T> => {
+  const out = [...list]
+  const [item] = out.splice(from, 1)
+  out.splice(to, 0, item!)
+  return out
+}
+
 export const RecurringSection = ({ ledger }: { ledger: Ledger }) => {
   const [adding, setAdding] = useState(false)
-  const items = ledger.recurring()
+  // перетаскивание: какая строка, откуда, куда встанет и насколько сдвинута за пальцем
+  const [drag, setDrag] = useState<{ from: number; to: number; dy: number; height: number } | null>(null)
+  // порядок после броска — пока журнал его не записал, чтобы строки не мигнули прежним
+  const [dropped, setDropped] = useState<ReadonlyArray<string> | null>(null)
+  // сразу после броска строки встают на новые места без анимации
+  const [settling, setSettling] = useState(false)
+  const startY = useRef(0)
+
+  const fresh = ledger.recurring()
+  const items = dropped
+    ? [...fresh].sort((a, b) => (dropped.indexOf(a.id) + 1 || Infinity) - (dropped.indexOf(b.id) + 1 || Infinity))
+    : fresh
+
+  const reorder = (from: number, to: number) => {
+    if (from === to) return
+    const ids = moved(
+      items.map((i) => i.id),
+      from,
+      to
+    )
+    setDropped(ids)
+    void ledger.reorderRecurring(ids).finally(() => setDropped(null))
+  }
+
+  useEffect(() => {
+    if (!settling) return
+    const frame = requestAnimationFrame(() => setSettling(false))
+    return () => cancelAnimationFrame(frame)
+  }, [settling])
+
+  const shiftOf = (index: number) => {
+    if (!drag) return 0
+    if (index === drag.from) return drag.dy
+    if (drag.from < index && index <= drag.to) return -drag.height
+    if (drag.to <= index && index < drag.from) return drag.height
+    return 0
+  }
+
+  const rowDrag = (index: number): RowDrag => ({
+    shift: shiftOf(index),
+    lifted: drag?.from === index,
+    onGripDown: (e) => {
+      const row = e.currentTarget.parentElement!
+      const grip = e.currentTarget
+      grip.setPointerCapture(e.pointerId)
+      startY.current = e.clientY
+      const height = row.offsetHeight
+      setDrag({ from: index, to: index, dy: 0, height })
+      const onMove = (m: PointerEvent) => {
+        const dy = m.clientY - startY.current
+        // строку не утащить за край списка
+        const clamped = Math.max(-index * height, Math.min((items.length - 1 - index) * height, dy))
+        setDrag({ from: index, to: index + Math.round(clamped / height), dy: clamped, height })
+      }
+      const onUp = (u: PointerEvent) => {
+        grip.removeEventListener("pointermove", onMove)
+        grip.removeEventListener("pointerup", onUp)
+        grip.removeEventListener("pointercancel", onUp)
+        const dy = Math.max(-index * height, Math.min((items.length - 1 - index) * height, u.clientY - startY.current))
+        setSettling(true)
+        setDrag(null)
+        if (u.type === "pointerup") reorder(index, index + Math.round(dy / height))
+      }
+      grip.addEventListener("pointermove", onMove)
+      grip.addEventListener("pointerup", onUp)
+      grip.addEventListener("pointercancel", onUp)
+    },
+    onGripKey: (e) => {
+      const step = e.key === "ArrowUp" ? -1 : e.key === "ArrowDown" ? 1 : 0
+      const to = index + step
+      if (!step || to < 0 || to >= items.length) return
+      e.preventDefault()
+      reorder(index, to)
+    }
+  })
+
   return (
     <section class="section">
-      <div class="card-list">
-        {items.map((item) => (
-          <RecurringRow key={`${item.id}:${item.status}:${item.amount}:${item.description}`} ledger={ledger} item={item} />
+      <div class={`card-list${drag ? " reordering" : ""}${settling ? " settling" : ""}`}>
+        {items.map((item, index) => (
+          <RecurringRow
+            key={`${item.id}:${item.status}:${item.amount}:${item.description}`}
+            ledger={ledger}
+            item={item}
+            drag={rowDrag(index)}
+          />
         ))}
         <button type="button" class="row row-button action-row" onClick={() => setAdding(true)}>
           <PlusIcon />
           <span>Добавить регулярную операцию</span>
         </button>
       </div>
-      <p class="section-footer">Раз в месяц в заданное число операция появляется сама. Правка не меняет уже созданные операции.</p>
+      <p class="section-footer">
+        Раз в месяц в заданное число операция появляется сама. Правка и удаление не меняют уже созданные операции. Порядок
+        меняется перетаскиванием за значок справа.
+      </p>
       {adding && (
         <Sheet label="Новая регулярная операция" onClose={() => setAdding(false)}>
           {(close) => (
