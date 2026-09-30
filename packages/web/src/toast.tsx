@@ -10,7 +10,8 @@ export interface ToastNote {
 export interface Toast {
   readonly text: string
   readonly notes?: ReadonlyArray<ToastNote>
-  readonly action?: { readonly label: string; readonly run: () => void }
+  /** `run` может вернуть итог отмены: `ok: false` — отменить не вышло, об этом скажет новый тост. */
+  readonly action?: { readonly label: string; readonly run: () => void | Promise<{ readonly ok: boolean } | void> }
 }
 
 /** Предупреждения о лимитах категорий — строками под тостом сохранения: превышение красным, 80% — оранжевым. */
@@ -52,9 +53,12 @@ export const ToastHost = () => {
         <button
           type="button"
           onClick={() => {
-            toast.action!.run()
+            const outcome = toast.action!.run()
             clearTimeout(timer)
             set(null)
+            void outcome?.then((result) => {
+              if (result && !result.ok) showToast({ text: "Не отменено: запись уже изменилась" })
+            })
           }}
         >
           {toast.action.label}

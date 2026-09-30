@@ -119,9 +119,16 @@ export const buildDashboard = (ctx: LedgerContext, query: DashboardQuery): Dashb
   const totals = periodTotals(ops, period)
   const { expenses, income } = totals
   const expensesIn = (range: Period) => periodTotals(ops, range).expenses
-  const limits = new Map(limitUsage(ctx.records.all("categories"), ops, period).map((u) => [u.categoryId, u.limit]))
+  const usage = limitUsage(ctx.records.all("categories"), ops, period)
+  const limits = new Map(usage.map((u) => [u.categoryId, u.limit]))
 
-  const categories = totals.categories.map((c): DashboardCategory => {
+  // категория с лимитом видна и без трат в периоде — «0 из 15 000»
+  const spentIn = totals.categories.map((c) => c.categoryId)
+  const unspent = usage
+    .filter((u) => !spentIn.includes(u.categoryId))
+    .map((u) => ({ categoryId: u.categoryId, amount: 0, operations: [] }))
+
+  const categories = [...totals.categories, ...unspent].map((c): DashboardCategory => {
     const category = ctx.categoryOf(c.categoryId, "expense")
     return {
       id: c.categoryId,
