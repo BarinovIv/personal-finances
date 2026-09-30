@@ -1,5 +1,5 @@
 import type { ComponentChildren, RefObject } from "preact"
-import { useEffect, useRef, useState } from "preact/hooks"
+import { useLayoutEffect, useRef, useState } from "preact/hooks"
 import { BackIcon } from "../icons"
 import { goBack } from "../state"
 
@@ -9,7 +9,8 @@ import { goBack } from "../state"
  */
 export const useScrolledPast = (ref: RefObject<HTMLElement>, offset: number) => {
   const [past, setPast] = useState(false)
-  useEffect(() => {
+  // до отрисовки: экран, вернувшийся к сохранённой прокрутке, сразу показывает свёрнутую шапку
+  useLayoutEffect(() => {
     const el = ref.current?.closest<HTMLElement>(".screen") ?? ref.current
     if (!el) return
     const onScroll = () => setPast(el.scrollTop > offset)
