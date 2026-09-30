@@ -10,6 +10,7 @@ import {
 } from "@fin/domain"
 import type { LedgerContext } from "./context"
 import type { RecordOf } from "./records"
+import { writeUndoable, type Undo } from "./undo"
 import type { CategoryView } from "./views"
 
 export interface RecurringView {
@@ -37,6 +38,10 @@ export interface RecurringInput {
 export type RecurringProblem = "not-found" | "bad-amount" | "no-description" | "bad-category" | "bad-day"
 
 export type RecurringResult = { readonly ok: true; readonly id: string } | { readonly ok: false; readonly problem: RecurringProblem }
+
+export type DeleteRecurringResult =
+  | { readonly ok: true; readonly undo: Undo }
+  | { readonly ok: false; readonly problem: "not-found" }
 
 export interface UpcomingItem {
   readonly templateId: string
@@ -76,11 +81,17 @@ const toView = (ctx: LedgerContext, record: RecordOf<"recurring">): RecurringVie
   }
 }
 
+/** Порядок, заданный пользователем; без него — действующие, на паузе, завершённые, по числу месяца. */
+const ordered = (records: ReadonlyArray<RecordOf<"recurring">>) =>
+  [...records].sort(
+    (a, b) =>
+      (a.data.position ?? Infinity) - (b.data.position ?? Infinity) ||
+      STATUS_ORDER[a.data.status] - STATUS_ORDER[b.data.status] ||
+      a.data.dayOfMonth - b.data.dayOfMonth
+  )
+
 export const listRecurring = (ctx: LedgerContext): Array<RecurringView> =>
-  ctx.records
-    .live("recurring")
-    .map((r) => toView(ctx, r))
-    .sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status] || a.dayOfMonth - b.dayOfMonth)
+  ordered(ctx.records.live("recurring")).map((r) => toView(ctx, r))
 
 const validate = (ctx: LedgerContext, input: RecurringInput): RecurringProblem | null => {
   if (!Number.isInteger(input.amount) || input.amount <= 0) return "bad-amount"
@@ -95,6 +106,7 @@ export const addRecurring = async (ctx: LedgerContext, input: RecurringInput): P
   const problem = validate(ctx, input)
   if (problem) return { ok: false, problem }
   const id = ctx.newId()
+  // места у новой нет — она встаёт после упорядоченных перетаскиванием
   const data: RecurringData = {
     ...input,
     description: input.description.trim(),
@@ -134,6 +146,27 @@ export const resumeRecurring = (ctx: LedgerContext, id: string) =>
   change(ctx, id, (data) => ({ ...data, status: "active", startDate: ctx.today() }))
 
 export const endRecurring = (ctx: LedgerContext, id: string) => change(ctx, id, (data) => ({ ...data, status: "ended" }))
+
+/** Удаление шаблона не трогает уже созданные по нему операции; новых он больше не создаёт. */
+export const deleteRecurring = async (ctx: LedgerContext, id: string): Promise<DeleteRecurringResult> => {
+  const record = ctx.records.get("recurring", id)
+  if (!record || record.deleted) return { ok: false, problem: "not-found" }
+  const undo = await writeUndoable(ctx.records, [{ collection: "recurring", id, data: record.data, deleted: true }])
+  return { ok: true, undo }
+}
+
+/**
+ * Новый порядок списка — после перетаскивания. `ids` — все регулярные операции в нужном порядке;
+ * записываются только те, чьё место изменилось. Незнакомые и удалённые id пропускаются.
+ */
+export const reorderRecurring = async (ctx: LedgerContext, ids: ReadonlyArray<string>): Promise<void> => {
+  const changes = ids.flatMap((id, index) => {
+    const record = ctx.records.get("recurring", id)
+    if (!record || record.deleted || record.data.position === index + 1) return []
+    return [{ collection: "recurring" as const, id, data: { ...record.data, position: index + 1 } }]
+  })
+  if (changes.length > 0) await ctx.records.write(changes)
+}
 
 /** Предстоящие списания: регулярные расходы, которые ещё появятся до конца текущего периода. */
 export const upcomingIn = (ctx: LedgerContext, period: Period): Upcoming => {

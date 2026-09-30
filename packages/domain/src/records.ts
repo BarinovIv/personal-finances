@@ -89,6 +89,11 @@ export interface RecurringData {
   /** С этой даты шаблон создаёт операции (дата создания или снятия с паузы). */
   readonly startDate: IsoDate
   readonly status: RecurringStatus
+  /**
+   * Место в списке, которое задал пользователь перетаскиванием. Необязательно: пока список
+   * не переставляли, поля нет — такие записи идут после упорядоченных.
+   */
+  readonly position?: number
 }
 
 export interface SettingsData {

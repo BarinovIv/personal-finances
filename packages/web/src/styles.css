@@ -769,6 +769,52 @@ select.row-input {
   cursor: pointer;
 }
 
+/* Дата со сбросом: крестик внутри той же «таблетки» */
+.date-pill {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  margin-left: auto;
+  border-radius: 9px;
+  background: var(--fill);
+}
+
+.date-pill .row-input[type="date"] {
+  background: transparent;
+}
+
+.date-pill:has(.date-clear) .row-input[type="date"] {
+  padding-right: 4px;
+}
+
+.date-clear {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 8px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--faint);
+  color: var(--surface);
+  position: relative;
+  cursor: pointer;
+}
+
+/* зона нажатия больше самого кружка */
+.date-clear::after {
+  content: "";
+  position: absolute;
+  inset: -10px;
+}
+
+.date-clear:active {
+  opacity: 0.6;
+}
+
 .row-input::-webkit-date-and-time-value {
   text-align: center;
 }
@@ -784,6 +830,61 @@ select.row-input {
 
 .action-row.destructive {
   color: var(--danger);
+}
+
+/* Регулярная операция: строка и «ручка» справа, за неё строка перетаскивается */
+.card-list > .recurring-item {
+  --separator-inset: 58px;
+  display: flex;
+  align-items: stretch;
+  transition: transform 0.25s var(--spring-smooth);
+}
+
+.recurring-item > .row-button {
+  flex: 1;
+  min-width: 0;
+  padding-right: 4px;
+}
+
+.drag-handle {
+  flex: 0 0 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-right: 4px;
+  color: var(--faint);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.drag-handle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -6px;
+  border-radius: 10px;
+}
+
+.card-list.reordering .drag-handle {
+  cursor: grabbing;
+}
+
+/* поднятая строка едет за пальцем без задержки, поверх соседей */
+.recurring-item.lifted {
+  z-index: 3;
+  transition: none;
+  background: linear-gradient(var(--fill), var(--fill)), var(--surface);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
+}
+
+.recurring-item.lifted::before,
+.recurring-item.lifted + .recurring-item::before {
+  opacity: 0;
+}
+
+.card-list.settling > .recurring-item {
+  transition: none;
 }
 
 .row.inactive .row-title,

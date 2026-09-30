@@ -40,6 +40,7 @@ export { dayLabel, dayMonth, OPERATION_KIND_TEXT } from "./src/format"
 export type { LimitWarning } from "./src/limits"
 export { indexedDbStore } from "./src/indexeddb"
 export type {
+  DeleteRecurringResult,
   RecurringInput,
   RecurringProblem,
   RecurringResult,

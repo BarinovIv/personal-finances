@@ -86,6 +86,53 @@ describe("регулярные операции на устройстве", () =
     expect(ledger.recurring()[0]).toMatchObject({ status: "ended", nextDate: null })
   })
 
+  it("удаление: созданные операции остаются, новых не будет; можно отменить", async () => {
+    const { ledger } = await makeLedger()
+    const id = await addTemplate(ledger, { description: "Кинопоиск", amount: 29900, dayOfMonth: 30 })
+    const result = await ledger.deleteRecurring(id)
+    if (!result.ok) throw new Error(result.problem)
+    expect(ledger.recurring()).toEqual([])
+    expect(ledger.dashboard({ mode: "month", offset: 0 }).upcoming.items).toEqual([])
+    expect(ledger.sync.pending()).toEqual([expect.objectContaining({ collection: "recurring", id, deleted: true })])
+    expect(await ledger.deleteRecurring(id)).toEqual({ ok: false, problem: "not-found" })
+    expect(await result.undo()).toEqual({ ok: true })
+    expect(ledger.recurring()).toMatchObject([{ id, description: "Кинопоиск", status: "active" }])
+  })
+
+  it("порядок: без перестановки — действующие по числу месяца; перетаскивание задаёт свой", async () => {
+    const { ledger } = await makeLedger()
+    const rent = await addTemplate(ledger, { description: "Аренда", amount: 500000, dayOfMonth: 20 })
+    const net = await addTemplate(ledger, { description: "Интернет", amount: 65000, dayOfMonth: 1 })
+    const gym = await addTemplate(ledger, { description: "Спортзал", amount: 300000, dayOfMonth: 15 })
+    await ledger.pauseRecurring(net)
+    const names = () => ledger.recurring().map((r) => r.description)
+    expect(names()).toEqual(["Спортзал", "Аренда", "Интернет"])
+
+    await ledger.reorderRecurring([net, rent, gym])
+    expect(names()).toEqual(["Интернет", "Аренда", "Спортзал"])
+    // правка и пауза место не меняют
+    await ledger.updateRecurring(rent, { amount: 550000 })
+    await ledger.resumeRecurring(net)
+    expect(names()).toEqual(["Интернет", "Аренда", "Спортзал"])
+    // новая — в конце
+    await addTemplate(ledger, { description: "iCloud", amount: 14900, dayOfMonth: 3 })
+    expect(names()).toEqual(["Интернет", "Аренда", "Спортзал", "iCloud"])
+  })
+
+  it("перестановка записывает только сдвинутые", async () => {
+    const { ledger, clock } = await makeLedger()
+    const a = await addTemplate(ledger, { description: "А", amount: 100, dayOfMonth: 1 })
+    const b = await addTemplate(ledger, { description: "Б", amount: 100, dayOfMonth: 2 })
+    const c = await addTemplate(ledger, { description: "В", amount: 100, dayOfMonth: 3 })
+    await ledger.reorderRecurring([a, b, c])
+    const stamps = () => new Map(ledger.pendingChanges().map((r) => [r.id, r.updatedAt]))
+    const before = stamps()
+    clock.advance(1000)
+    await ledger.reorderRecurring([a, c, b])
+    const after = stamps()
+    expect([a, b, c].filter((id) => after.get(id) !== before.get(id))).toEqual([b, c])
+  })
+
   describe("предстоящие списания", () => {
     const setup = async () => {
       const { ledger } = await makeLedger()

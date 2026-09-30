@@ -4,7 +4,11 @@ import { restartableServer, testServer, type TestClient } from "./support"
 
 const MSK = (iso: string) => Date.parse(`${iso}+03:00`)
 
-const template = (id: string, fields: Partial<{ dayOfMonth: number; startDate: string; status: string; amount: number }>, updatedAt = 1) => ({
+const template = (
+  id: string,
+  fields: Partial<{ dayOfMonth: number; startDate: string; status: string; amount: number; position: number }>,
+  updatedAt = 1
+) => ({
   collection: "recurring",
   id,
   updatedAt,
@@ -46,6 +50,16 @@ describe("регулярные операции: сервер", () => {
         "rec:net:2026-08": "2026-08-10",
         "rec:net:2026-09": "2026-09-10"
       })
+    }))
+
+  it.scoped("место в списке доходит до других устройств", () =>
+    Effect.gen(function* () {
+      yield* TestClock.setTime(MSK("2026-09-28T12:00:00"))
+      const server = yield* testServer()
+      yield* login(server)
+      yield* server.post("/api/sync", { cursor: 0, changes: [template("net", { position: 2 })] })
+      const res = yield* server.post("/api/sync", { cursor: 0, changes: [] })
+      expect(res.json.changes.find((r: any) => r.id === "net").data.position).toBe(2)
     }))
 
   it.scoped("операции получают вид, сумму, категорию и ссылку на шаблон", () =>

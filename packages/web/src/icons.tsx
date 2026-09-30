@@ -35,6 +35,9 @@ export const SearchIcon = ({ size = 20 }: { size?: number }) => <SfSymbol name="
 
 export const TrashIcon = ({ size = 18 }: { size?: number }) => <SfSymbol name="trash" size={size} />
 
+/** «Ручка» для перетаскивания строки, как `line.3.horizontal` в списках iOS. */
+export const GripIcon = ({ size = 20 }: { size?: number }) => <SfSymbol name="line_3_horizontal" size={size} />
+
 export const PlusIcon = ({ size = 18 }: { size?: number }) => <SfSymbol name="plus" size={size} />
 
 export const LogoutIcon = ({ size = 18 }: { size?: number }) => <SfSymbol name="square_arrow_left" size={size} />

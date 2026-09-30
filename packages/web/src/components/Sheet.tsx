@@ -1,4 +1,5 @@
 import type { ComponentChildren, JSX } from "preact"
+import { createPortal } from "preact/compat"
 import { useEffect, useRef, useState } from "preact/hooks"
 
 /** Сколько длится уход панели вниз — совпадает с `fin-sheet-out` в styles.css. */
@@ -10,8 +11,8 @@ const FLING = 0.6
 const prefersReducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches
 
 /**
- * Выезжающая снизу панель в стиле iOS 26: парит над краем экрана, закрывается тапом по подложке,
- * Escape и жестом вниз за «ручку». Уходит с анимацией; чтобы закрыть её так же из содержимого
+ * Выезжающая снизу панель в стиле iOS 26: парит над краем экрана поверх всего, в том числе таббара,
+ * закрывается тапом по подложке, Escape и жестом вниз за «ручку». Уходит с анимацией; чтобы закрыть её так же из содержимого
  * (например, по «Отмена»), передайте детей функцией — она получит `close`.
  */
 export const Sheet = ({
@@ -76,7 +77,8 @@ export const Sheet = ({
     el.style.transform = ""
   }
 
-  return (
+  // в body: иначе экран с `isolation: isolate` запирает панель под таббаром
+  return createPortal(
     <>
       <div class={`sheet-backdrop${closing ? " closing" : ""}`} onClick={close} />
       <div ref={sheetRef} class={`sheet${closing === "animate" ? " closing" : ""}`} role="dialog" aria-modal="true" aria-label={label}>
@@ -91,6 +93,7 @@ export const Sheet = ({
         </div>
         <div class="sheet-body">{typeof children === "function" ? children(close) : children}</div>
       </div>
-    </>
+    </>,
+    document.body
   )
 }
