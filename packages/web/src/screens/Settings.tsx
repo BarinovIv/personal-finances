@@ -167,15 +167,15 @@ const SUB_ICON: Record<SettingsSub, { icon: ComponentChildren; color: string }> 
   recurring: { icon: <LoopIcon />, color: "indigo" },
   categories: { icon: <GridIcon />, color: "orange" },
   goals: { icon: <StarIcon />, color: "teal" },
-  debts: { icon: <DebtIcon />, color: "teal" },
+  debts: { icon: <DebtIcon />, color: "purple" },
   export: { icon: <DownloadIcon />, color: "blue" },
   devices: { icon: <PhoneIcon />, color: "gray" }
 }
 
 /** Группы меню, как в «Настройках» iOS: учёт отдельно, данные и устройства отдельно. */
 const MENU_GROUPS: ReadonlyArray<ReadonlyArray<SettingsSub>> = [
-  ["paydays", "recurring", "categories", "goals"],
-  ["debts"],
+  ["paydays", "recurring", "categories"],
+  ["goals", "debts"],
   ["export", "devices"]
 ]
 
