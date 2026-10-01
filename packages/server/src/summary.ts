@@ -82,8 +82,7 @@ const comparisonLine = (current: number, previous: number) => {
 const allowanceLine = (a: DailyAllowance | null) => {
   if (a === null) return []
   if (a.kind === "daily") return [`Можно тратить в день: ${formatMoney(a.perDay)}`]
-  // ровно ноль свободных денег — ещё не перерасход: тратить просто не из чего
-  return [a.overspent > 0 ? `Перерасход за период: ${formatMoney(a.overspent)}` : `Можно тратить в день: ${formatMoney(0)}`]
+  return a.overspent > 0 ? [] : [`Можно тратить в день: ${formatMoney(0)}`]
 }
 
 const TOP_CATEGORIES = 5

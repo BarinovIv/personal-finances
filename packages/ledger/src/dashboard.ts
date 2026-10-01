@@ -57,6 +57,8 @@ export interface TrendBar {
   readonly start: IsoDate
   readonly end: IsoDate
   readonly amount: number
+  /** Смещение периода относительно текущего: 0 — текущий, −1 — предыдущий. */
+  readonly offset: number
   /** Выбранный период. */
   readonly current: boolean
 }
@@ -81,7 +83,7 @@ export interface Dashboard {
   /** По убыванию суммы. Доходы сюда не входят. */
   readonly categories: ReadonlyArray<DashboardCategory>
   readonly comparison: Comparison
-  /** Шесть периодов, последний — выбранный. */
+  /** Шесть последовательных периодов, включая выбранный и, когда возможно, более новые. */
   readonly trend: ReadonlyArray<TrendBar>
   /** Регулярные расходы, которые ещё появятся до конца текущего периода; для других периодов пусто. */
   readonly upcoming: Upcoming
@@ -122,13 +124,7 @@ export const buildDashboard = (ctx: LedgerContext, query: DashboardQuery): Dashb
   const usage = limitUsage(ctx.records.all("categories"), ops, period)
   const limits = new Map(usage.map((u) => [u.categoryId, u.limit]))
 
-  // категория с лимитом видна и без трат в периоде — «0 из 15 000»
-  const spentIn = totals.categories.map((c) => c.categoryId)
-  const unspent = usage
-    .filter((u) => !spentIn.includes(u.categoryId))
-    .map((u) => ({ categoryId: u.categoryId, amount: 0, operations: [] }))
-
-  const categories = [...totals.categories, ...unspent].map((c): DashboardCategory => {
+  const categories = totals.categories.map((c): DashboardCategory => {
     const category = ctx.categoryOf(c.categoryId, "expense")
     return {
       id: c.categoryId,
@@ -163,9 +159,17 @@ export const buildDashboard = (ctx: LedgerContext, query: DashboardQuery): Dashb
   const upcoming = upcomingIn(ctx, period)
 
   const trend: Array<TrendBar> = []
-  for (let i = TREND_LENGTH - 1; i >= 0; i--) {
-    const p = periodAt(mode, today, paydays, offset - i)
-    trend.push({ label: trendLabel(mode, p), start: p.start, end: p.end, amount: expensesIn(p), current: i === 0 })
+  const trendEndOffset = offset >= 0 ? offset : Math.min(0, offset + TREND_LENGTH - 1)
+  for (let trendOffset = trendEndOffset - TREND_LENGTH + 1; trendOffset <= trendEndOffset; trendOffset++) {
+    const p = periodAt(mode, today, paydays, trendOffset)
+    trend.push({
+      label: trendLabel(mode, p),
+      start: p.start,
+      end: p.end,
+      amount: expensesIn(p),
+      offset: trendOffset,
+      current: trendOffset === offset
+    })
   }
 
   return {

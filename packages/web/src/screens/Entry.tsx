@@ -21,6 +21,7 @@ import { SyncBadge } from "../components/SyncBadge"
 import { LargeTitle } from "../components/LargeTitle"
 import { ArrowUpIcon, SearchIcon } from "../icons"
 import { allowanceItems } from "../allowance"
+import { useAnimatedNumber } from "../animatedNumber"
 import { plural } from "../format"
 import { navigate, useLedgerVersion } from "../state"
 import { limitNotes, showToast } from "../toast"
@@ -172,15 +173,16 @@ export const EntryScreen = ({ ledger, sync }: { ledger: Ledger; sync: Sync }) =>
 const SpentHero = memo(({ ledger }: { ledger: Ledger }) => {
   useLedgerVersion(ledger)
   const currentPeriod = ledger.dashboard({ mode: ledger.dashboardMode(), offset: 0 })
-  const { allowance } = currentPeriod
+  const allowance = currentPeriod.allowance ? allowanceItems(currentPeriod.allowance) : []
+  const expenses = useAnimatedNumber(currentPeriod.expenses)
   return (
     <button type="button" class="spent-hero" onClick={() => navigate("/dashboard")}>
       <h1 class="visually-hidden">Ввод</h1>
       <span class="spent-hero-label">Потрачено за период</span>
-      <span class="spent-hero-value num">{formatMoney(currentPeriod.expenses)}</span>
-      {allowance && (
+      <span class="spent-hero-value num">{formatMoney(expenses)}</span>
+      {allowance.length > 0 && (
         <span class="spent-hero-allowance">
-          {allowanceItems(allowance).map((item) => (
+          {allowance.map((item) => (
             <span class="spent-hero-stat" key={item.label}>
               <span class="spent-hero-stat-label">{item.label}</span>
               <span class={`spent-hero-stat-value num${item.over ? " over" : ""}`}>{item.value}</span>
