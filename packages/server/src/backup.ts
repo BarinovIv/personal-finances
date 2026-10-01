@@ -30,8 +30,11 @@ export const backupFile = Effect.gen(function* () {
 
 const BACKUP_HOUR = 3
 
-/** Каждую ночь в 03:00 по Москве шлёт снимок базы в Telegram. Сбой отправки пишется в лог и не роняет сервер. */
-export const nightlyBackup = Effect.gen(function* () {
+/** Понедельник для ISO-даты (UTC здесь используется только для разбора календарной даты). */
+const isMonday = (date: string) => new Date(`${date}T00:00:00Z`).getUTCDay() === 1
+
+/** Каждый понедельник в 03:00 по Москве шлёт снимок базы в Telegram. Сбой отправки пишется в лог и не роняет сервер. */
+export const weeklyBackup = Effect.gen(function* () {
   const { telegram } = yield* AppConfig
   if (Option.isNone(telegram)) {
     yield* Effect.logWarning("BACKUP_TELEGRAM_TOKEN и BACKUP_TELEGRAM_CHAT_ID не заданы — бэкап базы выключен")
@@ -39,7 +42,7 @@ export const nightlyBackup = Effect.gen(function* () {
   }
   for (;;) {
     const now = yield* Clock.currentTimeMillis
-    yield* Effect.sleep(Duration.millis(untilMoscowTime(now, BACKUP_HOUR)))
+    yield* Effect.sleep(Duration.millis(untilMoscowTime(now, BACKUP_HOUR, isMonday)))
     yield* backupFile.pipe(
       Effect.flatMap((file) =>
         sendDocument(telegram.value, { ...file, type: "application/gzip" }).pipe(

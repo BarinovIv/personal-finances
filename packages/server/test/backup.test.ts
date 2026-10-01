@@ -38,7 +38,7 @@ interface Sent {
 const telegramStub = (statuses: Array<number> = []) => {
   const sent: Array<Sent> = []
   vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
-    sent.push({ url, form: init.body as FormData })
+    if (url.endsWith("/sendDocument")) sent.push({ url, form: init.body as FormData })
     return new Response("{}", { status: statuses.shift() ?? 200 })
   })
   return sent
@@ -60,11 +60,11 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe("ночной бэкап", () => {
-  it.scoped("в 03:00 по Москве присылает в Telegram базу со всеми записями", () =>
+describe("еженедельный бэкап", () => {
+  it.scoped("в понедельник в 03:00 по Москве присылает в Telegram базу со всеми записями", () =>
     Effect.gen(function* () {
       const sent = telegramStub()
-      yield* TestClock.setTime(MSK("2026-09-28T12:00:00"))
+      yield* TestClock.setTime(MSK("2026-09-27T12:00:00"))
       const server = yield* testServer({ telegram })
       yield* server.post("/api/login", { password: "верный-пароль" })
       yield* server.post("/api/sync", { cursor: 0, changes: [op] })
@@ -80,20 +80,24 @@ describe("ночной бэкап", () => {
       expect(sent[0]!.form.get("chat_id")).toBe("42")
 
       const { name, db } = yield* openSent(sent[0]!)
-      expect(name).toBe("finances-2026-09-29.sqlite.gz")
+      expect(name).toBe("finances-2026-09-28.sqlite.gz")
       const row = db.prepare("SELECT data FROM records WHERE collection = 'operations' AND id = 'coffee'").get() as { data: string }
       expect(JSON.parse(row.data).description).toBe("кофе")
       db.close()
+
+      yield* TestClock.adjust("6 days")
+      yield* settle
+      expect(sent).toHaveLength(1)
 
       yield* TestClock.adjust("1 day")
       yield* settle
       expect(sent).toHaveLength(2)
     }))
 
-  it.scoped("если Telegram не принял файл, следующей ночью бэкап приходит снова", () =>
+  it.scoped("если Telegram не принял файл, через неделю бэкап приходит снова", () =>
     Effect.gen(function* () {
       const sent = telegramStub([500])
-      yield* TestClock.setTime(MSK("2026-09-28T12:00:00"))
+      yield* TestClock.setTime(MSK("2026-09-27T12:00:00"))
       const server = yield* testServer({ telegram })
       yield* server.get("/api/health")
 
@@ -101,7 +105,7 @@ describe("ночной бэкап", () => {
       yield* settle
       expect(sent).toHaveLength(1)
 
-      yield* TestClock.adjust("1 day")
+      yield* TestClock.adjust("7 days")
       yield* settle
       expect(sent).toHaveLength(2)
       expect((yield* server.get("/api/health")).status).toBe(200)
