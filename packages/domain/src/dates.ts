@@ -1,8 +1,19 @@
 /** Дата без времени в формате `YYYY-MM-DD`. */
 export type IsoDate = string
 
-/** Все даты приложения считаются по московскому времени. */
+/** Часовой пояс по умолчанию, в том числе для старых настроек. */
 export const APP_TIME_ZONE = "Europe/Moscow"
+
+/** Поддерживаемый IANA-пояс; произвольные смещения UTC настройкой не являются. */
+export const isTimeZone = (value: string): boolean => {
+  if (value !== "UTC" && !value.includes("/")) return false
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: value })
+    return true
+  } catch {
+    return false
+  }
+}
 
 const pad = (n: number, width = 2) => String(n).padStart(width, "0")
 

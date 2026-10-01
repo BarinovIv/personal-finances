@@ -5,13 +5,15 @@ import { Data, Effect, Schema } from "effect"
 export class Offline extends Data.TaggedError("Offline")<{ readonly cause: unknown }> {}
 /** Нет сессии или она истекла. */
 export class Unauthorized extends Data.TaggedError("Unauthorized") {}
+/** Пользователь удалён; устройство должно стереть его локальные данные. */
+export class UserDeleted extends Data.TaggedError("UserDeleted") {}
 /** Сервер ответил ошибкой. */
 export class ServerError extends Data.TaggedError("ServerError")<{
   readonly status: number
   readonly body: ApiError | undefined
 }> {}
 
-export type RequestError = Offline | Unauthorized | ServerError
+export type RequestError = Offline | Unauthorized | UserDeleted | ServerError
 
 export interface Transport {
   readonly baseUrl: string
@@ -42,6 +44,7 @@ export const request = <A, I>(
     const text = yield* Effect.tryPromise({ try: () => res.text(), catch: (cause) => new Offline({ cause }) })
     const json = parseJson(text)
     if (res.status === 401 && isError(json, "unauthorized")) return yield* new Unauthorized()
+    if (res.status === 410 && isError(json, "user-deleted")) return yield* new UserDeleted()
     if (!res.ok) {
       const decoded = Schema.decodeUnknownOption(ApiError)(json)
       return yield* new ServerError({ status: res.status, body: decoded._tag === "Some" ? decoded.value : undefined })

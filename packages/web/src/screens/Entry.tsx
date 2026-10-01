@@ -390,11 +390,11 @@ const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) 
           {dateChip}
           <span class={`amount-preview num ${first.kind}`}>{first.amount ? signed(first) : "сумма?"}</span>
         </div>
-      ) : (
+      ) : ledger.days().length === 0 ? (
         <div class="hint">
           Например: <b>футболка 1500</b> · <b>+зарплата 95000</b> · <b>вчера такси 450</b> · <b>шаурма 340 такси 500</b>
         </div>
-      )}
+      ) : null}
       {picking !== null && picked && (
         <Sheet
           label="Выбор категории"
@@ -474,7 +474,7 @@ const Feed = memo(
             </div>
           )}
           {days.length === 0 ? (
-            <div class="empty">{found ? "Ничего не нашлось" : "Пока нет операций"}</div>
+            <div class="empty">{found ? "Ничего не нашлось" : "Пока нет операций. Введите расход или доход строкой выше — здесь появится ваша лента."}</div>
           ) : (
             days.map((day) => (
               <section class="day" key={day.date}>

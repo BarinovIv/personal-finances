@@ -77,7 +77,7 @@ import {
   type RecurringView
 } from "./recurring"
 import { searchOperations, type SearchSummary } from "./search"
-import { dashboardMode, readSettings, setDashboardMode, setPaydays, type Settings } from "./settings"
+import { dashboardMode, readSettings, setDashboardMode, setPaydays, setTimeZone, type Settings } from "./settings"
 import type { LedgerStore } from "./store"
 import type { Undo } from "./undo"
 import type { CategoryView, DayGroup, OperationView } from "./views"
@@ -103,9 +103,18 @@ export interface LedgerSyncPort {
   acknowledge(sent: ReadonlyArray<SyncRecord>): Promise<void>
 }
 
+/** Принадлежность всех локальных данных одному пользователю. */
+export interface LedgerDevicePort {
+  owner(): string | null
+  /** Присвоить данные без владельца первому вошедшему пользователю; очередь остаётся. */
+  adopt(userId: string): Promise<void>
+  /** Полностью стереть устройство перед выходом или сменой пользователя. */
+  clear(): Promise<void>
+}
+
 /** Клиентский журнал: всё, что видит и делает пользователь, работает с данными на устройстве. */
 export interface Ledger {
-  /** Сегодняшняя дата по Москве. */
+  /** Сегодняшняя дата в часовом поясе пользователя. */
   today(): IsoDate
   /** Категории вида в порядке, заданном пользователем. */
   categories(kind: CategoryKind): ReadonlyArray<CategoryView>
@@ -196,16 +205,20 @@ export interface Ledger {
   settings(): Settings
   /** Дни зарплаты — числа месяца; синхронизируются. */
   setPaydays(days: ReadonlyArray<number>): Promise<{ ok: boolean }>
+  /** IANA-часовой пояс; синхронизируется между устройствами пользователя. */
+  setTimeZone(timeZone: string): Promise<{ ok: boolean }>
   /** Все операции в CSV для Excel (UTF-8 с BOM, «;», десятичная запятая). */
   exportCsv(): string
   /** Изменения, которые ещё не ушли на сервер. */
   pendingChanges(): ReadonlyArray<SyncRecord>
   readonly sync: LedgerSyncPort
+  readonly device: LedgerDevicePort
   /** Подписка на любые изменения журнала. */
   subscribe(listener: () => void): () => void
 }
 
 const CURSOR = "syncCursor"
+const OWNER = "userId"
 
 export const openLedger = async (options: LedgerOptions): Promise<Ledger> => {
   const now = options.now ?? Date.now
@@ -266,9 +279,15 @@ export const openLedger = async (options: LedgerOptions): Promise<Ledger> => {
     deleteRecurring: (id) => deleteRecurring(ctx, id),
     reorderRecurring: (ids) => reorderRecurring(ctx, ids),
     settings: () => readSettings(ctx),
+    setTimeZone: (zone) => setTimeZone(ctx, zone),
     setPaydays: (days) => setPaydays(ctx, days),
     exportCsv: () => exportCsv(ctx),
     pendingChanges: () => records.pending(),
+    device: {
+      owner: () => records.getMeta<string>(OWNER) ?? null,
+      adopt: (userId) => records.saveMeta({ [OWNER]: userId }),
+      clear: () => records.clear()
+    },
     sync: {
       pending: () => records.pending(),
       cursor: () => records.getMeta<number>(CURSOR) ?? 0,

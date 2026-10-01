@@ -5,13 +5,15 @@ export interface AppConfigShape {
   readonly staticDir: string
   /** Пароль входа из переменной окружения. В базе хранится только его хэш. */
   readonly password: Option.Option<string>
+  /** Неизменяемый логин владельца при первом запуске. */
+  readonly login?: string
   /** Добавлять ли к cookie сессии флаг Secure. */
   readonly secureCookies: boolean
-  /** Куда слать еженедельные бэкап базы и сводку. Нет — оба выключены. */
+  /** Куда слать еженедельный бэкап всей базы. Нет — отправка выключена. */
   readonly telegram: Option.Option<TelegramTarget>
 }
 
-/** Telegram-бот и чат, куда он пишет: бэкап и сводка. */
+/** Telegram-бот и чат владельца для бэкапа всей базы. */
 export interface TelegramTarget {
   readonly telegramToken: string
   readonly telegramChatId: string
@@ -26,6 +28,7 @@ export const appConfigFromEnv = Layer.effect(
   Effect.gen(function* () {
     const staticDir = yield* Config.string("STATIC_DIR").pipe(Config.withDefault("packages/web/dist"))
     const password = yield* Config.option(Config.nonEmptyString("APP_PASSWORD"))
+    const login = yield* Config.string("APP_LOGIN").pipe(Config.withDefault("owner"))
     const secureCookies = yield* Config.boolean("SECURE_COOKIES").pipe(Config.withDefault(true))
     const telegram = yield* Config.option(
       Config.all({
@@ -33,6 +36,6 @@ export const appConfigFromEnv = Layer.effect(
         telegramChatId: Config.nonEmptyString("BACKUP_TELEGRAM_CHAT_ID")
       })
     )
-    return { staticDir, password, secureCookies, telegram }
+    return { staticDir, password, login, secureCookies, telegram }
   })
 )

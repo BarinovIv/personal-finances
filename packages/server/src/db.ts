@@ -1,10 +1,10 @@
-import { Context, Effect, Layer } from "effect"
+import { Context, Effect, Exit, FiberRef, Layer } from "effect"
 import { mkdirSync } from "node:fs"
 import { dirname } from "node:path"
 import { DatabaseSync, type SQLInputValue } from "node:sqlite"
 
 /**
- * Адаптер хранилища сервера: SQLite-файл (ADR-0003). Запросы синхронные — один экземпляр, один пользователь.
+ * Адаптер хранилища сервера: SQLite-файл (ADR-0003). Запросы синхронные — один экземпляр сервера.
  * Переезд на другую базу затронет только этот модуль и SQL в репозиториях.
  */
 export interface DbShape {
@@ -48,6 +48,73 @@ const MIGRATIONS: ReadonlyArray<string> = [
     PRIMARY KEY (collection, id)
   );
   CREATE INDEX records_seq ON records (seq);
+  `,
+  `
+  CREATE TABLE users (
+    id TEXT PRIMARY KEY,
+    login TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    is_owner INTEGER NOT NULL DEFAULT 0,
+    password_hash TEXT,
+    created_at INTEGER NOT NULL,
+    last_active_at INTEGER,
+    deleted_at INTEGER
+  );
+  CREATE UNIQUE INDEX single_owner ON users(is_owner) WHERE is_owner = 1;
+  INSERT INTO users(id, login, is_owner, password_hash, created_at)
+    SELECT 'owner', 'owner', 1, password_hash, 0 FROM auth WHERE id = 1;
+  ALTER TABLE auth ADD COLUMN env_password_hash TEXT;
+  ALTER TABLE sessions RENAME TO legacy_sessions;
+  CREATE TABLE sessions (
+    id TEXT PRIMARY KEY,
+    token_hash TEXT NOT NULL UNIQUE,
+    device TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    last_seen_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL,
+    user_id TEXT NOT NULL REFERENCES users(id)
+  );
+  INSERT INTO sessions SELECT id, token_hash, device, created_at, last_seen_at, expires_at, 'owner' FROM legacy_sessions;
+  DROP TABLE legacy_sessions;
+  CREATE INDEX sessions_user ON sessions(user_id);
+  ALTER TABLE records RENAME TO legacy_records;
+  DROP INDEX records_seq;
+  CREATE TABLE records (
+    user_id TEXT NOT NULL REFERENCES users(id),
+    collection TEXT NOT NULL,
+    id TEXT NOT NULL,
+    updated_at INTEGER NOT NULL,
+    deleted INTEGER NOT NULL,
+    data TEXT NOT NULL,
+    seq INTEGER NOT NULL,
+    PRIMARY KEY(user_id, collection, id)
+  );
+  INSERT INTO records SELECT 'owner', collection, id, updated_at, deleted, data, seq FROM legacy_records;
+  DROP TABLE legacy_records;
+  CREATE INDEX records_seq ON records(user_id, seq);
+  CREATE TABLE login_attempts (
+    login TEXT PRIMARY KEY,
+    failures INTEGER NOT NULL DEFAULT 0,
+    blocked_until INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE TABLE invitations (
+    id TEXT PRIMARY KEY,
+    token_hash TEXT NOT NULL UNIQUE,
+    created_by TEXT NOT NULL REFERENCES users(id),
+    expires_at INTEGER NOT NULL,
+    used_at INTEGER,
+    used_by TEXT REFERENCES users(id),
+    revoked_at INTEGER
+  );
+  CREATE TABLE password_resets (
+    id TEXT PRIMARY KEY,
+    token_hash TEXT NOT NULL UNIQUE,
+    user_id TEXT NOT NULL REFERENCES users(id),
+    expires_at INTEGER NOT NULL,
+    used_at INTEGER
+  );
+  CREATE TABLE deleted_sessions(token_hash TEXT PRIMARY KEY);
+  CREATE TABLE session_tokens(token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id));
+  INSERT INTO session_tokens SELECT token_hash, user_id FROM sessions;
   `
 ]
 
@@ -73,29 +140,34 @@ const make = (path: string) =>
     (db) => Effect.sync(() => db.close())
   ).pipe(
     Effect.map((db): DbShape => {
-      let depth = 0
+      const mutex = Effect.unsafeMakeSemaphore(1)
+      const inTransaction = FiberRef.unsafeMake(false, { fork: () => false })
+      const access = <A>(effect: Effect.Effect<A>) => Effect.gen(function* () {
+        return yield* (yield* FiberRef.get(inTransaction)) ? effect : mutex.withPermits(1)(effect)
+      })
       return {
-        all: (sql, ...params) => Effect.sync(() => db.prepare(sql).all(...params) as Array<any>),
-        get: (sql, ...params) => Effect.sync(() => db.prepare(sql).get(...params) as any),
+        all: (sql, ...params) => access(Effect.sync(() => db.prepare(sql).all(...params) as Array<any>)),
+        get: (sql, ...params) => access(Effect.sync(() => db.prepare(sql).get(...params) as any)),
         run: (sql, ...params) =>
-          Effect.sync(() => {
+          access(Effect.sync(() => {
             db.prepare(sql).run(...params)
-          }),
+          })),
         transaction: (effect) =>
-          Effect.suspend(() => {
-            if (depth > 0) return effect
-            depth++
-            db.exec("BEGIN IMMEDIATE")
-            return effect.pipe(
-              Effect.tap(() => Effect.sync(() => db.exec("COMMIT"))),
-              Effect.tapErrorCause(() => Effect.sync(() => db.exec("ROLLBACK"))),
-              Effect.ensuring(Effect.sync(() => depth--))
-            )
+          Effect.gen(function* () {
+            if (yield* FiberRef.get(inTransaction)) return yield* effect
+            return yield* mutex.withPermits(1)(Effect.uninterruptibleMask((restore) =>
+              Effect.sync(() => db.exec("BEGIN IMMEDIATE")).pipe(
+                Effect.zipRight(restore(effect).pipe(
+                  Effect.locally(inTransaction, true),
+                  Effect.onExit((exit) => Effect.sync(() => db.exec(Exit.isSuccess(exit) ? "COMMIT" : "ROLLBACK")))
+                ))
+              )
+            ))
           }),
         snapshot: (path) =>
-          Effect.sync(() => {
+          access(Effect.sync(() => {
             db.prepare("VACUUM INTO ?").run(path)
-          })
+          }))
       }
     })
   )

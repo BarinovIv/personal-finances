@@ -1,14 +1,26 @@
-import { indexedDbStore, openLedger, type Ledger } from "@fin/ledger"
-import { createAuthApi, createSync, type Sync, type Transport } from "@fin/sync"
+import { indexedDbStore, LocalUserChanged, openLedger, type Ledger } from "@fin/ledger"
+import { createAuthApi, createSync, createUserDevice, type Sync, type Transport, type UserDevice } from "@fin/sync"
 import { useEffect, useState } from "preact/hooks"
 
 const transport: Transport = { baseUrl: window.location.origin, fetch: (request) => fetch(request) }
 
 export const auth = createAuthApi(transport)
 
+// Cookie и IndexedDB общие у вкладок: после смены пользователя каждая вкладка проверяет вход заново.
+const userChanges = typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel("finances-user")
+if (userChanges) userChanges.onmessage = () => window.location.reload()
+export const refreshOtherTabs = () => userChanges?.postMessage("changed")
+window.addEventListener("unhandledrejection", (event) => {
+  if (event.reason instanceof LocalUserChanged) {
+    event.preventDefault()
+    window.location.reload()
+  }
+})
+
 export interface AppServices {
   readonly ledger: Ledger
   readonly sync: Sync
+  readonly device: UserDevice
 }
 
 let services: Promise<AppServices> | undefined
@@ -17,12 +29,12 @@ let services: Promise<AppServices> | undefined
 export const getServices = () =>
   (services ??= openLedger({ store: indexedDbStore() }).then((ledger) => {
     const sync = createSync({ ledger, transport })
-    sync.start()
+    const device = createUserDevice({ ledger, auth, sync })
     window.addEventListener("online", () => sync.wake())
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible") sync.wake()
     })
-    return { ledger, sync }
+    return { ledger, sync, device }
   }))
 
 /** Перерисовывает компонент при любом изменении журнала. */
@@ -49,7 +61,7 @@ window.addEventListener("popstate", (e) => {
 })
 
 type DocumentWithViewTransitions = Document & {
-  startViewTransition?: (callback: () => void) => { finished: Promise<void> }
+  startViewTransition?: (callback: () => void) => { finished: Promise<void>; ready: Promise<void> }
 }
 
 /** Въезд/выезд вложенного экрана через View Transitions API; без библиотек, с уважением к «уменьшить движение». */
@@ -68,7 +80,10 @@ const withRouteTransition = (nextPath: string, apply: () => void) => {
   const root = document.documentElement
   root.classList.toggle("vt-forward", isNestedPath(nextPath) && !isNestedPath(previousPath))
   root.classList.toggle("vt-backward", isNestedPath(previousPath) && !isNestedPath(nextPath))
-  doc.startViewTransition(apply)
+  // Быстрый следующий переход может отменить анимацию: состояние маршрута уже обновлено.
+  const transition = doc.startViewTransition(apply)
+  void transition.ready.catch(() => {})
+  void transition.finished.catch(() => {})
 }
 
 /** Текущий маршрут из hash: `#/`, `#/dashboard`, `#/op/<id>`. */

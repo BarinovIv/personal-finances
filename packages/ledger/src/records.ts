@@ -8,7 +8,7 @@ import {
   type SettingsData,
   type SyncRecord
 } from "@fin/domain"
-import type { LedgerStore } from "./store"
+import { LocalUserChanged, type LedgerStore } from "./store"
 
 interface DataOf {
   operations: OperationData
@@ -31,6 +31,7 @@ export class Records {
   private readonly meta: Map<string, unknown>
   private lastStamp = 0
   private saving: Promise<void> = Promise.resolve()
+  private storageOwner: string | null
   /** Растёт при каждом изменении — для кэширования расчётов. */
   version = 0
 
@@ -42,6 +43,7 @@ export class Records {
     meta: Readonly<Record<string, unknown>>
   ) {
     this.meta = new Map(Object.entries(meta))
+    this.storageOwner = typeof meta.userId === "string" ? meta.userId : null
     for (const record of records as ReadonlyArray<SyncRecord>) {
       this.byKey.set(recordKey(record.collection, record.id), record)
       this.lastStamp = Math.max(this.lastStamp, record.updatedAt)
@@ -132,6 +134,15 @@ export class Records {
     return this.persist({ meta }, false)
   }
 
+  /** Стереть данные пользователя, включая очередь, курсор и производные расчёты. */
+  clear(): Promise<void> {
+    this.byKey.clear()
+    this.outbox.clear()
+    this.meta.clear()
+    this.lastStamp = 0
+    return this.persist({ clear: true })
+  }
+
   subscribe(listener: () => void): () => void {
     this.listeners.add(listener)
     return () => this.listeners.delete(listener)
@@ -147,7 +158,14 @@ export class Records {
       this.version++
       for (const listener of this.listeners) listener()
     }
-    this.saving = this.saving.catch(() => {}).then(() => this.store.save(change))
+    this.saving = this.saving.catch((error) => {
+      // Вкладка после смены пользователя больше не может писать даже после неудачного adopt/clear.
+      if (error instanceof LocalUserChanged) throw error
+    }).then(async () => {
+      await this.store.save({ ...change, expectedOwner: this.storageOwner })
+      if (change.clear) this.storageOwner = null
+      if (typeof change.meta?.userId === "string") this.storageOwner = change.meta.userId
+    })
     return this.saving
   }
 }

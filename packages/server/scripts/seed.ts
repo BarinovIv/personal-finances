@@ -167,21 +167,21 @@ if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 're
   console.error(`В ${DB_PATH} нет таблицы records: сначала запусти сервер один раз.`)
   process.exit(1)
 }
-const hasSettings = db.prepare("SELECT 1 FROM records WHERE collection = 'settings' AND id = ?").get(SETTINGS_ID)
+const hasSettings = db.prepare("SELECT 1 FROM records WHERE user_id = 'owner' AND collection = 'settings' AND id = ?").get(SETTINGS_ID)
 if (!hasSettings) put("settings", SETTINGS_ID, { paydays: [5, 20] } satisfies SettingsData)
 
 const upsert = db.prepare(
-  `INSERT INTO records (collection, id, updated_at, deleted, data, seq) VALUES (?, ?, ?, ?, ?, ?)
-   ON CONFLICT (collection, id) DO UPDATE SET
+  `INSERT INTO records (user_id, collection, id, updated_at, deleted, data, seq) VALUES ('owner', ?, ?, ?, ?, ?, ?)
+   ON CONFLICT (user_id, collection, id) DO UPDATE SET
      updated_at = excluded.updated_at, deleted = excluded.deleted, data = excluded.data, seq = excluded.seq`
 )
 const fresh = new Set(records.map((r) => `${r.collection}:${r.id}`))
 const stale = db
-  .prepare("SELECT collection, id, data FROM records WHERE deleted = 0 AND (id LIKE 'seed-%' OR id LIKE 'rec:seed-%')")
+  .prepare("SELECT collection, id, data FROM records WHERE user_id = 'owner' AND deleted = 0 AND (id LIKE 'seed-%' OR id LIKE 'rec:seed-%')")
   .all() as Array<{ collection: Collection; id: string; data: string }>
 
 db.exec("BEGIN")
-let seq = (db.prepare("SELECT MAX(seq) AS seq FROM records").get() as { seq: number | null }).seq ?? 0
+let seq = (db.prepare("SELECT MAX(seq) AS seq FROM records WHERE user_id = 'owner'").get() as { seq: number | null }).seq ?? 0
 let removed = 0
 for (const row of stale) {
   if (fresh.has(`${row.collection}:${row.id}`)) continue

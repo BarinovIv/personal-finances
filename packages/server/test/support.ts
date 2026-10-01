@@ -31,7 +31,7 @@ export interface TestClient {
   device(userAgent?: string): TestClient
 }
 
-const makeClient = (handler: (request: Request) => Promise<Response>, userAgent: string): TestClient => {
+export const makeClient = (handler: (request: Request) => Promise<Response>, userAgent: string): TestClient => {
   const cookies = new Map<string, string>()
   const request: TestClient["request"] = (method, path, body, headers = {}) =>
     Effect.promise(async () => {

@@ -1,4 +1,4 @@
-import type { SessionState } from "@fin/sync"
+import type { DeviceState } from "@fin/sync"
 import type { ComponentChildren } from "preact"
 import { useEffect, useRef, useState } from "preact/hooks"
 import { ChartIcon, PenIcon, SlidersIcon } from "./icons"
@@ -8,12 +8,12 @@ import { GoalScreen } from "./screens/Goal"
 import { LoginScreen } from "./screens/Login"
 import { OperationScreen } from "./screens/Operation"
 import { SettingsScreen, type SettingsSub } from "./screens/Settings"
-import { auth, getServices, useRoute, type AppServices } from "./state"
+import { auth, dashboardMemory, getServices, navigate, refreshOtherTabs, useRoute, type AppServices } from "./state"
 import { ToastHost } from "./toast"
 
 type Tab = "entry" | "dashboard" | "settings"
 
-const SETTINGS_SUBS: ReadonlyArray<SettingsSub> = ["paydays", "recurring", "categories", "goals", "debts", "export", "devices", "news"]
+const SETTINGS_SUBS: ReadonlyArray<SettingsSub> = ["paydays", "recurring", "categories", "goals", "debts", "export", "devices", "news", "password", "users", "timezone"]
 
 /** Подстраница настроек — отдельный вложенный экран, без таббара (как «Операция»). */
 const settingsSubOf = (route: string): SettingsSub | null => {
@@ -49,18 +49,25 @@ const tabOf = (route: string): Tab | null => {
   return null
 }
 
-const Main = ({ services, onSignedOut }: { services: AppServices; onSignedOut: () => void }) => {
+const Main = ({ services, isOwner, onSignedOut, onSessionChanged, welcome }: {
+  services: AppServices; isOwner: boolean; onSignedOut: () => void; onSessionChanged: (state: DeviceState) => void; welcome: boolean
+}) => {
   const route = useRoute()
   // истёкшая сессия — на экран входа; очередь изменений остаётся на устройстве.
   // Слушаем без состояния: статус меняется на каждую правку и каждый обмен с сервером, а экрану до него дела нет.
   // Реагируем на переход в «нужен вход», а не на само состояние: сразу после входа статус ещё помнит
   // отказ сервера до входа, и приложение выкидывало бы обратно на экран входа.
-  const signedOut = useRef(onSignedOut)
-  signedOut.current = onSignedOut
+  const changed = useRef(onSessionChanged)
+  changed.current = onSessionChanged
   useEffect(() => {
     let last = services.sync.status().state
+    if (last === "unauthorized" || last === "user-deleted") {
+      void services.device.checkSession().then((state) => changed.current(state))
+    }
     return services.sync.subscribe((status) => {
-      if (status.state === "unauthorized" && last !== "unauthorized") signedOut.current()
+      if ((status.state === "unauthorized" || status.state === "user-deleted") && last !== status.state) {
+        void services.device.checkSession().then((state) => changed.current(state))
+      }
       last = status.state
     })
   }, [services.sync])
@@ -72,6 +79,7 @@ const Main = ({ services, onSignedOut }: { services: AppServices; onSignedOut: (
   const settingsSub = settingsSubOf(route)
   return (
     <div class={`app${tab ? " has-tabbar" : ""}`}>
+      {welcome && <p class="welcome-note">Если добавите приложение на домашний экран из Safari, в нём нужно будет войти ещё раз с тем же логином и паролем.</p>}
       {op ? (
         <OperationScreen ledger={ledger} id={decodeURIComponent(op[1]!)} />
       ) : goal ? (
@@ -79,7 +87,7 @@ const Main = ({ services, onSignedOut }: { services: AppServices; onSignedOut: (
       ) : tab === "dashboard" ? (
         <DashboardScreen ledger={ledger} />
       ) : tab === "settings" || settingsSub ? (
-        <SettingsScreen ledger={ledger} sync={sync} auth={auth} onSignedOut={onSignedOut} sub={settingsSub} />
+        <SettingsScreen ledger={ledger} sync={sync} auth={auth} device={services.device} isOwner={isOwner} onSignedOut={onSignedOut} sub={settingsSub} />
       ) : (
         <EntryScreen ledger={ledger} sync={sync} />
       )}
@@ -90,27 +98,53 @@ const Main = ({ services, onSignedOut }: { services: AppServices; onSignedOut: (
 }
 
 export const App = () => {
+  const route = useRoute()
   const [services, setServices] = useState<AppServices | null>(null)
-  const [session, setSession] = useState<SessionState | "checking">("checking")
+  const [session, setSession] = useState<DeviceState | null>(null)
+  const [welcome, setWelcome] = useState(false)
 
   useEffect(() => {
-    void getServices().then(setServices)
-    void auth.checkSession().then(setSession)
+    void getServices().then(async (next) => {
+      setServices(next)
+      setSession(await next.device.checkSession())
+    })
   }, [])
 
-  if (session === "signed-out") {
+  if (!services || !session) return <div class="app" aria-busy="true" />
+  const match = /^\/(invite|reset)\/([^/]+)$/.exec(route)
+  const link = match ? { kind: match[1] as "invite" | "reset", token: decodeURIComponent(match[2]!) } : null
+  if (session.state === "user-deleted" && !link) {
+    return <div class="app"><div class="login">
+      <h1>Пользователь удалён</h1>
+      <p class="hint">Владелец удалил пользователя. Его данные и неотправленные изменения очищены с этого устройства.</p>
+      <button type="button" class="accent-button large" onClick={() => setSession({ state: "signed-out" })}>Войти другим пользователем</button>
+    </div></div>
+  }
+  if (session.state === "signed-out" || link) {
     return (
       <div class="app">
         <LoginScreen
+          key={link ? `${link.kind}/${link.token}` : "login"}
           auth={auth}
-          onSignedIn={() => {
-            setSession("signed-in")
-            services?.sync.wake()
+          device={services.device}
+          link={link}
+          onSignedIn={(registered) => {
+            refreshOtherTabs()
+            setSession(services.device.state())
+            const safari = /Safari/.test(navigator.userAgent) && !/Chrome|CriOS|Android/.test(navigator.userAgent)
+            setWelcome(registered && safari && !window.matchMedia("(display-mode: standalone)").matches)
+            dashboardMemory.offset = 0
+            dashboardMemory.selected = null
+            navigate("/")
           }}
         />
       </div>
     )
   }
-  if (!services) return <div class="app" />
-  return <Main services={services} onSignedOut={() => setSession("signed-out")} />
+  return <Main services={services} isOwner={session.state === "signed-in" && session.user.isOwner} welcome={welcome} onSessionChanged={setSession} onSignedOut={() => {
+    refreshOtherTabs()
+    setWelcome(false)
+    setSession({ state: "signed-out" })
+    navigate("/")
+  }} />
 }
