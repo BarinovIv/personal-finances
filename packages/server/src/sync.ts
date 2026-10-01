@@ -10,11 +10,12 @@ import { generateRecurringFor } from "./recurring"
 /** Сколько записей отдавать за один обмен. */
 export const PAGE_SIZE = 1000
 
-const sync = withSession((session) =>
-  Effect.gen(function* () {
+const sync = Effect.gen(function* () {
+  const body = yield* HttpServerRequest.schemaBodyJson(SyncRequest).pipe(Effect.option)
+  if (Option.isNone(body)) return apiError(400, { error: "bad-request" })
+  // Сеть читается до блокировки базы; сессия проверяется уже после получения всего тела.
+  return yield* withSession((session) => Effect.gen(function* () {
     const db = yield* Db
-    const body = yield* HttpServerRequest.schemaBodyJson(SyncRequest).pipe(Effect.option)
-    if (Option.isNone(body)) return apiError(400, { error: "bad-request" })
     if (body.value.userId !== undefined && body.value.userId !== session.userId) return apiError(401, { error: "unauthorized" })
     const { cursor, changes } = body.value
 
@@ -43,7 +44,7 @@ const sync = withSession((session) =>
       })
     )
     return HttpServerResponse.unsafeJson(Schema.encodeSync(SyncResponse)(response as SyncResponse))
-  })
-)
+  }))
+})
 
 export const syncRoutes = HttpRouter.empty.pipe(HttpRouter.post("/api/sync", sync))

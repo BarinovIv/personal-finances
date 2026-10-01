@@ -90,7 +90,7 @@ const Export = ({ ledger }: { ledger: Ledger }) => (
   </section>
 )
 
-const Devices = ({ auth, device, onSignedOut }: { auth: AuthApi; device: UserDevice; onSignedOut: () => void }) => {
+const Devices = ({ auth, device, timeZone, onSignedOut }: { auth: AuthApi; device: UserDevice; timeZone: string; onSignedOut: () => void }) => {
   const [sessions, setSessions] = useState<ReadonlyArray<SessionInfo> | null | undefined>(undefined)
   const [note, setNote] = useState<string | null>(null)
   const load = () => auth.sessions().then(setSessions)
@@ -112,7 +112,7 @@ const Devices = ({ auth, device, onSignedOut }: { auth: AuthApi; device: UserDev
                 </span>
                 <div class="row-main">
                   <span class="row-title">{s.device}</span>
-                  <span class="row-sub">{s.current ? "это устройство" : lastActive(s.lastActiveAt)}</span>
+                  <span class="row-sub">{s.current ? "это устройство" : lastActive(s.lastActiveAt, Date.now(), timeZone)}</span>
                 </div>
                   <button
                     type="button"
@@ -250,7 +250,7 @@ export const SettingsScreen = (props: {
     case "timezone":
       return <SettingsSubPage sub="timezone"><TimeZoneSection ledger={props.ledger} /></SettingsSubPage>
     case "users":
-      return <SettingsSubPage sub="users">{props.isOwner ? <UsersSection auth={props.auth} /> : <p class="section-footer">Этот раздел доступен только владельцу.</p>}</SettingsSubPage>
+      return <SettingsSubPage sub="users">{props.isOwner ? <UsersSection auth={props.auth} timeZone={props.ledger.settings().timeZone} /> : <p class="section-footer">Этот раздел доступен только владельцу.</p>}</SettingsSubPage>
     case "paydays":
       return (
         <SettingsSubPage sub="paydays">
@@ -290,7 +290,7 @@ export const SettingsScreen = (props: {
     case "devices":
       return (
         <SettingsSubPage sub="devices">
-          <Devices auth={props.auth} device={props.device} onSignedOut={props.onSignedOut} />
+          <Devices auth={props.auth} device={props.device} timeZone={props.ledger.settings().timeZone} onSignedOut={props.onSignedOut} />
         </SettingsSubPage>
       )
     case "news":

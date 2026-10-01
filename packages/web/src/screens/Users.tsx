@@ -2,9 +2,9 @@ import type { AuthApi, InvitationInfo, UserInfo } from "@fin/sync"
 import { useEffect, useState } from "preact/hooks"
 import { authErrorText } from "./Login"
 
-const dateTime = (ms: number) => new Intl.DateTimeFormat("ru", { dateStyle: "medium", timeStyle: "short" }).format(ms)
+const dateTime = (ms: number, timeZone: string) => new Intl.DateTimeFormat("ru", { dateStyle: "medium", timeStyle: "short", timeZone }).format(ms)
 
-export const UsersSection = ({ auth }: { auth: AuthApi }) => {
+export const UsersSection = ({ auth, timeZone }: { auth: AuthApi; timeZone: string }) => {
   const [users, setUsers] = useState<ReadonlyArray<UserInfo>>([])
   const [invitations, setInvitations] = useState<ReadonlyArray<InvitationInfo>>([])
   const [loading, setLoading] = useState(true)
@@ -82,8 +82,8 @@ export const UsersSection = ({ auth }: { auth: AuthApi }) => {
         {users.map((user) => <div class="row user-row" key={user.id}>
           <div class="row-main">
             <span class="row-title">{user.login}{user.isOwner ? " · владелец" : ""}</span>
-            <span class="row-sub">Зарегистрирован: {dateTime(user.createdAt)}</span>
-            <span class="row-sub">Последняя активность: {user.lastActiveAt === null ? "ещё не входил" : dateTime(user.lastActiveAt)}</span>
+            <span class="row-sub">Зарегистрирован: {dateTime(user.createdAt, timeZone)}</span>
+            <span class="row-sub">Последняя активность: {user.lastActiveAt === null ? "ещё не входил" : dateTime(user.lastActiveAt, timeZone)}</span>
             <div class="user-actions">
               <button type="button" class="small-button" disabled={busy} onClick={() => void reset(user)}>Сбросить пароль</button>
               {!user.isOwner && <button type="button" class="small-button danger-button" disabled={busy} onClick={() => void remove(user)}>Удалить</button>}
@@ -99,7 +99,7 @@ export const UsersSection = ({ auth }: { auth: AuthApi }) => {
         {invitations.map((invitation) => <div class="row" key={invitation.id}>
           <div class="row-main">
             <span class="row-title">{invitation.expiresAt <= Date.now() ? "Истекло" : "Ожидает пользователя"}</span>
-            <span class="row-sub">До {dateTime(invitation.expiresAt)}</span>
+            <span class="row-sub">До {dateTime(invitation.expiresAt, timeZone)}</span>
           </div>
           <button type="button" class="small-button danger-button" disabled={busy} onClick={async () => {
             setBusy(true)
