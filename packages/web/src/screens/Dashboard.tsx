@@ -1,8 +1,9 @@
 import { formatMoney } from "@fin/domain"
 import { dayMonth, type Dashboard, type DashboardCategory, type Ledger, type PeriodMode } from "@fin/ledger"
 import { memo } from "preact/compat"
-import { useEffect, useMemo, useRef, useState } from "preact/hooks"
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks"
 import { allowanceItems } from "../allowance"
+import { useAnimatedNumber } from "../animatedNumber"
 import { CategoryBadge } from "../components/CategoryBadge"
 import { LargeTitle } from "../components/LargeTitle"
 import { signedAmount } from "../components/OperationRow"
@@ -15,30 +16,6 @@ const paletteVar = (color: string) => `var(--palette-${color})`
 
 const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches
 const easeOutCubic = (t: number) => 1 - (1 - t) ** 3
-
-/** Число «перетекает» к новому значению; без анимации, если пользователь просит её уменьшить. */
-const useAnimatedNumber = (target: number, duration = 450) => {
-  const [value, setValue] = useState(target)
-  const valueRef = useRef(target)
-  useEffect(() => {
-    valueRef.current = value
-  })
-  useEffect(() => {
-    if (reducedMotion()) return setValue(target)
-    const from = valueRef.current
-    if (from === target) return
-    let raf = 0
-    const start = performance.now()
-    const tick = (now: number) => {
-      const t = Math.min(1, (now - start) / duration)
-      setValue(Math.round(from + (target - from) * easeOutCubic(t)))
-      if (t < 1) raf = requestAnimationFrame(tick)
-    }
-    raf = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(raf)
-  }, [target])
-  return value
-}
 
 /** 0→1 при каждой смене `key` — сектора кольца «дорастают» на новый период. */
 const useGrowProgress = (key: string, duration = 450) => {
@@ -108,17 +85,17 @@ const Summary = memo(({ d }: { d: Dashboard }) => {
   // можно тратить в день — только в текущем периоде
   const allowance = d.allowance ? allowanceItems(d.allowance) : []
   const compareText =
-    change === null
-      ? `${comparison.label}: расходов не было`
-      : change === 0
-        ? `столько же, сколько ${comparison.label}`
+    change === 0
+      ? `столько же, сколько ${comparison.label}`
+      : change === null
+        ? ""
         : `${change < 0 ? "↓" : "↑"} на ${Math.abs(change)}% ${change < 0 ? "меньше" : "больше"}, чем ${comparison.label}`
   return (
     <section class="summary">
       <div class="summary-main">
         <span class="summary-caption">Расходы</span>
         <span class="summary-total num">{formatMoney(expenses)}</span>
-        <span class={`compare-badge ${change !== null && change > 0 ? "up" : "down"}`}>{compareText}</span>
+        {change !== null && <span class={`compare-badge ${change > 0 ? "up" : "down"}`}>{compareText}</span>}
       </div>
       <div class="summary-grid">
         <div class="summary-cell">
@@ -127,7 +104,7 @@ const Summary = memo(({ d }: { d: Dashboard }) => {
         </div>
         <div class="summary-cell">
           <span class="summary-caption">Остаток</span>
-          <span class="summary-value num">{formatMoney(d.balance, { sign: d.balance >= 0 ? "+" : "−" })}</span>
+          <span class="summary-value num">{formatMoney(d.balance)}</span>
         </div>
         {allowance.map((item) => (
           <div class={`summary-cell${allowance.length === 1 ? " wide" : ""}`} key={item.label}>
@@ -140,7 +117,7 @@ const Summary = memo(({ d }: { d: Dashboard }) => {
   )
 })
 
-const Donut = ({ d, selected }: { d: Dashboard; selected: string | null }) => {
+const Donut = ({ d, selected, onSelect }: { d: Dashboard; selected: string | null; onSelect: (id: string) => void }) => {
   const positive = d.categories.filter((c) => c.amount > 0)
   const total = positive.reduce((s, c) => s + c.amount, 0)
   const progress = useGrowProgress(`${d.period.start}:${d.period.end}`)
@@ -148,25 +125,44 @@ const Donut = ({ d, selected }: { d: Dashboard; selected: string | null }) => {
   const sel = d.categories.find((c) => c.id === selected)
   const value = useAnimatedNumber(sel ? sel.amount : d.expenses)
   let acc = 0
-  const stops: Array<string> = []
-  for (const c of positive) {
+  const sectors = positive.map((c) => {
     const from = (acc / total) * 100
+    const length = (c.amount / total) * 100
     acc += c.amount
-    const to = (acc / total) * 100
-    const grown = from + (to - from) * progress
-    const color = sectorColor(c.color, emphasis(c.id))
-    stops.push(`${color} ${from.toFixed(2)}% ${grown.toFixed(2)}%`)
-    if (grown < to) stops.push(`${MUTED_SECTOR} ${grown.toFixed(2)}% ${to.toFixed(2)}%`)
-  }
+    return { category: c, from, length }
+  })
   if (d.categories.length === 0) return null
   return (
     <section class="donut-card" aria-label="Доли категорий">
-      <div
-        class="donut"
-        style={{ background: total > 0 ? `conic-gradient(${stops.join(", ")})` : MUTED_SECTOR }}
-        role="img"
-        aria-label={positive.map((c) => `${c.name} ${Math.round((c.share ?? 0) * 100)}%`).join(", ")}
-      >
+      <div class="donut">
+        <svg class="donut-graphic" viewBox="0 0 100 100" role="group" aria-label="Расходы по категориям">
+          <circle class="donut-track" cx="50" cy="50" r="44" pathLength="100" />
+          {sectors.map(({ category: c, from, length }) => (
+            <circle
+              class="donut-sector"
+              key={c.id}
+              cx="50"
+              cy="50"
+              r="44"
+              pathLength="100"
+              role="button"
+              tabIndex={0}
+              aria-label={`${c.name}: ${formatMoney(c.amount)}, ${Math.round((c.share ?? 0) * 100)}%`}
+              aria-pressed={selected === c.id}
+              style={{
+                stroke: sectorColor(c.color, emphasis(c.id)),
+                strokeDasharray: `${(length * progress).toFixed(2)} ${(100 - length * progress).toFixed(2)}`,
+                strokeDashoffset: `${(-from).toFixed(2)}`
+              }}
+              onClick={() => onSelect(c.id)}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" && event.key !== " ") return
+                event.preventDefault()
+                onSelect(c.id)
+              }}
+            />
+          ))}
+        </svg>
         <div class="donut-hole">
           <span class="donut-caption">{sel ? sel.name : "Всего"}</span>
           <span class="donut-value num">{formatMoney(value)}</span>
@@ -177,37 +173,94 @@ const Donut = ({ d, selected }: { d: Dashboard; selected: string | null }) => {
 }
 
 /**
- * Полоска категории. Без лимита — доля от самой большой категории периода; с лимитом — заполнение лимита
- * и подпись «из 15 000 ₽», сверх лимита — красным.
+ * Полоска категории. Без лимита — доля от самой большой категории периода; с лимитом — процент,
+ * сумма лимита и его заполнение. Сверх лимита — красным.
  */
-const CategoryBar = ({ c, max }: { c: DashboardCategory; max: number }) => {
+const CategoryBar = ({ c, max, amount }: { c: DashboardCategory; max: number; amount: number }) => {
   if (c.limit === null) {
     return (
       <span class="bar-track">
         <span
           class="bar-fill"
-          style={{ width: `${Math.max(0, (c.amount / max) * 100).toFixed(1)}%`, background: paletteVar(c.color) }}
+          style={{ width: `${Math.max(0, (amount / max) * 100).toFixed(1)}%`, background: paletteVar(c.color) }}
         />
       </span>
     )
   }
   const over = c.amount > c.limit
-  const filled = Math.min(1, Math.max(0, c.amount / c.limit))
+  const filled = Math.min(1, Math.max(0, amount / c.limit))
+  const percent = Math.max(0, Math.round((amount / c.limit) * 100))
   return (
-    <span class={`cat-limit-line${over ? " over" : ""}`}>
+    <span class={`cat-limit-block${over ? " over" : ""}`}>
+      <span class="cat-limit-copy num">
+        <span class="cat-limit-percent" style={{ color: over ? "var(--danger)" : paletteVar(c.color) }}>
+          {percent}%
+        </span>
+        <span class="cat-limit-total">из {formatMoney(c.limit)}</span>
+      </span>
       <span class="bar-track">
         <span
           class="bar-fill"
           style={{ width: `${(filled * 100).toFixed(1)}%`, background: over ? "var(--danger)" : paletteVar(c.color) }}
         />
       </span>
-      <span class="cat-limit num">из {formatMoney(c.limit)}</span>
     </span>
+  )
+}
+
+const CategoryBlock = (props: {
+  c: DashboardCategory
+  max: number
+  initialAmount: number
+  open: boolean
+  dimmed: boolean
+  onSelect: (id: string) => void
+  today: string
+}) => {
+  const { c } = props
+  const amount = useAnimatedNumber(c.amount, 450, props.initialAmount)
+  const tone = c.amount < 0 ? "negative" : c.limit !== null && c.amount > c.limit ? "over" : ""
+  return (
+    <div
+      class={`cat-block${props.open ? " selected" : props.dimmed ? " dimmed" : ""}`}
+      style={`--cat-highlight: ${paletteVar(c.color)}`}
+    >
+      <button type="button" class="cat-row" aria-expanded={props.open} onClick={() => props.onSelect(c.id)}>
+        <span class="cat-row-line">
+          <CategoryBadge category={c} />
+          <span class="cat-name">{c.name}</span>
+          <span class="cat-share num">{c.share === null ? "" : `${Math.round(c.share * 100)}%`}</span>
+          <span class={`cat-amount num ${tone}`}>{formatMoney(amount)}</span>
+          <span class="chevron" style={{ transform: props.open ? "rotate(90deg)" : "none" }}>
+            <ForwardIcon size={16} />
+          </span>
+        </span>
+        <CategoryBar c={c} max={props.max} amount={amount} />
+      </button>
+      {props.open && (
+        <div class="cat-ops">
+          {c.operations.map((op) => (
+            <a href={`#/op/${op.id}`} class="cat-op" key={op.id}>
+              <span class="cat-op-desc">{op.kind === "refund" ? `возврат: ${op.description}` : op.description}</span>
+              <span class="row-sub">{dayMonth(op.date, props.today)}</span>
+              <span class={`cat-op-amount num ${op.kind}`}>
+                {op.kind === "refund" ? signedAmount(op) : formatMoney(op.amount)}
+              </span>
+            </a>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 
 const CategoryList = (props: { d: Dashboard; selected: string | null; onSelect: (id: string) => void; today: string }) => {
   const max = Math.max(1, ...props.d.categories.map((c) => c.amount))
+  const previousAmounts = useRef<ReadonlyMap<string, number> | null>(null)
+  const initialAmounts = previousAmounts.current
+  useLayoutEffect(() => {
+    previousAmounts.current = new Map(props.d.categories.map((c) => [c.id, c.amount]))
+  })
   if (props.d.categories.length === 0) return <div class="empty">За этот период расходов нет</div>
   return (
     <section class="section">
@@ -215,35 +268,17 @@ const CategoryList = (props: { d: Dashboard; selected: string | null; onSelect: 
       <div class="card-list">
         {props.d.categories.map((c: DashboardCategory) => {
           const open = props.selected === c.id
-          const tone = c.amount < 0 ? "negative" : c.limit !== null && c.amount > c.limit ? "over" : ""
           return (
-            <div class="cat-block" key={c.id}>
-              <button type="button" class="cat-row" aria-expanded={open} onClick={() => props.onSelect(c.id)}>
-                <span class="cat-row-line">
-                  <CategoryBadge category={c} />
-                  <span class="cat-name">{c.name}</span>
-                  <span class="cat-share num">{c.share === null ? "" : `${Math.round(c.share * 100)}%`}</span>
-                  <span class={`cat-amount num ${tone}`}>{formatMoney(c.amount)}</span>
-                  <span class="chevron" style={{ transform: open ? "rotate(90deg)" : "none" }}>
-                    <ForwardIcon size={16} />
-                  </span>
-                </span>
-                <CategoryBar c={c} max={max} />
-              </button>
-              {open && (
-                <div class="cat-ops">
-                  {c.operations.map((op) => (
-                    <a href={`#/op/${op.id}`} class="cat-op" key={op.id}>
-                      <span class="cat-op-desc">{op.kind === "refund" ? `возврат: ${op.description}` : op.description}</span>
-                      <span class="row-sub">{dayMonth(op.date, props.today)}</span>
-                      <span class={`cat-op-amount num ${op.kind}`}>
-                        {op.kind === "refund" ? signedAmount(op) : formatMoney(op.amount)}
-                      </span>
-                    </a>
-                  ))}
-                </div>
-              )}
-            </div>
+            <CategoryBlock
+              key={c.id}
+              c={c}
+              max={max}
+              initialAmount={initialAmounts === null ? c.amount : (initialAmounts.get(c.id) ?? 0)}
+              open={open}
+              dimmed={props.selected !== null && !open}
+              onSelect={props.onSelect}
+              today={props.today}
+            />
           )
         })}
       </div>
@@ -273,29 +308,38 @@ const UpcomingBlock = memo(({ d, today }: { d: Dashboard; today: string }) => {
   )
 })
 
-const Trend = memo(({ d }: { d: Dashboard }) => {
-  const max = Math.max(1, ...d.trend.map((t) => t.amount))
-  return (
-    <section class="trend-card">
-      <h2>{d.mode === "month" ? "Расходы по месяцам" : "Расходы по зарплатным периодам"}</h2>
-      <div class="trend">
-        {d.trend.map((t) => (
-          <div class="trend-col" key={t.start}>
-            <span class="trend-value num">{shortMoney(t.amount)}</span>
-            <span
-              class="trend-bar"
-              style={{
-                height: `${Math.max(4, Math.round((Math.max(0, t.amount) / max) * 96))}px`,
-                background: t.current ? "var(--accent)" : MUTED_SECTOR
-              }}
-            />
-            <span class="trend-label">{t.label}</span>
-          </div>
-        ))}
-      </div>
-    </section>
-  )
-})
+const Trend = memo(
+  ({ d, onSelect, anchorRef }: { d: Dashboard; onSelect: (offset: number) => void; anchorRef: { current: HTMLElement | null } }) => {
+    const max = Math.max(1, ...d.trend.map((t) => t.amount))
+    return (
+      <section class="trend-card" ref={anchorRef}>
+        <h2>{d.mode === "month" ? "Расходы по месяцам" : "Расходы по зарплатным периодам"}</h2>
+        <div class="trend">
+          {d.trend.map((t) => (
+            <button
+              type="button"
+              class="trend-col"
+              key={t.start}
+              aria-label={`${t.label}: ${formatMoney(t.amount)}`}
+              aria-pressed={t.current}
+              onClick={() => onSelect(t.offset)}
+            >
+              <span class="trend-value num">{shortMoney(t.amount)}</span>
+              <span
+                class="trend-bar"
+                style={{
+                  height: `${Math.max(4, Math.round((Math.max(0, t.amount) / max) * 96))}px`,
+                  background: t.current ? "var(--accent)" : MUTED_SECTOR
+                }}
+              />
+              <span class="trend-label">{t.label}</span>
+            </button>
+          ))}
+        </div>
+      </section>
+    )
+  }
+)
 
 export const DashboardScreen = ({ ledger }: { ledger: Ledger }) => {
   const version = useLedgerVersion(ledger)
@@ -304,6 +348,8 @@ export const DashboardScreen = ({ ledger }: { ledger: Ledger }) => {
   // назад, пользователь должен увидеть тот же период и ту же раскрытую категорию, а не сброс на дефолт.
   const [offset, setOffsetState] = useState(dashboardMemory.offset)
   const [selected, setSelectedState] = useState<string | null>(dashboardMemory.selected)
+  const trendRef = useRef<HTMLElement>(null)
+  const trendTopBeforeNavigation = useRef<number | null>(null)
   const setOffset = (next: number) => {
     dashboardMemory.offset = next
     setOffsetState(next)
@@ -331,6 +377,20 @@ export const DashboardScreen = ({ ledger }: { ledger: Ledger }) => {
     setOffset(0)
     setSelected(null)
   }
+  const goToTrend = (nextOffset: number) => {
+    if (nextOffset === offset) return
+    trendTopBeforeNavigation.current = trendRef.current?.getBoundingClientRect().top ?? null
+    setOffset(nextOffset)
+    setSelected(null)
+  }
+  useLayoutEffect(() => {
+    const before = trendTopBeforeNavigation.current
+    const trend = trendRef.current
+    trendTopBeforeNavigation.current = null
+    if (before === null || !trend) return
+    const scroller = trend.closest<HTMLElement>(".screen")
+    if (scroller) scroller.scrollTop += trend.getBoundingClientRect().top - before
+  }, [offset])
 
   const touchRef = useRef<{ x: number; y: number } | null>(null)
   const onTouchStart = (e: TouchEvent) => {
@@ -376,11 +436,11 @@ export const DashboardScreen = ({ ledger }: { ledger: Ledger }) => {
         </button>
       )}
       <Summary d={d} />
-      <Donut d={d} selected={selected} />
+      <Donut d={d} selected={selected} onSelect={select} />
       <UpcomingBlock d={d} today={today} />
       <CategoryList d={d} selected={selected} onSelect={select} today={today} />
       <GoalsBlock ledger={ledger} />
-      <Trend d={d} />
+      <Trend d={d} onSelect={goToTrend} anchorRef={trendRef} />
     </LargeTitle>
   )
 }

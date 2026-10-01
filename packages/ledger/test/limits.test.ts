@@ -16,14 +16,13 @@ describe("лимиты категорий", () => {
     ])
   })
 
-  it("категория с лимитом без трат в периоде видна на дашборде — «0 из 15 000», после категорий с тратами", async () => {
+  it("категория с лимитом без трат в периоде не видна на дашборде", async () => {
     const { ledger } = await makeLedger()
     const cafe = categoryId(ledger, "Кафе")
     await ledger.setCategoryLimit(cafe, 1500000)
     await add(ledger, "такси 500")
     expect(ledger.dashboard({ mode: "month", offset: 0 }).categories).toMatchObject([
-      { name: "Транспорт", amount: 50000, limit: null },
-      { name: "Кафе", amount: 0, share: null, limit: 1500000, operations: [] }
+      { name: "Транспорт", amount: 50000, limit: null }
     ])
   })
 

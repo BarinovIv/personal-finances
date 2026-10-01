@@ -68,6 +68,19 @@ describe("дашборд: зарплатный период", () => {
     ])
   })
 
+  it("после выбора прошлого столбца график сохраняет более новые периоды", async () => {
+    const { ledger } = await on("2026-09-28")
+    const d = ledger.dashboard({ mode: "pay", offset: -2 })
+    expect(d.trend.map((t) => [t.label, t.offset, t.current])).toEqual([
+      ["5 июл", -5, false],
+      ["20 июл", -4, false],
+      ["5 авг", -3, false],
+      ["20 авг", -2, true],
+      ["5 сен", -1, false],
+      ["20 сен", 0, false]
+    ])
+  })
+
   it("дни зарплаты проверяются", async () => {
     const { ledger } = await on("2026-09-28")
     expect(await ledger.setPaydays([])).toEqual({ ok: false })

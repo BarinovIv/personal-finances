@@ -1903,7 +1903,37 @@ select.text-input {
   width: 188px;
   height: 188px;
   flex-shrink: 0;
-  border-radius: 50%;
+}
+
+.donut-graphic {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  transform: rotate(-90deg);
+}
+
+.donut-track,
+.donut-sector {
+  fill: none;
+  stroke-width: 12;
+}
+
+.donut-track {
+  stroke: var(--chart-muted);
+}
+
+.donut-sector {
+  cursor: pointer;
+  pointer-events: stroke;
+  transition:
+    stroke 0.2s ease,
+    stroke-width 0.2s ease;
+}
+
+.donut-sector:focus-visible {
+  outline: none;
+  stroke-width: 15;
 }
 
 .donut-hole {
@@ -1917,6 +1947,7 @@ select.text-input {
   border-radius: 50%;
   background: var(--surface);
   text-align: center;
+  pointer-events: none;
 }
 
 .donut-caption {
@@ -1934,6 +1965,19 @@ select.text-input {
   --separator-inset: 58px;
   display: flex;
   flex-direction: column;
+  transition:
+    opacity 0.3s ease,
+    background-color 0.3s ease,
+    box-shadow 0.3s ease;
+}
+
+.cat-block.selected {
+  background: color-mix(in srgb, var(--cat-highlight) 9%, transparent);
+  box-shadow: inset 3px 0 var(--cat-highlight);
+}
+
+.cat-block.dimmed {
+  opacity: 0.45;
 }
 
 .cat-row {
@@ -2016,43 +2060,54 @@ select.text-input {
     background-color 0.2s ease;
 }
 
-/* Полоска лимита: заполнение и «из 15 000 ₽» под суммой */
-.cat-limit-line {
+/* Использование лимита — над полоской, чтобы сама полоска сохраняла полную ширину. */
+.cat-limit-block {
   display: flex;
-  align-items: center;
-  gap: 10px;
+  flex-direction: column;
+  gap: 7px;
   align-self: stretch;
   margin-left: 42px;
 }
 
-.cat-limit-line .bar-track {
-  flex: 1;
+.cat-limit-block .bar-track {
   margin-left: 0;
 }
 
-.cat-limit {
+.cat-limit-copy {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 5px;
   font-size: 13px;
-  color: var(--muted);
+  line-height: 1;
   white-space: nowrap;
 }
 
-.cat-limit-line.over .cat-limit {
+.cat-limit-percent {
+  font-weight: 700;
+}
+
+.cat-limit-total {
+  color: var(--muted);
+}
+
+.cat-limit-block.over .cat-limit-total {
   color: var(--danger);
 }
 
 .cat-ops {
   display: flex;
   flex-direction: column;
-  padding: 0 16px 10px 58px;
+  padding: 0 16px 8px 58px;
   animation: fin-rise 0.4s var(--spring-smooth);
 }
 
 .cat-op {
   display: flex;
   align-items: center;
-  gap: 8px;
-  min-height: 44px;
-  font-size: 15px;
+  gap: 6px;
+  min-height: 40px;
+  font-size: 14px;
   text-decoration: none;
   color: var(--ink);
 }
@@ -2069,11 +2124,11 @@ select.text-input {
 }
 
 .cat-op .row-sub {
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .cat-op-amount {
-  min-width: 76px;
+  min-width: 72px;
   text-align: right;
 }
 
@@ -2110,7 +2165,19 @@ select.text-input {
   align-items: center;
   justify-content: flex-end;
   gap: 4px;
+  min-width: 0;
   height: 140px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.trend-col:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .trend-value {
@@ -2125,6 +2192,10 @@ select.text-input {
   transition:
     height 0.7s var(--spring-smooth),
     background-color 0.2s ease;
+}
+
+.trend-col:active .trend-bar {
+  opacity: 0.65;
 }
 
 .trend-label {
