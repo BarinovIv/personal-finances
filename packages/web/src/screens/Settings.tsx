@@ -1,5 +1,5 @@
 import type { Ledger } from "@fin/ledger"
-import type { AuthApi, SessionInfo, Sync } from "@fin/sync"
+import type { AuthApi, SessionInfo, Sync, UserDevice } from "@fin/sync"
 import type { ComponentChildren } from "preact"
 import { useEffect, useState } from "preact/hooks"
 import { Header } from "../components/Header"
@@ -7,15 +7,19 @@ import { LargeTitle } from "../components/LargeTitle"
 import { SwipeBack } from "../components/SwipeBack"
 import { SyncBadge } from "../components/SyncBadge"
 import { lastActive } from "../format"
-import { CalendarIcon, DebtIcon, DownloadIcon, ForwardIcon, GridIcon, LogoutIcon, LoopIcon, NewsIcon, PhoneIcon, StarIcon } from "../icons"
+import { CalendarIcon, DebtIcon, DownloadIcon, ForwardIcon, GridIcon, LogoutIcon, LoopIcon, NewsIcon, PhoneIcon, SlidersIcon, StarIcon } from "../icons"
 import { goBack, useLedgerVersion } from "../state"
 import { CategoriesSection } from "./Categories"
 import { DebtsSection } from "./Debts"
 import { GoalsSection } from "./Goals"
 import { RecurringSection } from "./Recurring"
 import { WhatsNewSection } from "./WhatsNew"
+import { PasswordSection } from "./Password"
+import { TimeZoneSection } from "./TimeZone"
+import { UsersSection } from "./Users"
+import { authErrorText } from "./Login"
 
-export type SettingsSub = "paydays" | "recurring" | "categories" | "goals" | "debts" | "export" | "devices" | "news"
+export type SettingsSub = "paydays" | "recurring" | "categories" | "goals" | "debts" | "export" | "devices" | "news" | "password" | "users" | "timezone"
 
 const Paydays = ({ ledger }: { ledger: Ledger }) => {
   const current = ledger.settings().paydays.join(", ")
@@ -86,8 +90,9 @@ const Export = ({ ledger }: { ledger: Ledger }) => (
   </section>
 )
 
-const Devices = ({ auth, onSignedOut }: { auth: AuthApi; onSignedOut: () => void }) => {
+const Devices = ({ auth, device, onSignedOut }: { auth: AuthApi; device: UserDevice; onSignedOut: () => void }) => {
   const [sessions, setSessions] = useState<ReadonlyArray<SessionInfo> | null | undefined>(undefined)
+  const [note, setNote] = useState<string | null>(null)
   const load = () => auth.sessions().then(setSessions)
   useEffect(() => {
     void load()
@@ -109,30 +114,39 @@ const Devices = ({ auth, onSignedOut }: { auth: AuthApi; onSignedOut: () => void
                   <span class="row-title">{s.device}</span>
                   <span class="row-sub">{s.current ? "это устройство" : lastActive(s.lastActiveAt)}</span>
                 </div>
-                {!s.current && (
                   <button
                     type="button"
                     class="small-button danger-button"
                     onClick={async () => {
-                      await auth.revokeSession(s.id)
-                      await load()
+                      if (await auth.revokeSession(s.id)) {
+                        if (s.current) {
+                          await device.checkSession()
+                          onSignedOut()
+                        } else await load()
+                      } else setNote("Не получилось отозвать вход. Проверьте связь с сервером.")
                     }}
                   >
                     Отозвать
                   </button>
-                )}
               </div>
             ))}
           </div>
         )}
       </section>
+      {note && <p class="section-footer" role="status">{note}</p>}
       <div class="card-list">
         <button
           type="button"
           class="row row-button action-row destructive"
           onClick={async () => {
-            await auth.logout()
-            onSignedOut()
+            let result = await device.logout()
+            if (!result.ok && result.reason === "pending-changes" && window.confirm(`Не отправлено изменений: ${result.pending}. Выйти и удалить данные с этого устройства?`)) {
+              result = await device.logout({ confirmDiscard: true })
+            }
+            if (result.ok) onSignedOut()
+            else if (result.reason !== "pending-changes") setNote(result.reason === "offline"
+              ? "Для выхода нужна связь с сервером. Данные и неотправленные изменения сохранены."
+              : authErrorText(result.reason))
           }}
         >
           <LogoutIcon />
@@ -151,7 +165,10 @@ const SUB_TITLE: Record<SettingsSub, string> = {
   debts: "Долги",
   export: "Выгрузка",
   devices: "Устройства",
-  news: "Что нового"
+  news: "Что нового",
+  password: "Пароль",
+  users: "Пользователи",
+  timezone: "Часовой пояс"
 }
 
 /** Подстраница настроек — отдельный экран с «Назад», как в iOS. */
@@ -172,18 +189,21 @@ const SUB_ICON: Record<SettingsSub, { icon: ComponentChildren; color: string }> 
   debts: { icon: <DebtIcon />, color: "purple" },
   export: { icon: <DownloadIcon />, color: "blue" },
   devices: { icon: <PhoneIcon />, color: "gray" },
-  news: { icon: <NewsIcon />, color: "pink" }
+  news: { icon: <NewsIcon />, color: "pink" },
+  password: { icon: <SlidersIcon />, color: "indigo" },
+  users: { icon: <PhoneIcon />, color: "purple" },
+  timezone: { icon: <CalendarIcon />, color: "blue" }
 }
 
 /** Группы меню, как в «Настройках» iOS: учёт отдельно, данные и устройства отдельно. */
 const MENU_GROUPS: ReadonlyArray<ReadonlyArray<SettingsSub>> = [
   ["paydays", "recurring", "categories"],
   ["goals", "debts"],
-  ["export", "devices"],
+  ["timezone", "export", "devices", "password"],
   ["news"]
 ]
 
-const SettingsMenu = ({ sync }: { sync: Sync }) => (
+const SettingsMenu = ({ sync, isOwner }: { sync: Sync; isOwner: boolean }) => (
   <LargeTitle title="Настройки" actions={<SyncBadge sync={sync} />}>
     <nav class="settings-menu" aria-label="Разделы настроек">
       {MENU_GROUPS.map((group) => (
@@ -203,6 +223,13 @@ const SettingsMenu = ({ sync }: { sync: Sync }) => (
           ))}
         </div>
       ))}
+      {isOwner && <div class="card-list">
+        <a class="row row-button settings-row" href="#/settings/users">
+          <span class="settings-icon" style={{ background: "var(--palette-purple)" }}><PhoneIcon /></span>
+          <span class="row-main"><span class="row-title">Пользователи</span></span>
+          <span class="row-chevron"><ForwardIcon size={16} /></span>
+        </a>
+      </div>}
     </nav>
   </LargeTitle>
 )
@@ -211,11 +238,19 @@ export const SettingsScreen = (props: {
   ledger: Ledger
   sync: Sync
   auth: AuthApi
+  device: UserDevice
+  isOwner: boolean
   onSignedOut: () => void
   sub: SettingsSub | null
 }) => {
   useLedgerVersion(props.ledger)
   switch (props.sub) {
+    case "password":
+      return <SettingsSubPage sub="password"><PasswordSection auth={props.auth} /></SettingsSubPage>
+    case "timezone":
+      return <SettingsSubPage sub="timezone"><TimeZoneSection ledger={props.ledger} /></SettingsSubPage>
+    case "users":
+      return <SettingsSubPage sub="users">{props.isOwner ? <UsersSection auth={props.auth} /> : <p class="section-footer">Этот раздел доступен только владельцу.</p>}</SettingsSubPage>
     case "paydays":
       return (
         <SettingsSubPage sub="paydays">
@@ -255,7 +290,7 @@ export const SettingsScreen = (props: {
     case "devices":
       return (
         <SettingsSubPage sub="devices">
-          <Devices auth={props.auth} onSignedOut={props.onSignedOut} />
+          <Devices auth={props.auth} device={props.device} onSignedOut={props.onSignedOut} />
         </SettingsSubPage>
       )
     case "news":
@@ -265,6 +300,6 @@ export const SettingsScreen = (props: {
         </SettingsSubPage>
       )
     default:
-      return <SettingsMenu sync={props.sync} />
+      return <SettingsMenu sync={props.sync} isOwner={props.isOwner} />
   }
 }

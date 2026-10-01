@@ -6,12 +6,13 @@ import type { AppConfig } from "./config"
 import type { Db } from "./db"
 import { dailyGeneration, generateRecurring } from "./recurring"
 import { serveStatic } from "./static"
-import { weeklySummary } from "./summary"
 import { syncRoutes } from "./sync"
+import { userRoutes } from "./users"
 
 export const router = HttpRouter.empty.pipe(
   HttpRouter.get("/api/health", HttpServerResponse.json({ ok: true })),
   HttpRouter.concat(authRoutes),
+  HttpRouter.concat(userRoutes),
   HttpRouter.concat(syncRoutes),
   HttpRouter.all("/api/*", HttpServerResponse.json({ error: "not-found" }, { status: 404 })),
   HttpRouter.get("*", serveStatic)
@@ -20,8 +21,7 @@ export const router = HttpRouter.empty.pipe(
 export type AppServices = AppConfig | Db
 
 /**
- * Что сервер делает при старте, до приёма запросов: пароль, пропущенные регулярные операции, ежедневная генерация,
- * еженедельные бэкап и сводка.
+ * При старте: вход владельца, пропущенные регулярные операции, периодическая генерация и еженедельный бэкап.
  */
 export const startup = Effect.gen(function* () {
   yield* ensurePassword
@@ -29,7 +29,6 @@ export const startup = Effect.gen(function* () {
   if (created > 0) yield* Effect.logInfo(`Регулярные операции при старте: создано ${created}`)
   yield* Effect.forkScoped(dailyGeneration)
   yield* Effect.forkScoped(weeklyBackup)
-  yield* Effect.forkScoped(weeklySummary)
 })
 
 /**

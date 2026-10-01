@@ -1,5 +1,6 @@
 import {
   isMovement,
+  isTimeZone,
   liveOperations,
   monthlyLimit,
   paydaysOf,
@@ -22,12 +23,18 @@ export class LedgerContext {
   constructor(
     readonly records: Records,
     private readonly now: () => number,
-    private readonly timeZone: string,
+    private readonly defaultTimeZone: string,
     readonly newId: () => string
   ) {}
 
   today(): IsoDate {
-    return todayIn(this.now(), this.timeZone)
+    return todayIn(this.now(), this.timeZone())
+  }
+
+  timeZone(): string {
+    const record = this.records.get("settings", SETTINGS_ID)
+    const zone = record && !record.deleted ? record.data.timeZone : undefined
+    return zone && isTimeZone(zone) ? zone : this.defaultTimeZone
   }
 
   /** Кэш на версию записей. */

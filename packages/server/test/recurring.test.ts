@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Effect, TestClock } from "effect"
 import { restartableServer, testServer, type TestClient } from "./support"
+import { jumpClock } from "./clock"
 
 const MSK = (iso: string) => Date.parse(`${iso}+03:00`)
 
@@ -39,6 +40,48 @@ const generated = (client: TestClient) =>
   })
 
 describe("регулярные операции: сервер", () => {
+  it.scoped("в Новосибирске новый день наступает раньше Москвы и регулярная операция появляется в течение минуты", () =>
+    Effect.gen(function* () {
+      yield* TestClock.setTime(MSK("2026-09-28T19:59:30"))
+      const server = yield* testServer()
+      yield* login(server)
+      yield* server.post("/api/sync", { cursor: 0, changes: [
+        { collection: "settings", id: "settings", updatedAt: 1, deleted: false, data: { paydays: [5, 20], timeZone: "Asia/Novosibirsk" } },
+        template("gym", { dayOfMonth: 29, startDate: "2026-09-28" })
+      ] })
+      expect(yield* generated(server)).toEqual({})
+      yield* TestClock.adjust("1 minute")
+      yield* Effect.yieldNow()
+      expect(yield* generated(server)).toEqual({ "rec:gym:2026-09": "2026-09-29" })
+    }))
+
+  it.scoped("пользователи по разные стороны стыка суток получают свои операции без дублей и с одинаковыми id шаблонов", () =>
+    Effect.gen(function* () {
+      yield* TestClock.setTime(MSK("2026-09-28T19:59:30"))
+      const moscow = yield* testServer()
+      yield* login(moscow)
+      const invitation = yield* moscow.post("/api/invitations")
+      expect(invitation.status).toBe(200)
+      const novosibirsk = moscow.device()
+      const registered = yield* novosibirsk.post("/api/register", { token: invitation.json.token, login: "siberia", password: "другой-пароль" })
+      expect(registered.status).toBe(200)
+      yield* moscow.post("/api/sync", { cursor: 0, changes: [template("gym", { dayOfMonth: 29, startDate: "2026-09-28" })] })
+      yield* novosibirsk.post("/api/sync", { cursor: 0, changes: [
+        { collection: "settings", id: "settings", updatedAt: 1, deleted: false, data: { paydays: [5, 20], timeZone: "Asia/Novosibirsk" } },
+        template("gym", { dayOfMonth: 29, startDate: "2026-09-28" })
+      ] })
+      yield* TestClock.adjust("1 minute")
+      expect(yield* generated(moscow)).toEqual({})
+      expect(yield* generated(novosibirsk)).toEqual({ "rec:gym:2026-09": "2026-09-29" })
+      yield* TestClock.adjust("1 minute")
+      expect(yield* generated(novosibirsk)).toEqual({ "rec:gym:2026-09": "2026-09-29" })
+      const otherPhone = novosibirsk.device()
+      yield* otherPhone.post("/api/login", { login: "siberia", password: "другой-пароль" })
+      const synced = yield* otherPhone.post("/api/sync", { cursor: 0, changes: [] })
+      expect(synced.json.changes.find((r: any) => r.collection === "settings").data.timeZone).toBe("Asia/Novosibirsk")
+      expect((yield* moscow.post("/api/sync", { cursor: 0, changes: [] })).json.changes.some((r: any) => r.collection === "settings")).toBe(false)
+    }))
+
   it.scoped("новый шаблон сразу догоняет наступившие даты", () =>
     Effect.gen(function* () {
       yield* TestClock.setTime(MSK("2026-09-28T12:00:00"))
@@ -120,20 +163,21 @@ describe("регулярные операции: сервер", () => {
       expect(res.json.changes.filter((r: any) => r.collection === "operations")).toHaveLength(2)
     }))
 
-  it.scoped("раз в сутки по Москве появляется операция наступившего дня", () =>
+  it.scoped("при наступлении московского дня появляется одна операция, после скачка времени генерация догоняет дату", () =>
     Effect.gen(function* () {
       yield* TestClock.setTime(MSK("2026-09-28T12:00:00"))
+      const clock = yield* jumpClock
       const server = yield* testServer()
       yield* login(server)
       yield* server.post("/api/sync", { cursor: 0, changes: [template("gym", { dayOfMonth: 29, startDate: "2026-09-28" })] })
       expect(yield* generated(server)).toEqual({})
-      yield* TestClock.adjust("11 hours")
+      yield* clock.advance("11 hours")
       expect(yield* generated(server)).toEqual({})
-      yield* TestClock.adjust("1 hour")
-      yield* TestClock.adjust("2 seconds")
+      yield* clock.advance("1 hour")
+      yield* clock.advance("2 seconds")
       yield* Effect.yieldNow()
       expect(yield* generated(server)).toEqual({ "rec:gym:2026-09": "2026-09-29" })
-      yield* TestClock.adjust("1 day")
+      yield* clock.advance("1 day")
       yield* Effect.yieldNow()
       expect(Object.keys(yield* generated(server))).toHaveLength(1)
     }))

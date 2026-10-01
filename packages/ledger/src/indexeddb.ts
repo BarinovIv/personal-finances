@@ -1,4 +1,4 @@
-import type { LedgerStore, StoredState } from "./store"
+import { LocalUserChanged, type LedgerStore, type StoredState } from "./store"
 
 const RECORDS = "records"
 const OUTBOX = "outbox"
@@ -53,14 +53,28 @@ export const indexedDbStore = (name = "finances"): LedgerStore => {
 
     save: async (change) => {
       const tx = (await database()).transaction([RECORDS, OUTBOX, META], "readwrite")
+      const completed = done(tx)
       const records = tx.objectStore(RECORDS)
       const outbox = tx.objectStore(OUTBOX)
       const meta = tx.objectStore(META)
+      if (change.expectedOwner !== undefined) {
+        const owner = (await request(meta.get("userId"))) ?? null
+        if (owner !== change.expectedOwner) {
+          tx.abort()
+          await completed.catch(() => {})
+          throw new LocalUserChanged()
+        }
+      }
+      if (change.clear) {
+        records.clear()
+        outbox.clear()
+        meta.clear()
+      }
       for (const { key, value } of change.records ?? []) records.put(value, key)
       for (const key of change.outboxAdd ?? []) outbox.put(true, key)
       for (const key of change.outboxRemove ?? []) outbox.delete(key)
       for (const [key, value] of Object.entries(change.meta ?? {})) meta.put(value, key)
-      await done(tx)
+      await completed
     }
   }
 }

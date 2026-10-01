@@ -2,6 +2,7 @@ import { describe, expect, it } from "@effect/vitest"
 import { Effect, Option, TestClock } from "effect"
 import { appConfigLayer, Db, dbMemory, makeWebHandler, SESSION_COOKIE } from "@fin/server"
 import { MAC_CHROME_UA, testServer } from "./support"
+import { jumpClock } from "./clock"
 
 const PASSWORD = "верный-пароль"
 const start = TestClock.setTime(Date.parse("2026-09-28T09:00:00Z"))
@@ -84,11 +85,12 @@ describe("вход по паролю и сессии", () => {
   it.scoped("сессия живёт полгода", () =>
     Effect.gen(function* () {
       yield* start
+      const clock = yield* jumpClock
       const server = yield* testServer()
       yield* server.post("/api/login", { password: PASSWORD })
-      yield* TestClock.adjust("182 days")
+      yield* clock.advance("182 days")
       expect((yield* server.get("/api/me")).status).toBe(200)
-      yield* TestClock.adjust("1 day")
+      yield* clock.advance("1 day")
       expect((yield* server.get("/api/me")).status).toBe(401)
     }))
 

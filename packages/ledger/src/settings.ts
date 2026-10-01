@@ -1,19 +1,28 @@
-import { SETTINGS_ID, type PeriodMode, type SettingsData } from "@fin/domain"
+import { isTimeZone, SETTINGS_ID, type PeriodMode, type SettingsData } from "@fin/domain"
 import type { LedgerContext } from "./context"
 
 export interface Settings {
   /** Дни зарплаты, по возрастанию. */
   readonly paydays: ReadonlyArray<number>
+  readonly timeZone: string
 }
 
-export const readSettings = (ctx: LedgerContext): Settings => ({ paydays: ctx.paydays() })
+export const readSettings = (ctx: LedgerContext): Settings => ({ paydays: ctx.paydays(), timeZone: ctx.timeZone() })
 
 /** Дни зарплаты — числа месяца 1–31. Настройка синхронизируется. */
 export const setPaydays = async (ctx: LedgerContext, days: ReadonlyArray<number>): Promise<{ ok: boolean }> => {
   const paydays = [...new Set(days)].sort((a, b) => a - b)
   if (paydays.length === 0 || paydays.some((d) => !Number.isInteger(d) || d < 1 || d > 31)) return { ok: false }
-  const data: SettingsData = { paydays }
+  const current = ctx.records.get("settings", SETTINGS_ID)
+  const data: SettingsData = { ...(current && !current.deleted ? current.data : {}), paydays }
   await ctx.records.write([{ collection: "settings", id: SETTINGS_ID, data }])
+  return { ok: true }
+}
+
+/** IANA-часовой пояс пользователя, общий для всех его устройств. */
+export const setTimeZone = async (ctx: LedgerContext, timeZone: string): Promise<{ ok: boolean }> => {
+  if (!isTimeZone(timeZone)) return { ok: false }
+  await ctx.records.write([{ collection: "settings", id: SETTINGS_ID, data: { ...readSettings(ctx), timeZone } }])
   return { ok: true }
 }
 

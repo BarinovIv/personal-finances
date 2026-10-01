@@ -1,11 +1,11 @@
 import type { SyncRecord } from "@fin/domain"
-import type { LedgerSyncPort } from "@fin/ledger"
+import { LocalUserChanged, type LedgerDevicePort, type LedgerSyncPort } from "@fin/ledger"
 import { SyncRecord as SyncRecordSchema, SyncResponse } from "@fin/protocol"
 import { Duration, Effect, Either, Fiber, Queue, Schema } from "effect"
-import { request, type RequestError, type Transport } from "./http"
+import { request, Unauthorized, ServerError, type RequestError, type Transport } from "./http"
 
 /** «синхронизировано» / «ждёт сети» / нужен вход. */
-export type SyncState = "synced" | "pending" | "unauthorized"
+export type SyncState = "synced" | "pending" | "unauthorized" | "user-deleted"
 
 export interface SyncStatus {
   readonly state: SyncState
@@ -15,10 +15,14 @@ export interface SyncStatus {
   readonly lastSyncedAt: number | null
 }
 
-export type SyncOutcome = "ok" | "offline" | "unauthorized" | "error"
+export type SyncOutcome = "ok" | "offline" | "unauthorized" | "user-deleted" | "error"
 
 export interface SyncOptions {
-  readonly ledger: { readonly sync: LedgerSyncPort; subscribe(listener: () => void): () => void }
+  readonly ledger: {
+    readonly sync: LedgerSyncPort
+    readonly device?: Pick<LedgerDevicePort, "owner">
+    subscribe(listener: () => void): () => void
+  }
   readonly transport: Transport
   /** Пауза перед повтором при ошибке сети растёт от `base` до `max`, мс. */
   readonly retry?: { readonly base: number; readonly max: number }
@@ -57,8 +61,8 @@ export const createSync = (options: SyncOptions): Sync => {
   const status = (): SyncStatus => {
     const pending = port.pending().length
     const state: SyncState =
-      lastOutcome === "unauthorized"
-        ? "unauthorized"
+      lastOutcome === "unauthorized" || lastOutcome === "user-deleted"
+        ? lastOutcome
         : pending > 0 || lastOutcome === "offline" || lastOutcome === "error"
           ? "pending"
           : "synced"
@@ -85,10 +89,16 @@ export const createSync = (options: SyncOptions): Sync => {
       }
       const response = yield* request(transport(), "POST", "/api/sync", SyncResponse, {
         cursor: port.cursor(),
+        ...(options.ledger.device?.owner() ? { userId: options.ledger.device.owner() } : {}),
         changes
       })
-      yield* Effect.promise(() => port.receive(response.changes, response.cursor))
-      yield* Effect.promise(() => port.acknowledge(sent))
+      const save = (action: () => Promise<void>) => Effect.tryPromise({
+        try: action,
+        catch: (cause): RequestError => cause instanceof LocalUserChanged
+          ? new Unauthorized() : new ServerError({ status: 0, body: undefined })
+      })
+      yield* save(() => port.receive(response.changes, response.cursor))
+      yield* save(() => port.acknowledge(sent))
       if (!response.hasMore) return
     }
   })
@@ -107,11 +117,14 @@ export const createSync = (options: SyncOptions): Sync => {
         lastSyncedAt = Date.now()
       } else {
         const error = result.left
-        lastOutcome = error._tag === "Unauthorized" ? "unauthorized" : error._tag === "Offline" ? "offline" : "error"
+        lastOutcome = error._tag === "UserDeleted" ? "user-deleted"
+          : error._tag === "Unauthorized" ? "unauthorized" : error._tag === "Offline" ? "offline" : "error"
       }
       notify()
       return lastOutcome
-    })
+    }).pipe(Effect.ensuring(Effect.sync(() => {
+      syncing = false
+    })))
   )
 
   const wakeups = Effect.runSync(Queue.sliding<void>(1))
@@ -129,7 +142,7 @@ export const createSync = (options: SyncOptions): Sync => {
       if (outcome === "ok") {
         failures = 0
         yield* waitFor(interval)
-      } else if (outcome === "unauthorized") {
+      } else if (outcome === "unauthorized" || outcome === "user-deleted") {
         failures = 0
         yield* waitFor(null)
       } else {
@@ -149,6 +162,7 @@ export const createSync = (options: SyncOptions): Sync => {
     syncNow: () => Effect.runPromise(once),
     start: () => {
       if (fiber) return
+      lastOutcome = null
       fiber = Effect.runFork(loop)
       unsubscribe = options.ledger.subscribe(() => {
         notify()
@@ -160,6 +174,8 @@ export const createSync = (options: SyncOptions): Sync => {
       unsubscribe = null
       if (fiber) await Effect.runPromise(Fiber.interrupt(fiber))
       fiber = null
+      // Ручной syncNow тоже может быть в полёте: смена cookie и очистка ждут его завершения.
+      await Effect.runPromise(lock.withPermits(1)(Effect.void))
     },
     wake,
     status,

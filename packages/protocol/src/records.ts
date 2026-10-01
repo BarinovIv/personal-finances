@@ -7,6 +7,7 @@ import type {
   SyncRecord as SyncRecordType
 } from "@fin/domain"
 import { Schema } from "effect"
+import { isTimeZone } from "@fin/domain"
 
 const IsoDate = Schema.String.pipe(Schema.pattern(/^\d{4}-\d{2}-\d{2}$/))
 const Kopecks = Schema.Int.pipe(Schema.positive())
@@ -78,7 +79,8 @@ export const RecurringData = Schema.Struct({
 })
 
 export const SettingsData = Schema.Struct({
-  paydays: Schema.Array(Schema.Int.pipe(Schema.between(1, 31)))
+  paydays: Schema.Array(Schema.Int.pipe(Schema.between(1, 31))),
+  timeZone: Schema.optional(Schema.String.pipe(Schema.filter(isTimeZone)))
 })
 
 /** Цель накопления: целевая сумма — положительная в копейках, срок необязателен. */

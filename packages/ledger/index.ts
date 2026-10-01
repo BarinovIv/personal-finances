@@ -26,7 +26,7 @@ export type {
   GoalResult,
   GoalView
 } from "./src/goals"
-export { openLedger, type Ledger, type LedgerOptions, type LedgerSyncPort } from "./src/ledger"
+export { openLedger, type Ledger, type LedgerOptions, type LedgerSyncPort, type LedgerDevicePort } from "./src/ledger"
 export type {
   OperationPatch,
   RefundProblem,
@@ -51,6 +51,6 @@ export type {
 } from "./src/recurring"
 export type { Settings } from "./src/settings"
 export type { SearchSummary } from "./src/search"
-export { memoryStore, type LedgerStore, type StoreChange, type StoredState } from "./src/store"
+export { memoryStore, LocalUserChanged, type LedgerStore, type StoreChange, type StoredState } from "./src/store"
 export type { Undo } from "./src/undo"
 export type { CategoryView, DayGroup, OperationView } from "./src/views"

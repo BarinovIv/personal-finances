@@ -6,6 +6,8 @@ import { SyncRecord } from "./records"
  * сервер отвечает изменениями новее курсора. При конфликте побеждает бóльший `updatedAt` (ADR-0001).
  */
 export const SyncRequest = Schema.Struct({
+  /** Владелец локальной очереди: защищает от смены общей cookie в другой вкладке. */
+  userId: Schema.optional(Schema.String),
   cursor: Schema.Int.pipe(Schema.nonNegative()),
   changes: Schema.Array(SyncRecord)
 })

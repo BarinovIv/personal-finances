@@ -104,6 +104,8 @@ export interface RecurringData {
 export interface SettingsData {
   /** Дни зарплаты — числа месяца. */
   readonly paydays: ReadonlyArray<number>
+  /** IANA-пояс; у старых настроек без поля используется московское время. */
+  readonly timeZone?: string
 }
 
 /** Цель накопления. Накоплено на ней — сумма операций «Отложено» минус «Снято» с её `goalId`. */

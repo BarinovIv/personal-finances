@@ -6,6 +6,7 @@ import { join } from "node:path"
 import { DatabaseSync } from "node:sqlite"
 import { gunzipSync } from "node:zlib"
 import { testServer } from "./support"
+import { jumpClock } from "./clock"
 
 const MSK = (iso: string) => Date.parse(`${iso}+03:00`)
 
@@ -65,15 +66,16 @@ describe("еженедельный бэкап", () => {
     Effect.gen(function* () {
       const sent = telegramStub()
       yield* TestClock.setTime(MSK("2026-09-27T12:00:00"))
+      const clock = yield* jumpClock
       const server = yield* testServer({ telegram })
       yield* server.post("/api/login", { password: "верный-пароль" })
       yield* server.post("/api/sync", { cursor: 0, changes: [op] })
 
-      yield* TestClock.adjust("14 hours")
+      yield* clock.advance("14 hours")
       yield* settle
       expect(sent).toHaveLength(0)
 
-      yield* TestClock.adjust("1 hour")
+      yield* clock.advance("1 hour")
       yield* settle
       expect(sent).toHaveLength(1)
       expect(sent[0]!.url).toBe("https://api.telegram.org/bot123:секрет/sendDocument")
@@ -85,11 +87,11 @@ describe("еженедельный бэкап", () => {
       expect(JSON.parse(row.data).description).toBe("кофе")
       db.close()
 
-      yield* TestClock.adjust("6 days")
+      yield* clock.advance("6 days")
       yield* settle
       expect(sent).toHaveLength(1)
 
-      yield* TestClock.adjust("1 day")
+      yield* clock.advance("1 day")
       yield* settle
       expect(sent).toHaveLength(2)
     }))
@@ -98,14 +100,15 @@ describe("еженедельный бэкап", () => {
     Effect.gen(function* () {
       const sent = telegramStub([500])
       yield* TestClock.setTime(MSK("2026-09-27T12:00:00"))
+      const clock = yield* jumpClock
       const server = yield* testServer({ telegram })
       yield* server.get("/api/health")
 
-      yield* TestClock.adjust("15 hours")
+      yield* clock.advance("15 hours")
       yield* settle
       expect(sent).toHaveLength(1)
 
-      yield* TestClock.adjust("7 days")
+      yield* clock.advance("7 days")
       yield* settle
       expect(sent).toHaveLength(2)
       expect((yield* server.get("/api/health")).status).toBe(200)
@@ -115,8 +118,9 @@ describe("еженедельный бэкап", () => {
     Effect.gen(function* () {
       const sent = telegramStub()
       yield* TestClock.setTime(MSK("2026-09-28T12:00:00"))
+      const clock = yield* jumpClock
       yield* testServer()
-      yield* TestClock.adjust("2 days")
+      yield* clock.advance("2 days")
       yield* settle
       expect(sent).toHaveLength(0)
     }))

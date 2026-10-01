@@ -5,16 +5,17 @@ import { Effect, Option, Schema } from "effect"
 import { apiError, withSession } from "./auth"
 import { Db } from "./db"
 import { getRecord, putIfNewer, recordsSince } from "./records"
-import { generateRecurring } from "./recurring"
+import { generateRecurringFor } from "./recurring"
 
 /** Сколько записей отдавать за один обмен. */
 export const PAGE_SIZE = 1000
 
-const sync = withSession(() =>
+const sync = withSession((session) =>
   Effect.gen(function* () {
     const db = yield* Db
     const body = yield* HttpServerRequest.schemaBodyJson(SyncRequest).pipe(Effect.option)
     if (Option.isNone(body)) return apiError(400, { error: "bad-request" })
+    if (body.value.userId !== undefined && body.value.userId !== session.userId) return apiError(401, { error: "unauthorized" })
     const { cursor, changes } = body.value
 
     const response = yield* db.transaction(
@@ -23,16 +24,16 @@ const sync = withSession(() =>
         const winners: Array<SyncRecord> = []
         let templatesChanged = false
         for (const change of changes) {
-          const accepted = yield* putIfNewer(change)
-          if (accepted && change.collection === "recurring") templatesChanged = true
+          const accepted = yield* putIfNewer(change, session.userId)
+          if (accepted && (change.collection === "recurring" || change.collection === "settings")) templatesChanged = true
           if (!accepted) {
-            const stored = yield* getRecord(change.collection, change.id)
+            const stored = yield* getRecord(change.collection, change.id, session.userId)
             if (stored) winners.push(stored)
           }
         }
         // новая или возобновлённая регулярная операция сразу догоняет наступившие даты
-        if (templatesChanged) yield* generateRecurring
-        const page = yield* recordsSince(cursor, PAGE_SIZE)
+        if (templatesChanged) yield* generateRecurringFor(session.userId)
+        const page = yield* recordsSince(cursor, PAGE_SIZE, session.userId)
         const seen = new Set(page.records.map((r) => `${r.collection}:${r.id}`))
         return {
           cursor: page.cursor,

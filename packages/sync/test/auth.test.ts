@@ -12,7 +12,9 @@ describe("вход с клиента", () => {
     const auth = createAuthApi(device.transport)
     expect(await auth.checkSession()).toBe("signed-out")
     expect(await auth.login("не тот")).toEqual({ ok: false, reason: "wrong-password", attemptsLeft: 4 })
-    expect(await auth.login(PASSWORD)).toEqual({ ok: true })
+    const login = await auth.login("owner", PASSWORD)
+    expect(login).toMatchObject({ ok: true, user: { login: "owner", isOwner: true } })
+    if (login.ok) expect(await auth.me()).toEqual({ state: "signed-in", user: login.user })
     expect(await auth.checkSession()).toBe("signed-in")
   })
 
