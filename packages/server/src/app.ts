@@ -1,7 +1,7 @@
 import { HttpApp, HttpRouter, HttpServerResponse } from "@effect/platform"
 import { Effect } from "effect"
 import { authRoutes, ensurePassword } from "./auth"
-import { nightlyBackup } from "./backup"
+import { weeklyBackup } from "./backup"
 import type { AppConfig } from "./config"
 import type { Db } from "./db"
 import { dailyGeneration, generateRecurring } from "./recurring"
@@ -21,14 +21,14 @@ export type AppServices = AppConfig | Db
 
 /**
  * Что сервер делает при старте, до приёма запросов: пароль, пропущенные регулярные операции, ежедневная генерация,
- * ночной бэкап и еженедельная сводка.
+ * еженедельные бэкап и сводка.
  */
 export const startup = Effect.gen(function* () {
   yield* ensurePassword
   const created = yield* generateRecurring
   if (created > 0) yield* Effect.logInfo(`Регулярные операции при старте: создано ${created}`)
   yield* Effect.forkScoped(dailyGeneration)
-  yield* Effect.forkScoped(nightlyBackup)
+  yield* Effect.forkScoped(weeklyBackup)
   yield* Effect.forkScoped(weeklySummary)
 })
 

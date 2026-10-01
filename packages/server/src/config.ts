@@ -7,7 +7,7 @@ export interface AppConfigShape {
   readonly password: Option.Option<string>
   /** Добавлять ли к cookie сессии флаг Secure. */
   readonly secureCookies: boolean
-  /** Куда слать ночной бэкап базы и еженедельную сводку. Нет — оба выключены. */
+  /** Куда слать еженедельные бэкап базы и сводку. Нет — оба выключены. */
   readonly telegram: Option.Option<TelegramTarget>
 }
 
