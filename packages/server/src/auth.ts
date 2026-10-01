@@ -142,18 +142,18 @@ const revokeSession = withSession((session) => Effect.gen(function* () {
   return id === session.id ? yield* clearSessionCookie(response) : response
 }))
 
-const changePassword = withSession((session) => Effect.gen(function* () {
-  const db = yield* Db
+const changePassword = Effect.gen(function* () {
   const body = yield* HttpServerRequest.schemaBodyJson(PasswordChangeRequest).pipe(Effect.option)
   if (Option.isNone(body) || body.value.newPassword.length === 0) return apiError(400, { error: "bad-request" })
-  return yield* db.transaction(Effect.gen(function* () {
+  return yield* withSession((session) => Effect.gen(function* () {
+    const db = yield* Db
     const row = yield* db.get<UserRow>("SELECT * FROM users WHERE id = ? AND deleted_at IS NULL", session.userId)
     if (!row) return apiError(410, { error: "user-deleted" })
     if (!row.password_hash || !(yield* verifyPassword(body.value.currentPassword, row.password_hash))) return apiError(401, { error: "wrong-password" })
     yield* db.run("UPDATE users SET password_hash = ? WHERE id = ?", yield* hashPassword(body.value.newPassword), session.userId)
     return HttpServerResponse.unsafeJson({ ok: true })
   }))
-}))
+})
 
 const logout = Effect.gen(function* () {
   const db = yield* Db

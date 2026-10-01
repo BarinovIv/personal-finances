@@ -7,7 +7,7 @@ import { jumpClock } from "./clock"
 const start = TestClock.setTime(Date.parse("2026-09-28T09:00:00Z"))
 
 describe("пользователи", () => {
-  it.scoped("удаление дожидается начатой синхронизации и не позволяет воскресить учёт", () => Effect.gen(function* () {
+  it.scoped("медленная синхронизация не задерживает удаление и не позволяет воскресить учёт", () => Effect.gen(function* () {
     yield* start
     const context = yield* Layer.build(Layer.merge(appConfigLayer(defaultConfig), dbMemory))
     const handler = yield* makeWebHandler.pipe(Effect.provide(context))
@@ -35,9 +35,9 @@ describe("пользователи", () => {
     let deletionFinished = false
     const deleting = yield* Effect.forkScoped(owner.request("DELETE", `/api/users/${user.id}`).pipe(Effect.tap(() => Effect.sync(() => { deletionFinished = true }))))
     yield* Effect.promise(() => new Promise<void>((resolve) => setImmediate(resolve)))
-    expect(deletionFinished).toBe(false)
+    expect(deletionFinished).toBe(true)
     releaseBody()
-    expect((yield* Fiber.join(synchronizing)).status).toBe(200)
+    expect((yield* Fiber.join(synchronizing)).status).toBe(410)
     expect((yield* Fiber.join(deleting)).status).toBe(200)
     expect((yield* friend.get("/api/me")).status).toBe(410)
     expect((yield* friend.post("/api/sync", { cursor: 0, changes: [] })).status).toBe(410)

@@ -95,7 +95,7 @@ export const LoginScreen = ({ auth, device, link, onSignedIn }: {
           {!reset && <label class="row input-row">
             <span class="row-label">Логин</span>
             <input id="login" class="row-input" type="text" autocomplete="username" autocapitalize="off"
-              spellcheck={false} required minLength={3} maxLength={32} pattern="[A-Za-z0-9_-]{3,32}"
+              spellcheck={false} required minLength={3} maxLength={32} pattern={"[A-Za-z0-9_\\-]{3,32}"}
               placeholder="Латиница, цифры, _ и -" value={login} onInput={(e) => setLogin(e.currentTarget.value)} />
           </label>}
           <label class="row input-row">
