@@ -3,13 +3,15 @@ import {
   addCategory,
   categoryUsage,
   deleteCategory,
+  listCategories,
   renameCategory,
+  reorderCategories,
   setCategoryLimit,
   setCategoryStyle,
   type CategoryLimitProblem,
   type CategoryProblem,
   type CategoryStyle,
-  type DeleteCategoryProblem
+  type DeleteCategoryResult
 } from "./category-admin"
 import { LedgerContext } from "./context"
 import { exportCsv } from "./csv"
@@ -105,6 +107,7 @@ export interface LedgerSyncPort {
 export interface Ledger {
   /** Сегодняшняя дата по Москве. */
   today(): IsoDate
+  /** Категории вида в порядке, заданном пользователем. */
   categories(kind: CategoryKind): ReadonlyArray<CategoryView>
   addCategory(
     kind: CategoryKind,
@@ -118,11 +121,13 @@ export interface Ledger {
   setCategoryLimit(id: string, limit: number | null): Promise<{ ok: true } | { ok: false; problem: CategoryLimitProblem }>
   /** Сколько операций и регулярных операций в категории. */
   categoryUsage(id: string): number
-  /** Непустая категория удаляется только с переносом операций в `moveTo`. */
+  /** Непустая категория удаляется только с переносом операций в `moveTo`; результат можно отменить. */
   deleteCategory(
     id: string,
     options?: { moveTo?: string }
-  ): Promise<{ ok: true } | { ok: false; problem: DeleteCategoryProblem }>
+  ): Promise<DeleteCategoryResult>
+  /** Новый порядок категорий одного вида: все id в нужном порядке. */
+  reorderCategories(ids: ReadonlyArray<string>): Promise<void>
   /** Что получится из строки ввода — показывается под строкой. */
   preview(line: string, choice?: EntryChoice): EntryPreview
   /** Сохранить строку ввода как операцию. */
@@ -215,13 +220,14 @@ export const openLedger = async (options: LedgerOptions): Promise<Ledger> => {
 
   return {
     today: () => ctx.today(),
-    categories: (kind) => [...ctx.categories().values()].filter((c) => c.kind === kind),
+    categories: (kind) => listCategories(ctx, kind),
     addCategory: (kind, name, style) => addCategory(ctx, kind, name, style),
     renameCategory: (id, name) => renameCategory(ctx, id, name),
     setCategoryStyle: (id, style) => setCategoryStyle(ctx, id, style),
     setCategoryLimit: (id, limit) => setCategoryLimit(ctx, id, limit),
     categoryUsage: (id) => categoryUsage(ctx, id),
     deleteCategory: (id, options) => deleteCategory(ctx, id, options),
+    reorderCategories: (ids) => reorderCategories(ctx, ids),
     preview: (line, choice) => previewEntry(ctx, line, choice),
     submit: (line, choice) => submitEntry(ctx, line, choice),
     previewEntries: (line, choice) => previewEntries(ctx, line, choice),

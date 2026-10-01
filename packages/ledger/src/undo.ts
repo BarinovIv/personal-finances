@@ -3,7 +3,8 @@ import type { Records } from "./records"
 
 /**
  * «Отменить» только что сделанное изменение. Отмена — обычная правка: записям возвращаются прежние версии
- * с новым временем, поэтому она синхронизируется как любая другая (ADR-0001). Созданные записи удаляются.
+ * с новым временем, поэтому она синхронизируется как любая другая (ADR-0001). Созданные записи удаляются,
+ * а удалённое, у чего записи не было (стартовая категория), возвращается записью с теми же данными.
  * Если после изменения записи уже правили (здесь или на другом устройстве), отмена ничего не делает: `ok: false`.
  */
 export type Undo = () => Promise<{ readonly ok: boolean }>
@@ -26,7 +27,7 @@ export const writeUndoable = async (
         const previous = before[i]
         return previous
           ? { collection: c.collection, id: c.id, data: previous.data, deleted: previous.deleted }
-          : { collection: c.collection, id: c.id, data: c.data, deleted: true }
+          : { collection: c.collection, id: c.id, data: c.data, deleted: !c.deleted }
       })
     )
     return { ok: true }

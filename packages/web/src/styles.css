@@ -832,18 +832,33 @@ select.row-input {
   color: var(--danger);
 }
 
-/* Регулярная операция: строка и «ручка» справа, за неё строка перетаскивается */
-.card-list > .recurring-item {
+/* Переставляемая строка и «ручка» справа, за неё строка перетаскивается */
+.card-list > .reorderable-item {
   --separator-inset: 58px;
   display: flex;
   align-items: stretch;
   transition: transform 0.25s var(--spring-smooth);
 }
 
-.recurring-item > .row-button {
+/* то, что едет за пальцем при свайпе влево, — строка вместе с «ручкой»; под ней красная «Удалить» */
+.reorderable-slide {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: stretch;
+  background: var(--surface);
+  transition: transform 0.45s var(--spring-smooth);
+}
+
+.reorderable-slide > .row-button {
   flex: 1;
   min-width: 0;
   padding-right: 4px;
+}
+
+.reorderable-item.leaving {
+  overflow: hidden;
+  animation: fin-row-out 0.2s ease forwards;
 }
 
 .drag-handle {
@@ -870,7 +885,7 @@ select.row-input {
 }
 
 /* поднятая строка едет за пальцем без задержки, поверх соседей */
-.recurring-item.lifted {
+.reorderable-item.lifted {
   z-index: 3;
   transition: none;
   background: linear-gradient(var(--fill), var(--fill)), var(--surface);
@@ -878,12 +893,16 @@ select.row-input {
   box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
 }
 
-.recurring-item.lifted::before,
-.recurring-item.lifted + .recurring-item::before {
+.reorderable-item.lifted .reorderable-slide {
+  background: transparent;
+}
+
+.reorderable-item.lifted::before,
+.reorderable-item.lifted + .reorderable-item::before {
   opacity: 0;
 }
 
-.card-list.settling > .recurring-item {
+.card-list.settling > .reorderable-item {
   transition: none;
 }
 
@@ -1726,6 +1745,7 @@ select.text-input {
   }
 
   .op-row-wrap:hover .op-row-quick-delete,
+  .reorderable-item:hover .op-row-quick-delete,
   .op-row-quick-delete:focus-visible {
     opacity: 1;
   }
@@ -1735,8 +1755,14 @@ select.text-input {
   }
 
   .row-button:hover,
-  .op-row:hover {
+  .op-row:hover,
+  .reorderable-slide:hover {
     background-color: color-mix(in srgb, var(--surface), var(--ink) 3%);
+  }
+
+  /* подсветка — на всей переставляемой строке, вместе с корзиной и «ручкой» */
+  .reorderable-slide:hover > .op-row-quick-delete {
+    background: transparent;
   }
 }
 

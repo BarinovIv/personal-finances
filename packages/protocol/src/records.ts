@@ -62,7 +62,8 @@ export const CategoryData = Schema.Struct({
   name: Schema.String,
   color: Schema.String,
   icon: Schema.optional(Schema.String),
-  limit: Schema.optional(Kopecks)
+  limit: Schema.optional(Kopecks),
+  position: Schema.optional(Schema.Int)
 })
 
 export const RecurringData = Schema.Struct({

@@ -1,16 +1,13 @@
 import { formatMoney, isOutflow } from "@fin/domain"
 import type { CategoryView, OperationView } from "@fin/ledger"
-import type { JSX } from "preact"
 import { memo } from "preact/compat"
-import { useRef, useState } from "preact/hooks"
 import { OperationBadge, operationSubtitle, operationTitle } from "./OperationBadge"
-import { RefundIcon, RepeatIcon, TrashIcon } from "../icons"
+import { RefundIcon, RepeatIcon } from "../icons"
+import { QuickDeleteButton, SwipeDeleteButton, useSwipeDelete } from "./SwipeDelete"
 
 /** «−1 500 ₽» для денег, которые ушли (расход, «Отложено», «Одолжил», «Я вернул»), иначе «+1 500 ₽». */
 export const signedAmount = (op: Pick<OperationView, "kind" | "amount">) =>
   formatMoney(op.amount, { sign: isOutflow(op.kind) ? "−" : "+" })
-
-const REVEAL = 84
 
 interface OperationRowProps {
   op: OperationView
@@ -25,51 +22,15 @@ interface OperationRowProps {
  * анимацию исчезновения, не убирая строку из списка сразу (даёт время на «Отменить»).
  */
 const OperationRowView = ({ op, sub, onDelete, leaving }: OperationRowProps) => {
-  const [dragX, setDragX] = useState(0)
-  const [dragging, setDragging] = useState(false)
-  const open = useRef(false)
-  const startX = useRef<number | null>(null)
-  const baseX = useRef(0)
-
-  const onPointerDown = (e: JSX.TargetedPointerEvent<HTMLAnchorElement>) => {
-    if (!onDelete) return
-    e.currentTarget.setPointerCapture(e.pointerId)
-    startX.current = e.clientX
-    baseX.current = open.current ? -REVEAL : 0
-    setDragging(true)
-  }
-  const onPointerMove = (e: JSX.TargetedPointerEvent<HTMLAnchorElement>) => {
-    if (!onDelete || startX.current === null) return
-    const delta = e.clientX - startX.current
-    setDragX(Math.min(0, Math.max(-REVEAL - 24, baseX.current + delta)))
-  }
-  const endDrag = () => {
-    if (!onDelete || startX.current === null) return
-    startX.current = null
-    setDragging(false)
-    open.current = dragX < -REVEAL / 2
-    setDragX(open.current ? -REVEAL : 0)
-  }
+  const swipe = useSwipeDelete(Boolean(onDelete))
+  const label = `Удалить: ${operationTitle(op)}`
 
   return (
     <div class={`op-row-wrap${leaving ? " leaving" : ""}`}>
       {/* красная кнопка видна, только пока строка сдвинута — иначе просвечивает в скруглённом углу карточки */}
-      <div class={`op-row-swipe${dragX !== 0 ? " revealing" : ""}`}>
-        {onDelete && (
-          <button type="button" class="op-row-delete" aria-label={`Удалить: ${operationTitle(op)}`} onClick={() => onDelete(op)} tabIndex={-1}>
-            <TrashIcon size={20} />
-            <span>Удалить</span>
-          </button>
-        )}
-        <a
-          class="op-row"
-          href={`#/op/${op.id}`}
-          style={onDelete ? { transform: `translateX(${dragX}px)`, transition: dragging ? "none" : undefined } : undefined}
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={endDrag}
-          onPointerCancel={endDrag}
-        >
+      <div class={`op-row-swipe${swipe.revealing ? " revealing" : ""}`}>
+        {onDelete && <SwipeDeleteButton label={label} onDelete={() => onDelete(op)} />}
+        <a class="op-row" href={`#/op/${op.id}`} style={swipe.style} {...swipe.handlers}>
           <OperationBadge op={op} size={40} />
           <span class="op-main">
             <span class="op-desc">
@@ -82,11 +43,7 @@ const OperationRowView = ({ op, sub, onDelete, leaving }: OperationRowProps) => 
           <span class={`op-amount num ${op.kind}`}>{signedAmount(op)}</span>
         </a>
       </div>
-      {onDelete && (
-        <button type="button" class="op-row-quick-delete" aria-label={`Удалить: ${operationTitle(op)}`} onClick={() => onDelete(op)}>
-          <TrashIcon />
-        </button>
-      )}
+      {onDelete && <QuickDeleteButton label={label} onDelete={() => onDelete(op)} />}
     </div>
   )
 }
