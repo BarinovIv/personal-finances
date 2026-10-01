@@ -365,7 +365,7 @@ export const DashboardScreen = ({ ledger }: { ledger: Ledger }) => {
   const switchMode = (next: PeriodMode) => {
     setMode(next)
     setOffset(0)
-    // выбранная категория переживает смену вида периода — сбрасывается только смена самого периода
+    setSelected(null)
     void ledger.setDashboardMode(next)
   }
   const go = (delta: number) => {
