@@ -3,11 +3,14 @@ import { CATEGORY_PALETTE } from "./categories"
 import type { LedgerContext } from "./context"
 import { normalizeIcon } from "./icons"
 import { normalizePaletteColor } from "./palette"
+import { writeUndoable, type Undo } from "./undo"
 import type { CategoryView } from "./views"
 
 export type CategoryProblem = "empty-name" | "duplicate" | "not-found"
 export type DeleteCategoryProblem = "not-found" | "needs-target" | "bad-target" | "last-category"
 export type CategoryLimitProblem = "not-found" | "income" | "bad-limit"
+
+export type DeleteCategoryResult = { readonly ok: true; readonly undo: Undo } | { readonly ok: false; readonly problem: DeleteCategoryProblem }
 
 /** Цвет и иконка выбираются пользователем при создании и правке категории. */
 export interface CategoryStyle {
@@ -15,10 +18,40 @@ export interface CategoryStyle {
   readonly icon?: string
 }
 
-/** Запись категории из её вида; без лимита поля `limit` нет — как у записей до появления лимитов. */
-const categoryData = (category: CategoryView): CategoryData => {
+/**
+ * Запись категории из её вида; без лимита поля `limit` нет — как у записей до появления лимитов.
+ * Место в списке берётся из прежней записи: правка его не меняет.
+ */
+const categoryData = (ctx: LedgerContext, category: CategoryView): CategoryData => {
   const { kind, name, color, icon, limit } = category
-  return limit === null ? { kind, name, color, icon } : { kind, name, color, icon, limit }
+  const position = ctx.records.get("categories", category.id)?.data.position
+  return {
+    kind,
+    name,
+    color,
+    icon,
+    ...(limit === null ? {} : { limit }),
+    ...(position === undefined ? {} : { position })
+  }
+}
+
+/** Категории вида в порядке, заданном пользователем; без него — стартовые, затем свои в порядке создания. */
+export const listCategories = (ctx: LedgerContext, kind: CategoryKind): Array<CategoryView> => {
+  const position = (id: string) => ctx.records.get("categories", id)?.data.position ?? Infinity
+  return [...ctx.categories().values()].filter((c) => c.kind === kind).sort((a, b) => position(a.id) - position(b.id))
+}
+
+/**
+ * Новый порядок категорий — после перетаскивания. `ids` — категории одного вида в нужном порядке;
+ * записываются только те, чьё место изменилось. Незнакомые и удалённые id пропускаются.
+ */
+export const reorderCategories = async (ctx: LedgerContext, ids: ReadonlyArray<string>): Promise<void> => {
+  const changes = ids.flatMap((id, index) => {
+    const category = ctx.categories().get(id)
+    if (!category || ctx.records.get("categories", id)?.data.position === index + 1) return []
+    return [{ collection: "categories" as const, id, data: { ...categoryData(ctx, category), position: index + 1 } }]
+  })
+  if (changes.length > 0) await ctx.records.write(changes)
 }
 
 const nameTaken = (ctx: LedgerContext, kind: CategoryKind, name: string, except?: string) =>
@@ -55,7 +88,7 @@ export const renameCategory = async (
   const name = rawName.trim()
   if (!name) return { ok: false, problem: "empty-name" }
   if (nameTaken(ctx, category.kind, name, id)) return { ok: false, problem: "duplicate" }
-  await ctx.records.write([{ collection: "categories", id, data: categoryData({ ...category, name }) }])
+  await ctx.records.write([{ collection: "categories", id, data: categoryData(ctx, { ...category, name }) }])
   return { ok: true }
 }
 
@@ -67,7 +100,7 @@ export const setCategoryStyle = async (
 ): Promise<{ ok: true } | { ok: false; problem: "not-found" }> => {
   const category = ctx.categories().get(id)
   if (!category) return { ok: false, problem: "not-found" }
-  const data = categoryData({
+  const data = categoryData(ctx, {
     ...category,
     color: style.color ? normalizePaletteColor(style.color) : category.color,
     icon: style.icon ? normalizeIcon(style.icon, category.kind) : category.icon
@@ -86,7 +119,7 @@ export const setCategoryLimit = async (
   if (!category) return { ok: false, problem: "not-found" }
   if (category.kind !== "expense") return { ok: false, problem: "income" }
   if (limit !== null && (!Number.isInteger(limit) || limit <= 0)) return { ok: false, problem: "bad-limit" }
-  await ctx.records.write([{ collection: "categories", id, data: categoryData({ ...category, limit }) }])
+  await ctx.records.write([{ collection: "categories", id, data: categoryData(ctx, { ...category, limit }) }])
   return { ok: true }
 }
 
@@ -96,14 +129,14 @@ export const categoryUsage = (ctx: LedgerContext, id: string): number =>
   ctx.records.live("recurring").filter((r) => r.data.categoryId === id).length
 
 /**
- * Удаление категории. Операции непустой категории переносятся в `moveTo` новой правкой —
- * поэтому и подстановка (история — это операции) переходит вместе с ними.
+ * Удаление категории, с отменой. Операции непустой категории переносятся в `moveTo` новой правкой —
+ * поэтому и подстановка (история — это операции) переходит вместе с ними; отмена возвращает их обратно.
  */
 export const deleteCategory = async (
   ctx: LedgerContext,
   id: string,
   options: { readonly moveTo?: string } = {}
-): Promise<{ ok: true } | { ok: false; problem: DeleteCategoryProblem }> => {
+): Promise<DeleteCategoryResult> => {
   const category = ctx.categories().get(id)
   if (!category) return { ok: false, problem: "not-found" }
   const sameKind = [...ctx.categories().values()].filter((c) => c.kind === category.kind)
@@ -121,9 +154,9 @@ export const deleteCategory = async (
     if (!options.moveTo) return { ok: false, problem: "needs-target" }
     if (!target || target.kind !== category.kind || target.id === id) return { ok: false, problem: "bad-target" }
   }
-  await ctx.records.write([
+  const undo = await writeUndoable(ctx.records, [
     ...moved.map((m) => ({ ...m, data: { ...(m.data as object), categoryId: options.moveTo! } })),
-    { collection: "categories", id, data: categoryData(category), deleted: true }
+    { collection: "categories", id, data: categoryData(ctx, category), deleted: true }
   ])
-  return { ok: true }
+  return { ok: true, undo }
 }

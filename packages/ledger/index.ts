@@ -3,7 +3,8 @@ export type {
   CategoryLimitProblem,
   CategoryProblem,
   CategoryStyle,
-  DeleteCategoryProblem
+  DeleteCategoryProblem,
+  DeleteCategoryResult
 } from "./src/category-admin"
 export { CATEGORY_ICONS } from "./src/icons"
 export { PALETTE_COLORS, type PaletteColor } from "./src/palette"

@@ -1,9 +1,11 @@
 import { formatDecimal, formatMoney, parseMoney, type CategoryKind } from "@fin/domain"
 import { dayMonth, type Ledger, type RecurringProblem, type RecurringView } from "@fin/ledger"
-import type { ComponentChildren, JSX } from "preact"
-import { useEffect, useRef, useState } from "preact/hooks"
+import type { ComponentChildren } from "preact"
+import { useState } from "preact/hooks"
 import { CategoryBadge } from "../components/CategoryBadge"
+import { type RowDrag, useReorderableRows } from "../components/ReorderableRows"
 import { Sheet } from "../components/Sheet"
+import { QuickDeleteButton, SwipeDeleteButton, useSwipeDelete } from "../components/SwipeDelete"
 import { GripIcon, PlusIcon, RepeatIcon } from "../icons"
 import { showToast } from "../toast"
 
@@ -128,56 +130,69 @@ const RecurringForm = (props: {
   )
 }
 
-/** Как строка сдвинута во время перетаскивания: своя — за пальцем, соседние — уступают место. */
-interface RowDrag {
-  readonly shift: number
-  readonly lifted: boolean
-  readonly onGripDown: (e: JSX.TargetedPointerEvent<HTMLSpanElement>) => void
-  readonly onGripKey: (e: JSX.TargetedKeyboardEvent<HTMLSpanElement>) => void
-}
+/** Сколько тает удалённая свайпом строка — совпадает с `fin-row-out` у `.reorderable-item.leaving` в styles.css. */
+const ROW_OUT_MS = 200
 
 const RecurringRow = ({ ledger, item, drag }: { ledger: Ledger; item: RecurringView; drag: RowDrag }) => {
   const [editing, setEditing] = useState(false)
+  const [leaving, setLeaving] = useState(false)
+  const swipe = useSwipeDelete(true)
   const today = ledger.today()
-  const remove = async (close: () => void) => {
+  const deleteWithUndo = async () => {
     const result = await ledger.deleteRecurring(item.id)
-    if (!result.ok) return
-    close()
+    if (!result.ok) return false
     showToast({ text: `«${item.description}» удалена`, action: { label: "Отменить", run: () => result.undo() } })
+    return true
   }
+  const remove = async (close: () => void) => {
+    if (await deleteWithUndo()) close()
+  }
+  // строка сперва тает, потом удаляется; удалить не вышло — возвращается
+  const swipeRemove = () => {
+    setLeaving(true)
+    window.setTimeout(() => void deleteWithUndo().then((ok) => ok || setLeaving(false)), ROW_OUT_MS)
+  }
+  const deleteLabel = `Удалить: ${item.description}`
   return (
     <>
       <div
-        class={`recurring-item${drag.lifted ? " lifted" : ""}`}
+        class={`reorderable-item${drag.lifted ? " lifted" : ""}${leaving ? " leaving" : ""}`}
         style={drag.shift ? { transform: `translateY(${drag.shift}px)` } : undefined}
       >
-        <button
-          type="button"
-          class={`row row-button ${item.status === "active" ? "" : "inactive"}`}
-          aria-label={`Изменить: ${item.description}`}
-          onClick={() => setEditing(true)}
-        >
-          <CategoryBadge category={item.category} />
-          <span class="row-main">
-            <span class="row-title">
-              {item.description} <RepeatIcon />
+        <div class={`op-row-swipe${swipe.revealing ? " revealing" : ""}`}>
+          <SwipeDeleteButton label={deleteLabel} onDelete={swipeRemove} />
+          <div class="reorderable-slide" style={swipe.style}>
+            <button
+              type="button"
+              class={`row row-button ${item.status === "active" ? "" : "inactive"}`}
+              aria-label={`Изменить: ${item.description}`}
+              onClick={() => setEditing(true)}
+              {...swipe.handlers}
+            >
+              <CategoryBadge category={item.category} />
+              <span class="row-main">
+                <span class="row-title">
+                  {item.description} <RepeatIcon />
+                </span>
+                <span class="row-sub">
+                  {item.category.name} · {statusText(item, today)}
+                </span>
+              </span>
+              <span class={`num op-amount ${item.kind}`}>{formatMoney(item.amount, { sign: item.kind === "income" ? "+" : "−" })}</span>
+            </button>
+            <QuickDeleteButton label={deleteLabel} onDelete={swipeRemove} />
+            <span
+              class="drag-handle"
+              role="button"
+              tabIndex={0}
+              aria-label={`Переместить: ${item.description}. Стрелки вверх и вниз`}
+              onPointerDown={(event) => drag.onGripDown(event, swipe.gesture)}
+              onKeyDown={drag.onGripKey}
+            >
+              <GripIcon />
             </span>
-            <span class="row-sub">
-              {item.category.name} · {statusText(item, today)}
-            </span>
-          </span>
-          <span class={`num op-amount ${item.kind}`}>{formatMoney(item.amount, { sign: item.kind === "income" ? "+" : "−" })}</span>
-        </button>
-        <span
-          class="drag-handle"
-          role="button"
-          tabIndex={0}
-          aria-label={`Переместить: ${item.description}. Стрелки вверх и вниз`}
-          onPointerDown={drag.onGripDown}
-          onKeyDown={drag.onGripKey}
-        >
-          <GripIcon />
-        </span>
+          </div>
+        </div>
       </div>
       {editing && (
         <Sheet label={`Регулярная операция «${item.description}»`} onClose={() => setEditing(false)}>
@@ -230,94 +245,15 @@ const RecurringRow = ({ ledger, item, drag }: { ledger: Ledger; item: RecurringV
   )
 }
 
-const moved = <T,>(list: ReadonlyArray<T>, from: number, to: number): Array<T> => {
-  const out = [...list]
-  const [item] = out.splice(from, 1)
-  out.splice(to, 0, item!)
-  return out
-}
-
 export const RecurringSection = ({ ledger }: { ledger: Ledger }) => {
   const [adding, setAdding] = useState(false)
-  // перетаскивание: какая строка, откуда, куда встанет и насколько сдвинута за пальцем
-  const [drag, setDrag] = useState<{ from: number; to: number; dy: number; height: number } | null>(null)
-  // порядок после броска — пока журнал его не записал, чтобы строки не мигнули прежним
-  const [dropped, setDropped] = useState<ReadonlyArray<string> | null>(null)
-  // сразу после броска строки встают на новые места без анимации
-  const [settling, setSettling] = useState(false)
-  const startY = useRef(0)
-
-  const fresh = ledger.recurring()
-  const items = dropped
-    ? [...fresh].sort((a, b) => (dropped.indexOf(a.id) + 1 || Infinity) - (dropped.indexOf(b.id) + 1 || Infinity))
-    : fresh
-
-  const reorder = (from: number, to: number) => {
-    if (from === to) return
-    const ids = moved(
-      items.map((i) => i.id),
-      from,
-      to
-    )
-    setDropped(ids)
-    void ledger.reorderRecurring(ids).finally(() => setDropped(null))
-  }
-
-  useEffect(() => {
-    if (!settling) return
-    const frame = requestAnimationFrame(() => setSettling(false))
-    return () => cancelAnimationFrame(frame)
-  }, [settling])
-
-  const shiftOf = (index: number) => {
-    if (!drag) return 0
-    if (index === drag.from) return drag.dy
-    if (drag.from < index && index <= drag.to) return -drag.height
-    if (drag.to <= index && index < drag.from) return drag.height
-    return 0
-  }
-
-  const rowDrag = (index: number): RowDrag => ({
-    shift: shiftOf(index),
-    lifted: drag?.from === index,
-    onGripDown: (e) => {
-      const row = e.currentTarget.parentElement!
-      const grip = e.currentTarget
-      grip.setPointerCapture(e.pointerId)
-      startY.current = e.clientY
-      const height = row.offsetHeight
-      setDrag({ from: index, to: index, dy: 0, height })
-      const onMove = (m: PointerEvent) => {
-        const dy = m.clientY - startY.current
-        // строку не утащить за край списка
-        const clamped = Math.max(-index * height, Math.min((items.length - 1 - index) * height, dy))
-        setDrag({ from: index, to: index + Math.round(clamped / height), dy: clamped, height })
-      }
-      const onUp = (u: PointerEvent) => {
-        grip.removeEventListener("pointermove", onMove)
-        grip.removeEventListener("pointerup", onUp)
-        grip.removeEventListener("pointercancel", onUp)
-        const dy = Math.max(-index * height, Math.min((items.length - 1 - index) * height, u.clientY - startY.current))
-        setSettling(true)
-        setDrag(null)
-        if (u.type === "pointerup") reorder(index, index + Math.round(dy / height))
-      }
-      grip.addEventListener("pointermove", onMove)
-      grip.addEventListener("pointerup", onUp)
-      grip.addEventListener("pointercancel", onUp)
-    },
-    onGripKey: (e) => {
-      const step = e.key === "ArrowUp" ? -1 : e.key === "ArrowDown" ? 1 : 0
-      const to = index + step
-      if (!step || to < 0 || to >= items.length) return
-      e.preventDefault()
-      reorder(index, to)
-    }
-  })
+  const { items, rowDrag, reordering, settling } = useReorderableRows(ledger.recurring(), (ids) =>
+    ledger.reorderRecurring(ids)
+  )
 
   return (
     <section class="section">
-      <div class={`card-list${drag ? " reordering" : ""}${settling ? " settling" : ""}`}>
+      <div class={`card-list${reordering ? " reordering" : ""}${settling ? " settling" : ""}`}>
         {items.map((item, index) => (
           <RecurringRow
             key={`${item.id}:${item.status}:${item.amount}:${item.description}`}
@@ -333,7 +269,7 @@ export const RecurringSection = ({ ledger }: { ledger: Ledger }) => {
       </div>
       <p class="section-footer">
         Раз в месяц в заданное число операция появляется сама. Правка и удаление не меняют уже созданные операции. Порядок
-        меняется перетаскиванием за значок справа.
+        меняется перетаскиванием за значок справа, свайп влево удаляет.
       </p>
       {adding && (
         <Sheet label="Новая регулярная операция" onClose={() => setAdding(false)}>

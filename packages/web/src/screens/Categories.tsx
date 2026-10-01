@@ -3,9 +3,11 @@ import type { CategoryProblem, CategoryView, DeleteCategoryProblem, Ledger } fro
 import { useState } from "preact/hooks"
 import { CategoryBadge } from "../components/CategoryBadge"
 import { CategoryStylePicker } from "../components/CategoryStylePicker"
+import { type RowDrag, useReorderableRows } from "../components/ReorderableRows"
 import { Sheet } from "../components/Sheet"
+import { QuickDeleteButton, SwipeDeleteButton, useSwipeDelete } from "../components/SwipeDelete"
 import { plural } from "../format"
-import { ForwardIcon, PlusIcon } from "../icons"
+import { GripIcon, PlusIcon } from "../icons"
 import { showToast } from "../toast"
 
 const problemText: Record<CategoryProblem | DeleteCategoryProblem, string> = {
@@ -42,13 +44,18 @@ const LimitField = ({ value, onInput }: { value: string; onInput: (value: string
   </label>
 )
 
-const CategoryRow = ({ ledger, category }: { ledger: Ledger; category: CategoryView }) => {
+/** Сколько тает удалённая свайпом строка — совпадает с `fin-row-out` у `.reorderable-item.leaving`. */
+const ROW_OUT_MS = 200
+
+const CategoryRow = ({ ledger, category, drag }: { ledger: Ledger; category: CategoryView; drag: RowDrag }) => {
   const [editing, setEditing] = useState(false)
+  const [leaving, setLeaving] = useState(false)
   const [name, setName] = useState(category.name)
   const [style, setStyle] = useState({ color: category.color, icon: category.icon })
   const [limit, setLimit] = useState(limitText(category.limit))
   const [moveTo, setMoveTo] = useState("")
   const [error, setError] = useState<string | null>(null)
+  const swipe = useSwipeDelete(true)
   const usage = ledger.categoryUsage(category.id)
   const others = ledger.categories(category.kind).filter((c) => c.id !== category.id)
 
@@ -59,22 +66,46 @@ const CategoryRow = ({ ledger, category }: { ledger: Ledger; category: CategoryV
   // поле лимита заполняется при открытии: `reset` после сохранения видит категорию ещё до правки
   const open = () => {
     setLimit(limitText(category.limit))
+    setError(null)
     setEditing(true)
   }
 
   const row = (
-    <button type="button" class="row row-button" aria-label={`Изменить: ${category.name}`} onClick={open}>
-      <CategoryBadge category={category} />
-      <span class="row-main">
-        <span class="row-title">{category.name}</span>
-        {sub && <span class="row-sub">{sub}</span>}
-      </span>
-      <span class="row-chevron">
-        <ForwardIcon size={16} />
-      </span>
-    </button>
+    <div
+      class={`reorderable-item${drag.lifted ? " lifted" : ""}${leaving ? " leaving" : ""}`}
+      style={drag.shift ? { transform: `translateY(${drag.shift}px)` } : undefined}
+    >
+      <div class={`op-row-swipe${swipe.revealing ? " revealing" : ""}`}>
+        <SwipeDeleteButton label={`Удалить: ${category.name}`} onDelete={() => void swipeRemove()} />
+        <div class="reorderable-slide" style={swipe.style}>
+          <button
+            type="button"
+            class="row row-button"
+            aria-label={`Изменить: ${category.name}`}
+            onClick={open}
+            {...swipe.handlers}
+          >
+            <CategoryBadge category={category} />
+            <span class="row-main">
+              <span class="row-title">{category.name}</span>
+              {sub && <span class="row-sub">{sub}</span>}
+            </span>
+          </button>
+          <QuickDeleteButton label={`Удалить: ${category.name}`} onDelete={() => void swipeRemove()} />
+          <span
+            class="drag-handle"
+            role="button"
+            tabIndex={0}
+            aria-label={`Переместить: ${category.name}. Стрелки вверх и вниз`}
+            onPointerDown={(event) => drag.onGripDown(event, swipe.gesture)}
+            onKeyDown={drag.onGripKey}
+          >
+            <GripIcon />
+          </span>
+        </div>
+      </div>
+    </div>
   )
-  if (!editing) return row
 
   const reset = () => {
     setEditing(false)
@@ -96,12 +127,27 @@ const CategoryRow = ({ ledger, category }: { ledger: Ledger; category: CategoryV
     }
     close()
   }
-  const remove = async () => {
-    const result = await ledger.deleteCategory(category.id, moveTo ? { moveTo } : {})
+  const deleteWithUndo = async (targetId = "") => {
+    const result = await ledger.deleteCategory(category.id, targetId ? { moveTo: targetId } : {})
     if (!result.ok) return setError(problemText[result.problem])
-    const target = others.find((c) => c.id === moveTo)
-    showToast({ text: target ? `«${category.name}» удалена, операции — в «${target.name}»` : `«${category.name}» удалена` })
+    const target = others.find((c) => c.id === targetId)
+    showToast({
+      text: target ? `«${category.name}» удалена, операции — в «${target.name}»` : `«${category.name}» удалена`,
+      action: { label: "Отменить", run: () => result.undo() }
+    })
+    return true
   }
+  const remove = async (close: () => void) => {
+    if (await deleteWithUndo(moveTo)) close()
+  }
+  const swipeRemove = async () => {
+    // Непустой категории сначала нужно выбрать, куда перенести операции; последнюю удалить нельзя.
+    if (usage > 0 || others.length === 0) return open()
+    setLeaving(true)
+    window.setTimeout(() => void deleteWithUndo().then((ok) => ok || setLeaving(false)), ROW_OUT_MS)
+  }
+
+  if (!editing) return row
 
   return (
     <>
@@ -149,7 +195,7 @@ const CategoryRow = ({ ledger, category }: { ledger: Ledger; category: CategoryV
                 type="button"
                 class="secondary-button danger-button grow"
                 disabled={usage > 0 && !moveTo}
-                onClick={() => void remove()}
+                onClick={() => void remove(close)}
               >
                 Удалить
               </button>
@@ -231,12 +277,15 @@ const NewCategorySheet = ({ ledger, kind, onDone }: { ledger: Ledger; kind: Cate
 
 const KindList = ({ ledger, kind, title }: { ledger: Ledger; kind: CategoryKind; title: string }) => {
   const [adding, setAdding] = useState(false)
+  const { items, rowDrag, reordering, settling } = useReorderableRows(ledger.categories(kind), (ids) =>
+    ledger.reorderCategories(ids)
+  )
   return (
     <div class="section">
       <h2 class="section-header">{title}</h2>
-      <div class="card-list">
-        {ledger.categories(kind).map((c) => (
-          <CategoryRow key={`${c.id}:${c.name}`} ledger={ledger} category={c} />
+      <div class={`card-list${reordering ? " reordering" : ""}${settling ? " settling" : ""}`}>
+        {items.map((c, index) => (
+          <CategoryRow key={c.id} ledger={ledger} category={c} drag={rowDrag(index)} />
         ))}
         <button type="button" class="row row-button action-row" onClick={() => setAdding(true)}>
           <PlusIcon />
@@ -252,5 +301,6 @@ export const CategoriesSection = ({ ledger }: { ledger: Ledger }) => (
   <section class="section">
     <KindList ledger={ledger} kind="expense" title="Расходы" />
     <KindList ledger={ledger} kind="income" title="Доходы" />
+    <p class="section-footer">Порядок меняется перетаскиванием за значок справа, свайп влево удаляет.</p>
   </section>
 )
