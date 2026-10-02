@@ -15,7 +15,6 @@ export type {
   EntryChoice,
   EntryPreview,
   EntryPreviewProblem,
-  EntryTarget,
   SubmitEntriesResult,
   SubmitResult
 } from "./src/entry"

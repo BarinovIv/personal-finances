@@ -1,4 +1,4 @@
-import { formatMoney, isOutflow } from "@fin/domain"
+import { formatMoney } from "@fin/domain"
 import {
   dayLabel,
   type EntriesChoice,
@@ -11,10 +11,11 @@ import {
 import { memo } from "preact/compat"
 import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks"
 import type { Sync } from "@fin/sync"
+import { CategoryBadge } from "../components/CategoryBadge"
 import { CategoryFilter } from "../components/CategoryFilter"
 import { CategoryGrid } from "../components/CategoryGrid"
 import { EntryHelp } from "../components/EntryHelp"
-import { kindLabel, OperationBadge, operationTitle } from "../components/OperationBadge"
+import { operationTitle } from "../components/OperationBadge"
 import { OperationRow } from "../components/OperationRow"
 import { Sheet } from "../components/Sheet"
 import { SyncBadge } from "../components/SyncBadge"
@@ -29,14 +30,8 @@ import { useTabActive } from "../tabActivity"
 const problemText: Record<EntryPreviewProblem, string> = {
   "no-amount": "Не вижу сумму — добавьте число, например «кофе 250».",
   "no-description": "Добавьте описание — что это было?",
-  "no-category": "Выберите категорию.",
-  "no-expense": "Не найдена покупка, по которой можно оформить возврат.",
-  "choose-target": "Выберите покупку для возврата.",
-  "too-much": "Сумма больше остатка покупки."
+  "no-category": "Выберите категорию."
 }
-
-const showPreviewProblem = (problem: EntryPreviewProblem) =>
-  problem !== "no-amount" && problem !== "no-description" && problem !== "no-category" && problem !== "choose-target"
 
 /** Сколько тает поиск при закрытии — совпадает с `fin-sink` у `.search-mode.leaving` в styles.css. */
 const SEARCH_CLOSE_MS = 200
@@ -197,14 +192,10 @@ const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) 
   const [choice, setChoice] = useState<EntriesChoice>({})
   // для какой операции строки открыт выбор категории
   const [pickerFor, setPickerFor] = useState<number | null>(null)
-  const [targetFor, setTargetFor] = useState<number | null>(null)
   // шторка выбора сама всплывает, только когда строка дописана и набор затих
   const [autoPick, setAutoPick] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
   const [inputFocused, setInputFocused] = useState(false)
-  const [caretAtEnd, setCaretAtEnd] = useState(true)
-  const [composing, setComposing] = useState(false)
-  const [inputScroll, setInputScroll] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const input = useRef<HTMLInputElement>(null)
   const pendingChoice = useRef<EntriesChoice | null>(null)
@@ -213,33 +204,11 @@ const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) 
   const first = previews[0]!
   const many = previews.length > 1
   const has = text.trim() !== ""
-  const needsPick = (p: EntryPreview) =>
-    (p.kind === "expense" || p.kind === "income") && p.description !== "" && p.categoryId === null
+  const needsPick = (p: EntryPreview) => p.description !== "" && p.categoryId === null
   // без категории отправить можно: отправка откроет выбор категории
-  const canAdd = has && previews.every((p) =>
-    p.problems.every((problem) => problem === "no-category" || problem === "choose-target")
-  )
+  const canAdd = has && previews.every((p) => p.problems.every((problem) => problem === "no-category"))
   const categoryOf = (p: EntryPreview) =>
-    p.categoryId ? ledger.categories(p.kind === "income" ? "income" : "expense").find((c) => c.id === p.categoryId) : undefined
-  const previewLabel = (p: EntryPreview) =>
-    p.kind === "expense" || p.kind === "income"
-      ? categoryOf(p)?.name ?? "Категория?"
-      : kindLabel(p.kind) + (p.problems.includes("choose-target") ? " · Выбрать" : "")
-  const openPreview = (p: EntryPreview, index: number) => {
-    if (p.kind === "expense" || p.kind === "income") setPickerFor(index)
-    else if (p.targets.length > 0) setTargetFor(index)
-  }
-  const completion = inputFocused && caretAtEnd && !composing ? ledger.completeEntry(text) : null
-  const updateCaret = (field: HTMLInputElement) =>
-    setCaretAtEnd(field.selectionStart === field.value.length && field.selectionEnd === field.value.length)
-  const acceptCompletion = () => {
-    if (!completion) return
-    setText(completion)
-    setChoice({ ...choice, targetIds: undefined })
-    setError(null)
-    input.current?.focus()
-    requestAnimationFrame(() => input.current?.setSelectionRange(completion.length, completion.length))
-  }
+    p.categoryId ? ledger.categories(p.kind).find((c) => c.id === p.categoryId) : undefined
   const today = ledger.today()
   const awaiting = previews.findIndex((p) => needsPick(p) && !p.problems.includes("no-amount"))
   const picking = !has ? null : (pickerFor ?? (autoPick && awaiting >= 0 ? awaiting : null))
@@ -247,35 +216,26 @@ const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) 
 
   useEffect(() => {
     setAutoPick(false)
-    if (!active || helpOpen || targetFor !== null || awaiting < 0) return
+    if (!active || helpOpen || awaiting < 0) return
     const timer = window.setTimeout(() => setAutoPick(true), AUTO_PICK_DELAY_MS)
     return () => window.clearTimeout(timer)
-  }, [text, awaiting, active, helpOpen, targetFor])
+  }, [text, awaiting, active, helpOpen])
 
   // шторка поверх открытой клавиатуры закрыта ею наполовину — убираем клавиатуру
   useEffect(() => {
-    if (active && (picking !== null || targetFor !== null)) input.current?.blur()
-  }, [picking !== null, targetFor !== null, active])
+    if (active && picking !== null) input.current?.blur()
+  }, [picking !== null, active])
 
   const reset = () => {
     setText("")
     setChoice({})
     setPickerFor(null)
-    setTargetFor(null)
     setError(null)
   }
 
   const pick = (index: number, categoryId: string): EntriesChoice => {
     const categoryIds = previews.map((_, i) => (i === index ? categoryId : (choice.categoryIds?.[i] ?? null)))
     const next = { ...choice, categoryIds }
-    setChoice(next)
-    setError(null)
-    return next
-  }
-
-  const pickTarget = (index: number, targetId: string): EntriesChoice => {
-    const targetIds = previews.map((_, i) => (i === index ? targetId : (choice.targetIds?.[i] ?? null)))
-    const next = { ...choice, targetIds }
     setChoice(next)
     setError(null)
     return next
@@ -290,7 +250,6 @@ const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) 
       const problem = result.problems[0]!
       // без категории открывается выбор — он сам и есть объяснение
       if (problem === "no-category") setPickerFor(result.index)
-      else if (problem === "choose-target") setTargetFor(result.index)
       else
         setError(
           submittedMany
@@ -308,10 +267,9 @@ const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) 
     } else {
       const op = ops[0]!
       const taught = submittedFirst.categorySource === "manual"
-      const category = op.category?.name
-      done = taught && category
-        ? `Запомнил: "${op.description}" → ${category}`
-        : `Добавлено: ${operationTitle(op)} · ${category ?? kindLabel(op.kind)}`
+      // строка ввода создаёт только расходы и доходы — у них категория есть всегда
+      const category = op.category!.name
+      done = taught ? `Запомнил: "${op.description}" → ${category}` : `Добавлено: ${op.description} · ${category}`
     }
     // «Отменить» удаляет всё сохранённое строкой и возвращает её в поле — поправить опечатку и сохранить заново
     const line = text
@@ -337,15 +295,14 @@ const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) 
     reset()
   }
 
-  const signed = (p: EntryPreview) => formatMoney(p.amount!, { sign: isOutflow(p.kind) ? "−" : "+" })
   const finishPicker = () => {
     setPickerFor(null)
-    setTargetFor(null)
     setAutoPick(false)
     const nextChoice = pendingChoice.current
     pendingChoice.current = null
     if (nextChoice) void add(nextChoice)
   }
+  const signed = (p: EntryPreview) => formatMoney(p.amount!, { sign: p.kind === "income" ? "+" : "−" })
   const sameDate = previews.every((p) => p.date === first.date)
   const dateChip = (
     <label class="chip">
@@ -363,66 +320,40 @@ const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) 
     </label>
   )
   const expenses = previews.reduce((sum, p) => sum + (p.kind === "expense" ? (p.amount ?? 0) : 0), 0)
-  const targetPreview = targetFor === null ? undefined : previews[targetFor]
-  const issue = has ? previews.find((p) => p.amount !== null && p.problems.some(showPreviewProblem)) : undefined
-  const issueProblem = issue?.problems.find(showPreviewProblem)
 
   return (
     <div class={`composer${reveal ? " reveal" : ""}`}>
       <div class={`composer-field${has ? " filled" : ""}`}>
-        <div class="line-entry">
-          {completion && (
-            <div class="entry-completion" aria-hidden="true">
-              <span style={{ transform: `translateX(-${inputScroll}px)` }}>
-                <span class="entry-completion-typed">{text}</span>{completion.slice(text.length)}
-              </span>
-            </div>
-          )}
-          <input
-            ref={input}
-            id="line"
-            aria-label="Что потратил или получил?"
-            class="line-input"
-            type="text"
-            placeholder="футболка 1500"
-            autocomplete="off"
-            autocapitalize="off"
-            enterKeyHint="done"
-            value={text}
-            onFocus={() => setInputFocused(true)}
-            onBlur={() => setInputFocused(false)}
-            onCompositionStart={() => setComposing(true)}
-            onCompositionEnd={() => setComposing(false)}
-            onSelect={(e) => updateCaret(e.currentTarget)}
-            onClick={(e) => updateCaret(e.currentTarget)}
-            onKeyUp={(e) => updateCaret(e.currentTarget)}
-            onScroll={(e) => setInputScroll(e.currentTarget.scrollLeft)}
-            onInput={(e) => {
-              const value = e.currentTarget.value
-              setText(value)
-              setCaretAtEnd(e.currentTarget.selectionStart === value.length && e.currentTarget.selectionEnd === value.length)
-              setInputScroll(e.currentTarget.scrollLeft)
-              setChoice({ ...choice, targetIds: undefined })
-              setError(null)
-              if (!value.trim()) {
-                setChoice({})
-                setPickerFor(null)
-                setTargetFor(null)
-              }
-            }}
-            onKeyDown={(e) => {
-              if (e.isComposing) return
-              if (completion && e.currentTarget.selectionStart === text.length && e.currentTarget.selectionEnd === text.length
-                && (e.key === "Tab" || e.key === "ArrowRight") && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
-                e.preventDefault()
-                acceptCompletion()
-              } else if (e.key === "Enter") {
-                e.preventDefault()
-                void add()
-              }
-            }}
-          />
-        </div>
+        <input
+          ref={input}
+          id="line"
+          aria-label="Что потратил или получил?"
+          class="line-input"
+          type="text"
+          placeholder="футболка 1500"
+          autocomplete="off"
+          autocapitalize="off"
+          enterKeyHint="done"
+          value={text}
+          onFocus={() => setInputFocused(true)}
+          onBlur={() => setInputFocused(false)}
+          onInput={(e) => {
+            const value = e.currentTarget.value
+            setText(value)
+            setError(null)
+            if (!value.trim()) {
+              setChoice({})
+              setPickerFor(null)
+            }
+          }}
+          onKeyDown={(e) => {
+            if (e.isComposing) return
+            if (e.key === "Enter") {
+              e.preventDefault()
+              void add()
+            }
+          }}
+        />
         {!inputFocused && text === "" && (
           <span class="entry-help-trigger">
             <button
@@ -445,24 +376,18 @@ const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) 
           </button>
         )}
       </div>
-      {completion && (
-        <button type="button" class="entry-completion-accept" aria-label={`Дополнить: ${completion.slice(text.length)}`}
-          onPointerDown={(e) => e.preventDefault()} onClick={acceptCompletion}>
-          Дополнить
-        </button>
-      )}
       {has && many ? (
         <div class="recognized-many">
           <div class="card-list">
             {previews.map((p, i) => {
               const category = categoryOf(p)
               return (
-                <button type="button" class="row row-button recognized-row" key={i} onClick={() => openPreview(p, i)}>
-                  <OperationBadge op={{ kind: p.kind, category: category ?? null }} size={32} />
+                <button type="button" class="row row-button recognized-row" key={i} onClick={() => setPickerFor(i)}>
+                  <CategoryBadge category={category ?? { color: "gray", icon: "dots", name: "" }} size={32} />
                   <span class="row-main">
                     <span class="row-title">{p.description || "что это?"}</span>
                     <span class="row-sub">
-                      {previewLabel(p)}
+                      {category ? category.name : <span class="missing">Категория?</span>}
                       {!sameDate && ` · ${dayLabel(p.date, today)}`}
                     </span>
                   </span>
@@ -478,16 +403,16 @@ const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) 
         </div>
       ) : has ? (
         <div class="recognized">
-          <button type="button" class="chip" onClick={() => openPreview(first, 0)}>
-            <OperationBadge op={{ kind: first.kind, category: categoryOf(first) ?? null }} size={22} />
-            <span>{previewLabel(first)}</span>
+          <button type="button" class="chip" onClick={() => setPickerFor(pickerFor === null ? 0 : null)}>
+            <CategoryBadge category={categoryOf(first) ?? { color: "gray", icon: "dots", name: "" }} size={22} />
+            <span>{categoryOf(first)?.name ?? "Категория?"}</span>
           </button>
           {dateChip}
           <span class={`amount-preview num ${first.kind}`}>{first.amount ? signed(first) : "сумма?"}</span>
         </div>
       ) : null}
       {active && helpOpen && <EntryHelp onClose={() => setHelpOpen(false)} />}
-      {active && !helpOpen && targetFor === null && picking !== null && picked && (picked.kind === "expense" || picked.kind === "income") && (
+      {active && !helpOpen && picking !== null && picked && (
         <Sheet
           key={`category-${picking}`}
           label="Выбор категории"
@@ -503,7 +428,7 @@ const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) 
                     : "Категория расхода"}
               </div>
               <CategoryGrid
-                categories={ledger.categories(picked.kind === "income" ? "income" : "expense")}
+                categories={ledger.categories(picked.kind)}
                 selected={picked.categoryId}
                 onPick={(categoryId) => {
                   pendingChoice.current = pick(picking, categoryId)
@@ -515,29 +440,6 @@ const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) 
           )}
         </Sheet>
       )}
-      {active && !helpOpen && targetFor !== null && targetPreview && (
-        <Sheet key={`target-${targetFor}`} label="Выбор покупки" onClose={finishPicker}>
-          {(close) => (
-            <div class="picker">
-              <div class="sheet-title">Выберите покупку для возврата</div>
-              <div class="card-list">
-                {targetPreview.targets.map((target) => (
-                  <button type="button" class="row row-button" key={target.id} onClick={() => {
-                    pendingChoice.current = pickTarget(targetFor, target.id)
-                    close()
-                  }}>
-                    <span class="row-main">
-                      <span class="row-title">{target.label}</span>
-                      <span class="row-sub">{target.date ? dayLabel(target.date, today) + " · " : ""}Осталось: {formatMoney(target.remaining)}</span>
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </Sheet>
-      )}
-      {!error && issueProblem && <div class="hint error" role="status">{problemText[issueProblem]}</div>}
       {error && <div class="hint error">{error}</div>}
     </div>
   )

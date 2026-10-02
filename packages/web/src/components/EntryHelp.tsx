@@ -61,15 +61,7 @@ export const EntryHelp = ({ onClose }: { onClose: () => void }) => {
               <code>вчера такси 450</code> · <code>позавчера кино 800</code>
               <span class="entry-help-note">Без даты — сегодня. Дата в начале — общая, если у операции нет своей.</span>
             </dd>
-            <dt>Возврат покупки</dt>
-            <dd>
-              <code>возврат шаурма 150</code>
-              <span class="entry-help-note">
-                Если совпадений несколько — выберите нужную операцию.
-              </span>
-            </dd>
           </dl>
-          <p class="hint">Серое продолжение можно принять клавишей Tab, стрелкой вправо или кнопкой "Дополнить".</p>
         </div>
       )}
     </Sheet>

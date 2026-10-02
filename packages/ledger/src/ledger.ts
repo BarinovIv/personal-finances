@@ -29,7 +29,6 @@ import {
   type GoalView
 } from "./goals"
 import { randomId } from "./ids"
-import { completeEntry } from "./entry-completion"
 import { debtPeople, debtsOverview, type DebtsOverview } from "./debts"
 import { buildDashboard, type Dashboard, type DashboardQuery } from "./dashboard"
 import { listDays } from "./days"
@@ -142,8 +141,6 @@ export interface Ledger {
   reorderCategories(ids: ReadonlyArray<string>): Promise<void>
   /** Что получится из строки ввода — показывается под строкой. */
   preview(line: string, choice?: EntryChoice): EntryPreview
-  /** Полная строка с предложенным окончанием; null, если однозначного продолжения нет. */
-  completeEntry(line: string): string | null
   /** Сохранить строку ввода как операцию. */
   submit(line: string, choice?: EntryChoice): Promise<SubmitResult>
   /** Строка ввода с одной или несколькими операциями: «шаурма 340 такси 500». */
@@ -249,7 +246,6 @@ export const openLedger = async (options: LedgerOptions): Promise<Ledger> => {
     deleteCategory: (id, options) => deleteCategory(ctx, id, options),
     reorderCategories: (ids) => reorderCategories(ctx, ids),
     preview: (line, choice) => previewEntry(ctx, line, choice),
-    completeEntry: (line) => completeEntry(ctx, line),
     submit: (line, choice) => submitEntry(ctx, line, choice),
     previewEntries: (line, choice) => previewEntries(ctx, line, choice),
     submitEntries: (line, choice) => submitEntries(ctx, line, choice),
