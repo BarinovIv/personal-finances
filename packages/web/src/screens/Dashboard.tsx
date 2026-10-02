@@ -1,7 +1,7 @@
 import { formatMoney } from "@fin/domain"
 import { dayMonth, type Dashboard, type DashboardCategory, type Ledger, type PeriodMode } from "@fin/ledger"
 import { memo } from "preact/compat"
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks"
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks"
 import { useAnimatedNumber } from "../animatedNumber"
 import { CategoryBadge } from "../components/CategoryBadge"
 import { LargeTitle } from "../components/LargeTitle"
@@ -77,6 +77,44 @@ const shortMoney = (kopecks: number) => {
   return `${(Math.round(rub / 100) / 10).toLocaleString("ru-RU")}к`
 }
 
+/** Пояснение суммы открывается по нажатию, закрывается снаружи, при уходе фокуса или по Escape. */
+const SummaryCaption = ({ label, help }: { label: string; help: string }) => {
+  const [open, setOpen] = useState(false)
+  const id = useId()
+  const root = useRef<HTMLSpanElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const onPointerDown = (event: PointerEvent) => {
+      if (event.target instanceof Node && !root.current?.contains(event.target)) setOpen(false)
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false)
+    }
+    document.addEventListener("pointerdown", onPointerDown)
+    document.addEventListener("keydown", onKeyDown)
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown)
+      document.removeEventListener("keydown", onKeyDown)
+    }
+  }, [open])
+  return (
+    <span ref={root} class="summary-caption-wrap">
+      <button
+        type="button"
+        class="summary-caption summary-help-trigger"
+        aria-label={`${label}: пояснение`}
+        aria-expanded={open}
+        aria-describedby={open ? id : undefined}
+        onClick={() => setOpen(!open)}
+        onBlur={() => setOpen(false)}
+      >
+        {label}<span class="summary-help-icon" aria-hidden="true">?</span>
+      </button>
+      {open && <span id={id} class="summary-tooltip" role="tooltip">{help}</span>}
+    </span>
+  )
+}
+
 const Summary = memo(({ d }: { d: Dashboard }) => {
   const { comparison } = d
   const change = comparison.change
@@ -90,18 +128,34 @@ const Summary = memo(({ d }: { d: Dashboard }) => {
   return (
     <section class="summary">
       <div class="summary-main">
-        <span class="summary-caption">Расходы</span>
+        <SummaryCaption
+          label="Расходы"
+          help="Покупки и оплата услуг за выбранный период за вычетом возвратов, пришедших в этом периоде. Накопления, долги и их погашения сюда не входят."
+        />
         <span class="summary-total num">{formatMoney(expenses)}</span>
         {change !== null && <span class={`compare-badge ${change > 0 ? "up" : "down"}`}>{compareText}</span>}
       </div>
       <div class="summary-grid">
         <div class="summary-cell">
-          <span class="summary-caption">Доходы</span>
+          <SummaryCaption
+            label="Доходы"
+            help="Доходы за выбранный период. Снятие накоплений, деньги, взятые в долг, и погашения выданных долгов доходами не считаются."
+          />
           <span class="summary-income num">{formatMoney(d.income, { sign: "+" })}</span>
         </div>
         <div class="summary-cell">
-          <span class="summary-caption">Остаток</span>
+          <SummaryCaption
+            label="Доходы − расходы"
+            help="Разница доходов и расходов за выбранный период с учётом возвратов покупок. Накопления, долги и предстоящие списания эту сумму не меняют."
+          />
           <span class="summary-value num">{formatMoney(d.balance)}</span>
+        </div>
+        <div class={`summary-cell summary-free${d.free < 0 ? " negative" : ""}`}>
+          <SummaryCaption
+            label="Свободные деньги"
+            help="Доходы минус расходы за выбранный период с учётом возвратов, накоплений и долгов, за вычетом предстоящих списаний. Отложенное, выданные долги и погашения взятых долгов уменьшают сумму; снятие накоплений, взятые долги и погашения выданных долгов увеличивают. Остаток прошлого периода не переносится. Минус означает перерасход за период."
+          />
+          <span class="summary-value num">{formatMoney(d.free)}</span>
         </div>
       </div>
     </section>
