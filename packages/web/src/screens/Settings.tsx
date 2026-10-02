@@ -42,7 +42,7 @@ const Paydays = ({ ledger }: { ledger: Ledger }) => {
           <input
             class="row-input num"
             type="text"
-            inputMode="numeric"
+            inputMode="text"
             aria-label="Дни зарплаты"
             placeholder="5, 20"
             value={text}
