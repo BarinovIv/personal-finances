@@ -1,38 +1,13 @@
 import { ENTRY_COMMANDS, parseEntryLine, parseEntryLines } from "@fin/entry-line"
-import type { OperationKind } from "@fin/domain"
 import type { LedgerContext } from "./context"
-import { debtPeople, debtsOverview } from "./debts"
-import { goalSavings } from "./movements"
 import { refundedAmount } from "./operations"
 
 const normalized = (text: string) => text.toLowerCase().replace(/ё/g, "е").replace(/\s+/g, " ")
 const label = (text: string) => text.trim().replace(/\s+/g, " ")
 
-const targets = (ctx: LedgerContext, kind: OperationKind): ReadonlyArray<string> => {
-  switch (kind) {
-    case "saved":
-    case "withdrawn":
-      return ctx.records.live("goals")
-        .filter((goal) => kind === "saved" || goalSavings(ctx, goal.id) > 0)
-        .map((goal) => goal.data.name)
-    case "lent":
-    case "borrowed":
-      return debtPeople(ctx)
-    case "repaid-to-me":
-    case "repaid-by-me": {
-      const direction = kind === "repaid-to-me" ? "lent" : "borrowed"
-      return debtsOverview(ctx).people
-        .filter((person) => person.open.some((debt) => debt.operation.kind === direction))
-        .map((person) => person.name)
-    }
-    case "refund":
-      return ctx.operations()
-        .filter((operation) => operation.data.kind === "expense" && operation.data.amount > refundedAmount(ctx, operation.id))
-        .map((operation) => operation.data.description)
-    default:
-      return []
-  }
-}
+const refundableDescriptions = (ctx: LedgerContext): ReadonlyArray<string> => ctx.operations()
+  .filter((operation) => operation.data.kind === "expense" && operation.data.amount > refundedAmount(ctx, operation.id))
+  .map((operation) => operation.data.description)
 
 /** Находим незавершённую последнюю операцию через общий разбор, сохраняя исходные пробелы и разделители. */
 const unfinished = (line: string): string | null => {
@@ -66,7 +41,7 @@ export const completeEntry = (ctx: LedgerContext, line: string): string | null =
         const commandEnd = words.reduce((offset, word) => body.indexOf(word, offset) + word.length, 0)
         const prefix = normalized(body.slice(commandEnd).replace(/^\s+/, ""))
         const names = new Map<string, string>()
-        for (const candidate of targets(ctx, command.kind).map(label)) {
+        for (const candidate of refundableDescriptions(ctx).map(label)) {
           const key = normalized(candidate)
           if (key.startsWith(prefix) && !names.has(key)) names.set(key, candidate)
         }

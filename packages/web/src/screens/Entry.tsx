@@ -30,12 +30,9 @@ const problemText: Record<EntryPreviewProblem, string> = {
   "no-amount": "Не вижу сумму — добавьте число, например «кофе 250».",
   "no-description": "Добавьте описание — что это было?",
   "no-category": "Выберите категорию.",
-  "no-person": "Добавьте имя человека, например \"одолжил Петя 2к\".",
-  "no-goal": "Цель не найдена. Выберите существующую цель или создайте её в разделе \"Цели\".",
-  "no-debt": "Не найден открытый долг этого человека.",
   "no-expense": "Не найдена покупка, по которой можно оформить возврат.",
-  "choose-target": "Выберите, к какой операции или цели относится строка.",
-  "too-much": "Сумма больше остатка долга, покупки или накопленного на цели."
+  "choose-target": "Выберите покупку для возврата.",
+  "too-much": "Сумма больше остатка покупки."
 }
 
 const showPreviewProblem = (problem: EntryPreviewProblem) =>
@@ -519,10 +516,10 @@ const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) 
         </Sheet>
       )}
       {active && !helpOpen && targetFor !== null && targetPreview && (
-        <Sheet key={`target-${targetFor}`} label="Выбор операции или цели" onClose={finishPicker}>
+        <Sheet key={`target-${targetFor}`} label="Выбор покупки" onClose={finishPicker}>
           {(close) => (
             <div class="picker">
-              <div class="sheet-title">{kindLabel(targetPreview.kind)}: выберите {targetPreview.goalId || targetPreview.kind === "saved" || targetPreview.kind === "withdrawn" ? "цель" : "операцию"}</div>
+              <div class="sheet-title">Выберите покупку для возврата</div>
               <div class="card-list">
                 {targetPreview.targets.map((target) => (
                   <button type="button" class="row row-button" key={target.id} onClick={() => {
@@ -531,7 +528,7 @@ const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) 
                   }}>
                     <span class="row-main">
                       <span class="row-title">{target.label}</span>
-                      <span class="row-sub">{target.date ? dayLabel(target.date, today) + " · " : ""}{targetPreview.kind === "saved" || targetPreview.kind === "withdrawn" ? "Накоплено" : "Осталось"}: {formatMoney(target.remaining)}</span>
+                      <span class="row-sub">{target.date ? dayLabel(target.date, today) + " · " : ""}Осталось: {formatMoney(target.remaining)}</span>
                     </span>
                   </button>
                 ))}
