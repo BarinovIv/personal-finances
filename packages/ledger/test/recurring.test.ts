@@ -1,6 +1,6 @@
-import { recurringOperationId } from "@fin/domain"
-import { describe, expect, it } from "vitest"
-import { categoryId, makeLedger } from "./support"
+import { occurrencesBetween, pendingOccurrences, recurringOperationId } from "@fin/domain"
+import { describe, expect, it, vi } from "vitest"
+import { add, categoryId, makeLedger, testClock } from "./support"
 
 const addTemplate = async (
   ledger: Awaited<ReturnType<typeof makeLedger>>["ledger"],
@@ -44,6 +44,153 @@ describe("регулярные операции на устройстве", () =
     expect(await ledger.addRecurring({ ...base, description: " " })).toEqual({ ok: false, problem: "no-description" })
     expect(await ledger.addRecurring({ ...base, dayOfMonth: 32 })).toEqual({ ok: false, problem: "bad-day" })
     expect(await ledger.addRecurring({ ...base, categoryId: "salary" })).toEqual({ ok: false, problem: "bad-category" })
+  })
+
+  describe("регулярная операция из расхода", () => {
+    it("сегодняшний расход не дублируется; новые настройки не меняют расход и его возвраты", async () => {
+      const { ledger } = await makeLedger()
+      const expense = await add(ledger, "Интернет 650", { categoryId: categoryId(ledger, "Подписки") })
+      expect((await ledger.addRefund(expense.id, { amount: 10000 })).ok).toBe(true)
+      const refunds = ledger.refunds(expense.id)
+      const total = ledger.dashboard({ mode: "month", offset: 0 }).expenses
+      const result = await ledger.makeRecurring(expense.id, {
+        description: "  Интернет дома  ",
+        amount: 70000,
+        categoryId: categoryId(ledger, "Продукты"),
+        dayOfMonth: 28
+      })
+      if (!result.ok) throw new Error(result.problem)
+      const template = ledger.recurring()[0]!
+      expect(template).toMatchObject({
+        id: result.id,
+        kind: "expense",
+        description: "Интернет дома",
+        amount: 70000,
+        category: { name: "Продукты" },
+        status: "active",
+        startDate: "2026-09-29",
+        nextDate: "2026-10-28"
+      })
+      expect(pendingOccurrences(result.id, template, () => false, ledger.today(), ledger.today())).toEqual([])
+      expect(ledger.operation(expense.id)).toEqual({ ...expense, recurringId: result.id, updatedAt: expect.any(Number) })
+      expect(ledger.refunds(expense.id)).toEqual(refunds)
+      expect(ledger.dashboard({ mode: "month", offset: 0 }).expenses).toBe(total)
+      await ledger.updateRecurring(result.id, { amount: 80000 })
+      expect(ledger.operation(expense.id)?.amount).toBe(65000)
+    })
+
+    it("старый расход не догоняет прошлые месяцы; ближайшее списание видно в текущем месяце", async () => {
+      const { ledger } = await makeLedger()
+      const expense = await add(ledger, "Интернет 650", { date: "2026-07-30", categoryId: "subscriptions" })
+      const result = await ledger.makeRecurring(expense.id, {
+        description: expense.description,
+        amount: expense.amount,
+        categoryId: expense.category!.id,
+        dayOfMonth: 30
+      })
+      if (!result.ok) throw new Error(result.problem)
+      const template = ledger.recurring()[0]!
+      expect(occurrencesBetween(template, "2026-07-01", ledger.today())).toEqual([])
+      expect(template.nextDate).toBe("2026-09-30")
+      expect(ledger.dashboard({ mode: "month", offset: 0 }).upcoming).toMatchObject({
+        total: 65000,
+        items: [{ templateId: result.id, date: "2026-09-30", amount: 65000 }]
+      })
+      expect(ledger.days().flatMap((day) => day.items)).toHaveLength(1)
+    })
+
+    it("31-е января повторяется 28-го февраля", async () => {
+      const { ledger } = await makeLedger({ clock: testClock("2026-01-31T12:00:00+03:00") })
+      const expense = await add(ledger, "Аренда 1000", { categoryId: "subscriptions" })
+      const result = await ledger.makeRecurring(expense.id, {
+        description: expense.description,
+        amount: expense.amount,
+        categoryId: expense.category!.id,
+        dayOfMonth: 31
+      })
+      expect(result.ok).toBe(true)
+      expect(ledger.recurring()[0]).toMatchObject({ startDate: "2026-02-01", nextDate: "2026-02-28" })
+    })
+
+    it("начинается завтра по часовому поясу пользователя", async () => {
+      const { ledger } = await makeLedger({ clock: testClock("2026-09-28T20:30:00Z") })
+      await ledger.setTimeZone("Asia/Novosibirsk")
+      const expense = await add(ledger, "Интернет 650", { categoryId: "subscriptions" })
+      expect(expense.date).toBe("2026-09-29")
+      const result = await ledger.makeRecurring(expense.id, {
+        description: expense.description,
+        amount: expense.amount,
+        categoryId: expense.category!.id,
+        dayOfMonth: 29
+      })
+      expect(result.ok).toBe(true)
+      expect(ledger.recurring()[0]).toMatchObject({ startDate: "2026-09-30", nextDate: "2026-10-29" })
+    })
+
+    it("неверные данные, отсутствующая операция и другие виды не оставляют правок", async () => {
+      const { ledger } = await makeLedger()
+      const expense = await add(ledger, "Интернет 650", { categoryId: "subscriptions" })
+      const income = await add(ledger, "+Зарплата 1000", { categoryId: categoryId(ledger, "Зарплата") })
+      const refund = await ledger.addRefund(expense.id, { amount: 10000 })
+      const debt = await ledger.addMovement({ kind: "lent", amount: 10000, person: "Петя" })
+      if (!refund.ok || !debt.ok) throw new Error("Не удалось создать операции")
+      const deleted = await add(ledger, "Интернет 100", { categoryId: "subscriptions" })
+      await ledger.deleteOperation(deleted.id)
+      const before = ledger.pendingChanges()
+      const input = { description: expense.description, amount: expense.amount, categoryId: "subscriptions", dayOfMonth: 28 }
+      for (const amount of [0, -100, 1.5]) {
+        expect(await ledger.makeRecurring(expense.id, { ...input, amount })).toEqual({ ok: false, problem: "bad-amount" })
+      }
+      for (const dayOfMonth of [0, 32, 1.5]) {
+        expect(await ledger.makeRecurring(expense.id, { ...input, dayOfMonth })).toEqual({ ok: false, problem: "bad-day" })
+      }
+      expect(await ledger.makeRecurring(expense.id, { ...input, description: " " })).toEqual({ ok: false, problem: "no-description" })
+      expect(await ledger.makeRecurring(expense.id, { ...input, categoryId: income.category!.id })).toEqual({ ok: false, problem: "bad-category" })
+      expect(await ledger.makeRecurring(expense.id, { ...input, categoryId: "missing" })).toEqual({ ok: false, problem: "bad-category" })
+      for (const id of ["missing", deleted.id]) {
+        expect(await ledger.makeRecurring(id, input)).toEqual({ ok: false, problem: "not-found" })
+      }
+      for (const id of [income.id, refund.operation.id, debt.operation.id]) {
+        expect(await ledger.makeRecurring(id, input)).toEqual({ ok: false, problem: "not-expense" })
+      }
+      expect(ledger.recurring()).toEqual([])
+      expect(ledger.operation(expense.id)).toEqual(expense)
+      expect(ledger.pendingChanges()).toEqual(before)
+    })
+
+    it("сохраняет шаблон и связь одной пачкой, запрещает повтор и отменяет обе записи", async () => {
+      const { ledger, store, reopen } = await makeLedger()
+      const expense = await add(ledger, "Интернет 650", { categoryId: "subscriptions" })
+      await ledger.sync.acknowledge(ledger.pendingChanges())
+      const save = vi.spyOn(store, "save")
+      const input = { description: expense.description, amount: expense.amount, categoryId: "subscriptions", dayOfMonth: 28 }
+      const result = await ledger.makeRecurring(expense.id, input)
+      if (!result.ok) throw new Error(result.problem)
+      expect(save).toHaveBeenCalledTimes(1)
+      expect(save.mock.calls[0]![0].records).toHaveLength(2)
+      expect(save.mock.calls[0]![0].outboxAdd).toHaveLength(2)
+      const pending = ledger.pendingChanges()
+      expect(pending).toHaveLength(2)
+      expect(new Set(pending.map((record) => record.updatedAt)).size).toBe(1)
+      expect(await ledger.makeRecurring(expense.id, input)).toEqual({ ok: false, problem: "already-recurring" })
+      expect(save).toHaveBeenCalledTimes(1)
+      expect(ledger.pendingChanges()).toEqual(pending)
+      const restored = await reopen()
+      expect(restored.recurring()).toEqual(ledger.recurring())
+      expect(restored.operation(expense.id)).toEqual(ledger.operation(expense.id))
+      expect(restored.pendingChanges()).toEqual(pending)
+      expect(await result.undo()).toEqual({ ok: true })
+      expect(ledger.recurring()).toEqual([])
+      expect(ledger.operation(expense.id)).toEqual({ ...expense, updatedAt: expect.any(Number) })
+      expect(ledger.pendingChanges()).toEqual(expect.arrayContaining([
+        expect.objectContaining({ collection: "recurring", id: result.id, deleted: true }),
+        expect.objectContaining({ collection: "operations", id: expense.id, data: expect.objectContaining({ recurringId: null }) })
+      ]))
+      const undone = await reopen()
+      expect(undone.recurring()).toEqual([])
+      expect(undone.operation(expense.id)?.recurringId).toBeNull()
+      save.mockRestore()
+    })
   })
 
   it("правка шаблона не меняет уже созданные операции", async () => {

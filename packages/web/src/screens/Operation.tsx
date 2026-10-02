@@ -8,10 +8,11 @@ import { kindLabel, OperationBadge, operationTitle } from "../components/Operati
 import { signedAmount } from "../components/OperationRow"
 import { Sheet } from "../components/Sheet"
 import { SwipeBack } from "../components/SwipeBack"
-import { CheckIcon, CloseIcon, ForwardIcon, RefundIcon, TrashIcon } from "../icons"
+import { CheckIcon, CloseIcon, ForwardIcon, RefundIcon, RepeatIcon, TrashIcon } from "../icons"
 import { goBack, useLedgerVersion } from "../state"
 import { limitNotes, showToast } from "../toast"
 import { DebtRepayments, isDebtOperation } from "./Debt"
+import { RecurringForm } from "./Recurring"
 
 const problemText: Record<UpdateProblem, string> = {
   "not-found": "Операция уже удалена.",
@@ -189,6 +190,7 @@ const remove = async (ledger: Ledger, op: OperationView) => {
 const ViewCard = ({ ledger, op, onEdit }: { ledger: Ledger; op: OperationView; onEdit: () => void }) => {
   const [refundOpen, setRefundOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [recurringOpen, setRecurringOpen] = useState(false)
   const isRefund = op.kind === "refund"
   const movement = isMovement(op.kind)
   const info = op.kind === "expense" ? ledger.refunds(op.id) : undefined
@@ -273,6 +275,12 @@ const ViewCard = ({ ledger, op, onEdit }: { ledger: Ledger; op: OperationView; o
         {info && <RefundsList ledger={ledger} info={info} onOpenForm={() => setRefundOpen(true)} />}
         {isDebtOperation(op) && <DebtRepayments ledger={ledger} debt={op} />}
         <div class="card-list">
+          {op.kind === "expense" && !op.recurringId && (
+            <button type="button" class="row row-button action-row" onClick={() => setRecurringOpen(true)}>
+              <RepeatIcon size={18} />
+              <span>Сделать регулярной</span>
+            </button>
+          )}
           <button type="button" class="row row-button action-row destructive" onClick={() => setDeleteOpen(true)}>
             <TrashIcon size={18} />
             <span>Удалить операцию</span>
@@ -280,6 +288,40 @@ const ViewCard = ({ ledger, op, onEdit }: { ledger: Ledger; op: OperationView; o
         </div>
       </div>
       {refundOpen && info && <RefundForm ledger={ledger} op={op} info={info} onDone={() => setRefundOpen(false)} />}
+      {recurringOpen && (
+        <Sheet label="Новая регулярная операция" onClose={() => setRecurringOpen(false)}>
+          {(close) => (
+            <RecurringForm
+              ledger={ledger}
+              editing={false}
+              fixedKind
+              close={close}
+              initial={{
+                kind: "expense",
+                description: op.description,
+                amount: amountText(op.amount),
+                categoryId: op.category?.id ?? "",
+                day: String(Number(op.date.slice(8)))
+              }}
+              onSubmit={async (draft, amount) => {
+                const result = await ledger.makeRecurring(op.id, {
+                  description: draft.description,
+                  amount,
+                  categoryId: draft.categoryId,
+                  dayOfMonth: Number(draft.day)
+                })
+                if (result.ok) showToast({
+                  text: "Расход стал регулярным",
+                  action: { label: "Отменить", run: () => result.undo() }
+                })
+                return result
+              }}
+            >
+              <span class="hint">Повторения начнутся после сегодня. Уже внесённый расход сохранится.</span>
+            </RecurringForm>
+          )}
+        </Sheet>
+      )}
       {deleteOpen && <DeleteSheet op={op} onClose={() => setDeleteOpen(false)} onConfirm={() => void remove(ledger, op)} />}
     </>
   )

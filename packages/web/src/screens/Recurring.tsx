@@ -1,5 +1,5 @@
 import { formatDecimal, formatMoney, parseMoney, type CategoryKind } from "@fin/domain"
-import { dayMonth, type Ledger, type RecurringProblem, type RecurringView } from "@fin/ledger"
+import { dayMonth, type Ledger, type MakeRecurringProblem, type RecurringView } from "@fin/ledger"
 import type { ComponentChildren } from "preact"
 import { useState } from "preact/hooks"
 import { CategoryBadge } from "../components/CategoryBadge"
@@ -9,12 +9,14 @@ import { QuickDeleteButton, SwipeDeleteButton, useSwipeDelete } from "../compone
 import { GripIcon, PlusIcon, RepeatIcon } from "../icons"
 import { showToast } from "../toast"
 
-const problemText: Record<RecurringProblem, string> = {
+const problemText: Record<MakeRecurringProblem, string> = {
   "not-found": "Регулярная операция уже удалена.",
   "bad-amount": "Проверьте сумму.",
   "no-description": "Добавьте описание.",
   "bad-category": "Выберите категорию.",
-  "bad-day": "Число месяца — от 1 до 31."
+  "bad-day": "Число месяца — от 1 до 31.",
+  "not-expense": "Регулярной можно сделать только операцию расхода.",
+  "already-recurring": "Расход уже связан с регулярной операцией."
 }
 
 const statusText = (r: RecurringView, today: string) =>
@@ -34,13 +36,14 @@ interface Draft {
   day: string
 }
 
-const RecurringForm = (props: {
+export const RecurringForm = (props: {
   ledger: Ledger
   initial: Draft
   editing: boolean
+  fixedKind?: boolean
   /** Закрыть панель с анимацией — и по «Отмена», и после сохранения. */
   close: () => void
-  onSubmit: (draft: Draft, amount: number) => Promise<{ ok: boolean; problem?: RecurringProblem }>
+  onSubmit: (draft: Draft, amount: number) => Promise<{ ok: boolean; problem?: MakeRecurringProblem }>
   children?: ComponentChildren
 }) => {
   const [draft, setDraft] = useState(props.initial)
@@ -61,7 +64,7 @@ const RecurringForm = (props: {
   return (
     <form class="sheet-form" onSubmit={submit}>
       <div class="sheet-title">{props.editing ? "Регулярная операция" : "Новая регулярная операция"}</div>
-      {!props.editing && (
+      {!props.editing && !props.fixedKind && (
         <div class="segmented" role="group" aria-label="Вид операции">
           {(["expense", "income"] as const).map((kind) => (
             <button

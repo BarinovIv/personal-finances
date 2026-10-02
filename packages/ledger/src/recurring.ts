@@ -10,6 +10,7 @@ import {
 } from "@fin/domain"
 import type { LedgerContext } from "./context"
 import type { RecordOf } from "./records"
+import type { MakeRecurringResult, RecurringProblem } from "./types"
 import { writeUndoable, type Undo } from "./undo"
 import type { CategoryView } from "./views"
 
@@ -34,8 +35,6 @@ export interface RecurringInput {
   readonly categoryId: string
   readonly dayOfMonth: number
 }
-
-export type RecurringProblem = "not-found" | "bad-amount" | "no-description" | "bad-category" | "bad-day"
 
 export type RecurringResult = { readonly ok: true; readonly id: string } | { readonly ok: false; readonly problem: RecurringProblem }
 
@@ -115,6 +114,33 @@ export const addRecurring = async (ctx: LedgerContext, input: RecurringInput): P
   }
   await ctx.records.write([{ collection: "recurring", id, data }])
   return { ok: true, id }
+}
+
+/** Расход становится регулярным; повторения начинаются после сегодня, без второго расхода за этот день. */
+export const makeRecurring = async (
+  ctx: LedgerContext,
+  expenseId: string,
+  input: Omit<RecurringInput, "kind">
+): Promise<MakeRecurringResult> => {
+  const expense = ctx.records.get("operations", expenseId)
+  if (!expense || expense.deleted) return { ok: false, problem: "not-found" }
+  if (expense.data.kind !== "expense") return { ok: false, problem: "not-expense" }
+  if (expense.data.recurringId) return { ok: false, problem: "already-recurring" }
+  const problem = validate(ctx, { ...input, kind: "expense" })
+  if (problem) return { ok: false, problem }
+  const id = ctx.newId()
+  const data: RecurringData = {
+    ...input,
+    kind: "expense",
+    description: input.description.trim(),
+    startDate: addDays(ctx.today(), 1),
+    status: "active"
+  }
+  const undo = await writeUndoable(ctx.records, [
+    { collection: "recurring", id, data },
+    { collection: "operations", id: expenseId, data: { ...expense.data, recurringId: id } }
+  ])
+  return { ok: true, id, undo }
 }
 
 const change = async (

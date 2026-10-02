@@ -43,13 +43,13 @@ export { indexedDbStore } from "./src/indexeddb"
 export type {
   DeleteRecurringResult,
   RecurringInput,
-  RecurringProblem,
   RecurringResult,
   RecurringView,
   Upcoming,
   UpcomingItem
 } from "./src/recurring"
 export type { Settings } from "./src/settings"
+export type { MakeRecurringProblem, MakeRecurringResult, RecurringProblem } from "./src/types"
 export type { SearchSummary } from "./src/search"
 export { memoryStore, LocalUserChanged, type LedgerStore, type StoreChange, type StoredState } from "./src/store"
 export type { Undo } from "./src/undo"
