@@ -37,7 +37,7 @@ export type SubmitResult =
 
 /** Выбор вручную для строки с несколькими операциями. */
 export interface EntriesChoice {
-  /** Категории по порядку операций в строке. */
+  /** Категории по порядку операций; выбор подставляется и в одинаковые операции без категории. */
   readonly categoryIds?: ReadonlyArray<string | null | undefined>
   /** Дата сразу для всех операций строки. */
   readonly date?: IsoDate | null
@@ -56,10 +56,26 @@ export type SubmitEntriesResult =
 export const previewEntry = (ctx: LedgerContext, line: string, choice: EntryChoice = {}): EntryPreview =>
   previewParsed(ctx, parseEntryLine(line), choice)
 
-export const previewEntries = (ctx: LedgerContext, line: string, choice: EntriesChoice = {}): Array<EntryPreview> =>
-  parseEntryLines(line).map((parsed, i) =>
+export const previewEntries = (ctx: LedgerContext, line: string, choice: EntriesChoice = {}): Array<EntryPreview> => {
+  const previews = parseEntryLines(line).map((parsed, i) =>
     previewParsed(ctx, parsed, { categoryId: choice.categoryIds?.[i] ?? null, date: choice.date ?? null })
   )
+  const key = (p: EntryPreview) => `${p.kind}|${p.description.toLowerCase().replace(/ё/g, "е")}`
+  const chosen = new Map<string, string>()
+  for (const p of previews) {
+    if (p.categorySource === "manual" && p.categoryId !== null) chosen.set(key(p), p.categoryId)
+  }
+  return previews.map((p) => {
+    const categoryId = chosen.get(key(p))
+    if (p.categoryId !== null || categoryId === undefined) return p
+    return {
+      ...p,
+      categoryId,
+      categorySource: "manual",
+      problems: p.problems.filter((problem) => problem !== "no-category")
+    }
+  })
+}
 
 const previewParsed = (ctx: LedgerContext, parsed: ParsedEntryLine, choice: EntryChoice): EntryPreview => {
   const date = choice.date ?? addDays(ctx.today(), parsed.dateShift)

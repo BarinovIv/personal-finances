@@ -117,6 +117,82 @@ describe("ввод операции строкой", () => {
 })
 
 describe("несколько операций одной строкой", () => {
+  it("для одинаковых расходов достаточно выбрать категорию один раз", async () => {
+    const { ledger } = await makeLedger()
+    const choice = { categoryIds: [categoryId(ledger, "Транспорт")] }
+
+    expect(ledger.previewEntries("карш 100 + 100", choice)).toMatchObject([
+      { description: "карш", amount: 10000, categoryId: categoryId(ledger, "Транспорт"), problems: [] },
+      { description: "карш", amount: 10000, categoryId: categoryId(ledger, "Транспорт"), problems: [] }
+    ])
+    expect(await ledger.submitEntries("карш 100 + 100", choice)).toMatchObject({
+      ok: true,
+      operations: [
+        { description: "карш", amount: 10000, category: { name: "Транспорт" } },
+        { description: "карш", amount: 10000, category: { name: "Транспорт" } }
+      ]
+    })
+  })
+
+  it.each(["карш 100 + 200", "Карш 100; карш 200"])(
+    "выбор для второй операции подставляется и в первую: %s",
+    async (line) => {
+      const { ledger } = await makeLedger()
+      expect(ledger.previewEntries(line, { categoryIds: [null, categoryId(ledger, "Транспорт")] })).toMatchObject([
+        { amount: 10000, categoryId: categoryId(ledger, "Транспорт"), problems: [] },
+        { amount: 20000, categoryId: categoryId(ledger, "Транспорт"), problems: [] }
+      ])
+      expect(ledger.preview("карш 100").categoryId).toBeNull()
+    }
+  )
+
+  it("выбор не переносится на другое описание или вид операции", async () => {
+    const { ledger } = await makeLedger()
+    expect(
+      ledger.previewEntries("карш 100 +карш 200 абвгд 300 карш 400", {
+        categoryIds: [categoryId(ledger, "Транспорт")]
+      })
+    ).toMatchObject([
+      { kind: "expense", description: "карш", categoryId: categoryId(ledger, "Транспорт"), problems: [] },
+      { kind: "income", description: "карш", categoryId: null, problems: ["no-category"] },
+      { kind: "expense", description: "абвгд", categoryId: null, problems: ["no-category"] },
+      { kind: "expense", description: "карш", categoryId: categoryId(ledger, "Транспорт"), problems: [] }
+    ])
+  })
+
+  it("у одинаковых операций можно оставить разные явно выбранные категории", async () => {
+    const { ledger } = await makeLedger()
+    expect(
+      ledger.previewEntries("карш 100 + 200", {
+        categoryIds: [categoryId(ledger, "Транспорт"), categoryId(ledger, "Подарки")]
+      })
+    ).toMatchObject([
+      { categoryId: categoryId(ledger, "Транспорт"), problems: [] },
+      { categoryId: categoryId(ledger, "Подарки"), problems: [] }
+    ])
+  })
+
+  it.each(["咖啡 100; 出租车 200", "🎮 100; 🚕 200"])(
+    "разные описания не объединяются, даже если в них нет русских или латинских букв: %s",
+    async (line) => {
+      const { ledger } = await makeLedger()
+      expect(ledger.previewEntries(line, { categoryIds: [categoryId(ledger, "Транспорт")] })).toMatchObject([
+        { categoryId: categoryId(ledger, "Транспорт"), problems: [] },
+        { categoryId: null, problems: ["no-category"] }
+      ])
+    }
+  )
+
+  it("неподходящая категория не переносится на одинаковые расходы", async () => {
+    const { ledger } = await makeLedger()
+    expect(
+      ledger.previewEntries("карш 100 + 100", { categoryIds: [categoryId(ledger, "Подработка")] })
+    ).toMatchObject([
+      { categoryId: null, problems: ["no-category"] },
+      { categoryId: null, problems: ["no-category"] }
+    ])
+  })
+
   it("предпросмотр показывает каждую операцию со своей категорией", async () => {
     const { ledger } = await makeLedger()
     expect(
