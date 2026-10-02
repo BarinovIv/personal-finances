@@ -67,6 +67,7 @@ import {
   deleteRecurring,
   endRecurring,
   listRecurring,
+  makeRecurring,
   pauseRecurring,
   reorderRecurring,
   resumeRecurring,
@@ -80,6 +81,7 @@ import { searchOperations, type SearchSummary } from "./search"
 import { dashboardMode, readSettings, setDashboardMode, setPaydays, setTimeZone, type Settings } from "./settings"
 import type { LedgerStore } from "./store"
 import type { Undo } from "./undo"
+import type { MakeRecurringResult } from "./types"
 import type { CategoryView, DayGroup, OperationView } from "./views"
 
 export interface LedgerOptions {
@@ -192,6 +194,8 @@ export interface Ledger {
   /** Регулярные операции в порядке, заданном пользователем; без него — сначала действующие. */
   recurring(): ReadonlyArray<RecurringView>
   addRecurring(input: RecurringInput): Promise<RecurringResult>
+  /** Сделать расход регулярным с повторениями после сегодня; исходный расход сохраняется. С отменой. */
+  makeRecurring(expenseId: string, input: Omit<RecurringInput, "kind">): Promise<MakeRecurringResult>
   /** Правка шаблона не меняет уже созданные операции. */
   updateRecurring(id: string, patch: Partial<Omit<RecurringInput, "kind">>): Promise<RecurringResult>
   pauseRecurring(id: string): Promise<RecurringResult>
@@ -272,6 +276,7 @@ export const openLedger = async (options: LedgerOptions): Promise<Ledger> => {
     setDashboardMode: (mode) => setDashboardMode(ctx, mode),
     recurring: () => listRecurring(ctx),
     addRecurring: (input) => addRecurring(ctx, input),
+    makeRecurring: (id, input) => makeRecurring(ctx, id, input),
     updateRecurring: (id, patch) => updateRecurring(ctx, id, patch),
     pauseRecurring: (id) => pauseRecurring(ctx, id),
     resumeRecurring: (id) => resumeRecurring(ctx, id),
