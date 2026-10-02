@@ -15,12 +15,13 @@ import { CategoryBadge } from "../components/CategoryBadge"
 import { CategoryFilter } from "../components/CategoryFilter"
 import { CategoryGrid } from "../components/CategoryGrid"
 import { EntryHelp } from "../components/EntryHelp"
+import { EntryCalculationError } from "../components/EntryCalculationError"
 import { operationTitle } from "../components/OperationBadge"
 import { OperationRow } from "../components/OperationRow"
 import { Sheet } from "../components/Sheet"
 import { SyncBadge } from "../components/SyncBadge"
 import { LargeTitle } from "../components/LargeTitle"
-import { ArrowUpIcon, SearchIcon } from "../icons"
+import { ArrowUpIcon, SearchIcon, WarningIcon } from "../icons"
 import { useAnimatedNumber } from "../animatedNumber"
 import { plural } from "../format"
 import { navigate, useLedgerVersion } from "../state"
@@ -196,6 +197,7 @@ const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) 
   // шторка выбора сама всплывает, только когда строка дописана и набор затих
   const [autoPick, setAutoPick] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
+  const [calculationErrorOpen, setCalculationErrorOpen] = useState(false)
   const [inputFocused, setInputFocused] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const input = useRef<HTMLInputElement>(null)
@@ -205,6 +207,7 @@ const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) 
   const first = previews[0]!
   const many = previews.length > 1
   const has = text.trim() !== ""
+  const invalidCalculation = previews.some((p) => p.problems.includes("invalid-calculation"))
   const needsPick = (p: EntryPreview) => p.description !== "" && p.categoryId === null
   // без категории отправить можно: отправка откроет выбор категории
   const canAdd = has && previews.every((p) => p.problems.every((problem) => problem === "no-category"))
@@ -217,10 +220,10 @@ const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) 
 
   useEffect(() => {
     setAutoPick(false)
-    if (!active || helpOpen || awaiting < 0) return
+    if (!active || helpOpen || calculationErrorOpen || invalidCalculation || awaiting < 0) return
     const timer = window.setTimeout(() => setAutoPick(true), AUTO_PICK_DELAY_MS)
     return () => window.clearTimeout(timer)
-  }, [text, awaiting, active, helpOpen])
+  }, [text, awaiting, active, helpOpen, calculationErrorOpen, invalidCalculation])
 
   // шторка поверх открытой клавиатуры закрыта ею наполовину — убираем клавиатуру
   useEffect(() => {
@@ -232,6 +235,7 @@ const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) 
     setChoice({})
     setPickerFor(null)
     setError(null)
+    setCalculationErrorOpen(false)
   }
 
   const pick = (index: number, categoryId: string): EntriesChoice => {
@@ -251,7 +255,7 @@ const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) 
       const problem = result.problems[0]!
       // без категории открывается выбор — он сам и есть объяснение
       if (problem === "no-category") setPickerFor(result.index)
-      else
+      else if (problem !== "invalid-calculation")
         setError(
           submittedMany
             ? `«${submittedPreviews[result.index]!.description || "…"}»: ${problemText[problem]}`
@@ -329,6 +333,7 @@ const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) 
           ref={input}
           id="line"
           aria-label="Что потратил или получил?"
+          aria-invalid={invalidCalculation || undefined}
           class="line-input"
           type="text"
           placeholder="футболка 1500"
@@ -342,6 +347,7 @@ const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) 
             const value = e.currentTarget.value
             setText(value)
             setError(null)
+            setCalculationErrorOpen(false)
             if (!value.trim()) {
               setChoice({})
               setPickerFor(null)
@@ -371,7 +377,23 @@ const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) 
             <span id="entry-help-tooltip" role="tooltip">Примеры ввода</span>
           </span>
         )}
-        {has && (
+        {invalidCalculation ? (
+          <button
+            type="button"
+            class="entry-error-trigger"
+            aria-label="Ошибка в выражении"
+            aria-haspopup="dialog"
+            aria-expanded={calculationErrorOpen}
+            onClick={() => {
+              input.current?.blur()
+              setPickerFor(null)
+              setAutoPick(false)
+              setCalculationErrorOpen(true)
+            }}
+          >
+            <WarningIcon />
+          </button>
+        ) : has && (
           <button type="button" class="send-button" aria-label="Добавить" disabled={!canAdd} onClick={() => void add()}>
             <ArrowUpIcon />
           </button>
@@ -413,7 +435,7 @@ const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) 
         </div>
       ) : null}
       {active && helpOpen && <EntryHelp onClose={() => setHelpOpen(false)} />}
-      {active && !helpOpen && picking !== null && picked && (
+      {active && !helpOpen && !calculationErrorOpen && picking !== null && picked && (
         <Sheet
           key={`category-${picking}`}
           label="Выбор категории"
@@ -441,9 +463,13 @@ const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) 
           )}
         </Sheet>
       )}
-      {(error || previews.some((p) => p.problems.includes("invalid-calculation"))) && (
-        <div class="hint error">{error ?? problemText["invalid-calculation"]}</div>
+      {active && calculationErrorOpen && invalidCalculation && (
+        <EntryCalculationError
+          message={problemText["invalid-calculation"]}
+          onClose={() => setCalculationErrorOpen(false)}
+        />
       )}
+      {error && <div class="hint error">{error}</div>}
     </div>
   )
 })

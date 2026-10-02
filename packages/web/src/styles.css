@@ -1382,6 +1382,23 @@ select.text-input {
   color: var(--faint);
 }
 
+.entry-error-trigger {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--danger);
+}
+
+.entry-error-trigger:active {
+  background: var(--danger-soft);
+}
+
 /* Круглая кнопка отправки, как в «Сообщениях» */
 .send-button {
   width: 40px;
