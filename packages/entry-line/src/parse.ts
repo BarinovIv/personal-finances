@@ -1,4 +1,7 @@
-export type EntryProblem = "no-amount" | "no-description"
+import { CURRENCY, DATE_WORDS } from "./constants"
+import { isAmount, takeAmount, takeCalculation } from "./helpers"
+
+export type EntryProblem = "no-amount" | "no-description" | "invalid-calculation"
 
 export interface ParsedEntryLine {
   readonly kind: "expense" | "income"
@@ -26,10 +29,14 @@ export const parseEntryLine = (line: string): ParsedEntryLine => {
     tokens = tokens.filter((_, i) => i !== dateAt)
   }
 
-  const amount = takeAmount(tokens)
+  const calculation = takeCalculation(tokens)
+  const amount = calculation
+    ? { kopecks: calculation.amounts.length === 1 ? calculation.amounts[0]! : null, rest: calculation.rest }
+    : takeAmount(tokens)
   const description = (amount ? amount.rest : tokens).join(" ")
   const problems: Array<EntryProblem> = []
-  if (!amount) problems.push("no-amount")
+  if (calculation && calculation.amounts.length !== 1) problems.push("invalid-calculation")
+  else if (!amount) problems.push("no-amount")
   if (!description) problems.push("no-description")
   return { kind, amount: amount?.kopecks ?? null, description, dateShift, problems }
 }
@@ -43,13 +50,17 @@ export const parseEntryLines = (line: string): ReadonlyArray<ParsedEntryLine> =>
   const groups = line
     .split(SEPARATOR)
     .flatMap((chunk) => splitAfterAmounts(chunk.split(/\s+/).filter(Boolean)))
-  if (groups.length <= 1) return [parseEntryLine(groups[0]?.join(" ") ?? line)]
 
   const lead = line.trim().replace(/^\+\s*/, "").split(/\s+/)[0]!.toLowerCase()
   const shared = DATE_WORDS.get(lead)
-  return groups.map((tokens) => {
+  if (groups.length === 0) return [parseEntryLine(line)]
+  return groups.flatMap((tokens) => {
     const parsed = parseEntryLine(tokens.join(" "))
-    return shared !== undefined && !tokens.some(isDateWord) ? { ...parsed, dateShift: shared } : parsed
+    const dated = shared !== undefined && !tokens.some(isDateWord) ? { ...parsed, dateShift: shared } : parsed
+    const calculation = takeCalculation(tokens)
+    return calculation && calculation.amounts.length > 1
+      ? calculation.amounts.map((amount) => ({ ...dated, amount, problems: dated.problems.filter((p) => p !== "invalid-calculation") }))
+      : [dated]
   })
 }
 
@@ -73,64 +84,16 @@ const splitAfterAmounts = (tokens: ReadonlyArray<string>): Array<Array<string>> 
 const endsEntry = (current: ReadonlyArray<string>, next: string | undefined, afterNext: string | undefined) => {
   if (next === undefined || !current.some(isWord)) return false
   const last = current.at(-1)!
-  const onAmount = isAmount(last) || (CURRENCY.test(last) && isAmount(current.at(-2) ?? ""))
+  const onAmount = isAmount(last) || (CURRENCY.test(last) && isAmount(current.at(-2) ?? "")) || takeCalculation(current) !== null
   if (!onAmount) return false
   // «такси 450 вчера» — дата этой же операции, «такси 450 вчера кино 800» — уже следующей
   if (isDateWord(next)) return afterNext !== undefined && isWord(afterNext)
+  if (next === "+" && (afterNext === undefined || (!isWord(afterNext) && !isDateWord(afterNext)))) return false
+  if (/^\+\d/.test(next) && (afterNext === undefined || !isWord(afterNext))) return false
   return next.startsWith("+") || isWord(next)
 }
-
-const isAmount = (token: string) => parseAmountToken(token) !== null
 
 const isDateWord = (token: string) => DATE_WORDS.has(token.toLowerCase())
 
 /** Слово описания: с буквами, но не сумма («2к»), не валюта и не дата. */
-const isWord = (token: string) => /\p{L}/u.test(token) && !isAmount(token) && !CURRENCY.test(token) && !isDateWord(token)
-
-const DATE_WORDS = new Map([["сегодня", 0], ["вчера", -1], ["позавчера", -2]])
-
-const CURRENCY = /^(₽|р|р\.|руб|руб\.|рублей|рубля)$/i
-
-/** Сумма в конце строки, а если там её нет — в начале. */
-const takeAmount = (tokens: ReadonlyArray<string>) => {
-  const body = CURRENCY.test(tokens.at(-1) ?? "") ? tokens.slice(0, -1) : tokens
-  return amountAtEdge(body, "end") ?? amountAtEdge(tokens, "start")
-}
-
-/** Число с разрядами через пробел: «1 500», «1 250 000,50». */
-const GROUPED = /^\d{1,3}(?: \d{3})+(?:[.,]\d{1,2})?$/
-
-const amountAtEdge = (tokens: ReadonlyArray<string>, edge: "start" | "end") => {
-  const take = (n: number) => (edge === "end" ? tokens.slice(-n) : tokens.slice(0, n))
-  const rest = (n: number) => (edge === "end" ? tokens.slice(0, tokens.length - n) : tokens.slice(n))
-  for (let n = Math.min(tokens.length, 5); n >= 2; n--) {
-    const candidate = take(n).join(" ")
-    if (GROUPED.test(candidate)) {
-      const kopecks = Math.round(Number(candidate.replace(/ /g, "").replace(",", ".")) * 100)
-      return validAmount(kopecks) ? { kopecks, rest: rest(n) } : null
-    }
-  }
-  const single = tokens.length > 0 ? parseAmountToken(take(1)[0]!) : null
-  return single !== null && single > 0 ? { kopecks: single, rest: rest(1) } : null
-}
-
-const AMOUNT = /^(\d+(?:[.,]\d+)?)(к|k|т|тыс\.?)?(₽|р|р\.|руб\.?)?$/i
-
-const validAmount = (kopecks: number) => Number.isSafeInteger(kopecks) && kopecks > 0
-
-/** Один токен суммы → копейки, иначе null. */
-const parseAmountToken = (token: string): number | null => {
-  const m = AMOUNT.exec(token)
-  if (!m) return null
-  const [, number, thousands] = m
-  let text = number!
-  if (!thousands) {
-    // «1.500» — разряды, «99.90» — копейки
-    const fraction = /[.,](\d+)$/.exec(text)?.[1]
-    if (fraction !== undefined && fraction.length === 3) text = text.replace(/[.,]/, "")
-    else if (fraction !== undefined && fraction.length > 2) return null
-  }
-  const value = Number(text.replace(",", ".")) * (thousands ? 1000 : 1)
-  const kopecks = Math.round(value * 100)
-  return validAmount(kopecks) ? kopecks : null
-}
+const isWord = (token: string) => /\p{L}/u.test(token) && !isAmount(token) && !CURRENCY.test(token) && !isDateWord(token) && takeCalculation([token]) === null
