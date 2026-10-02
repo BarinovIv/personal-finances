@@ -1,14 +1,7 @@
-import type { OperationKind } from "@fin/domain"
-
-export type EntryProblem = "no-amount" | "no-description" | "no-expense"
-
-/** Слова команды в начале операции; плюс всегда означает обычный доход. */
-export const ENTRY_COMMANDS: ReadonlyArray<{ readonly text: string; readonly kind: OperationKind }> = [
-  { text: "возврат", kind: "refund" }
-]
+export type EntryProblem = "no-amount" | "no-description"
 
 export interface ParsedEntryLine {
-  readonly kind: OperationKind
+  readonly kind: "expense" | "income"
   /** Копейки или null, если суммы нет. */
   readonly amount: number | null
   readonly description: string
@@ -33,22 +26,11 @@ export const parseEntryLine = (line: string): ParsedEntryLine => {
     tokens = tokens.filter((_, i) => i !== dateAt)
   }
 
-  if (kind !== "income") {
-    const command = ENTRY_COMMANDS.find(({ text }) => {
-      const words = text.split(" ")
-      return words.every((word, i) => tokens[i]?.toLowerCase() === word)
-    })
-    if (command) {
-      kind = command.kind
-      tokens = tokens.slice(command.text.split(" ").length)
-    }
-  }
-
   const amount = takeAmount(tokens)
   const description = (amount ? amount.rest : tokens).join(" ")
   const problems: Array<EntryProblem> = []
   if (!amount) problems.push("no-amount")
-  if (!description) problems.push(kind === "refund" ? "no-expense" : "no-description")
+  if (!description) problems.push("no-description")
   return { kind, amount: amount?.kopecks ?? null, description, dateShift, problems }
 }
 
