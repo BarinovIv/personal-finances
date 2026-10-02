@@ -1080,6 +1080,44 @@ select.text-input {
   font-weight: 500;
 }
 
+.entry-help {
+  padding: 0 4px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.entry-help summary {
+  min-height: 44px;
+  padding: 12px 0;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.entry-help dl {
+  margin: 0 0 12px;
+}
+
+.entry-help dt {
+  margin-top: 12px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.entry-help dd {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.entry-help b {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.entry-help a {
+  color: var(--accent);
+}
+
 .empty {
   padding: 40px 16px;
   text-align: center;
