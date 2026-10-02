@@ -1,6 +1,7 @@
 import { indexedDbStore, LocalUserChanged, openLedger, type Ledger } from "@fin/ledger"
 import { createAuthApi, createSync, createUserDevice, type Sync, type Transport, type UserDevice } from "@fin/sync"
 import { useEffect, useState } from "preact/hooks"
+import { useTabActive } from "./tabActivity"
 
 const transport: Transport = { baseUrl: window.location.origin, fetch: (request) => fetch(request) }
 
@@ -37,8 +38,9 @@ export const getServices = () =>
     return { ledger, sync, device }
   }))
 
-/** Перерисовывает компонент при любом изменении журнала. */
+/** Обновляет данные при правке журнала и открытии вкладки, включая зависящие от текущей даты. */
 export const useLedgerVersion = (ledger: Ledger) => {
+  useTabActive()
   const [version, setVersion] = useState(0)
   useEffect(() => ledger.subscribe(() => setVersion((v) => v + 1)), [ledger])
   return version

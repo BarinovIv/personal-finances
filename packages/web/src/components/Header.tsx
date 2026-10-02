@@ -2,6 +2,7 @@ import type { ComponentChildren, RefObject } from "preact"
 import { useLayoutEffect, useRef, useState } from "preact/hooks"
 import { BackIcon } from "../icons"
 import { goBack } from "../state"
+import { useTabActive } from "../tabActivity"
 
 /**
  * Прокручен ли ближайший `.screen` дальше `offset` пикселей. По этому шапка включает
@@ -9,15 +10,17 @@ import { goBack } from "../state"
  */
 export const useScrolledPast = (ref: RefObject<HTMLElement>, offset: number) => {
   const [past, setPast] = useState(false)
+  const active = useTabActive()
   // до отрисовки: экран, вернувшийся к сохранённой прокрутке, сразу показывает свёрнутую шапку
   useLayoutEffect(() => {
+    if (!active) return
     const el = ref.current?.closest<HTMLElement>(".screen") ?? ref.current
     if (!el) return
     const onScroll = () => setPast(el.scrollTop > offset)
     onScroll()
     el.addEventListener("scroll", onScroll, { passive: true })
     return () => el.removeEventListener("scroll", onScroll)
-  }, [offset])
+  }, [offset, active])
   return past
 }
 
