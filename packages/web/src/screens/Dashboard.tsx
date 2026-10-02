@@ -2,7 +2,6 @@ import { formatMoney } from "@fin/domain"
 import { dayMonth, type Dashboard, type DashboardCategory, type Ledger, type PeriodMode } from "@fin/ledger"
 import { memo } from "preact/compat"
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks"
-import { allowanceItems } from "../allowance"
 import { useAnimatedNumber } from "../animatedNumber"
 import { CategoryBadge } from "../components/CategoryBadge"
 import { LargeTitle } from "../components/LargeTitle"
@@ -82,8 +81,6 @@ const Summary = memo(({ d }: { d: Dashboard }) => {
   const { comparison } = d
   const change = comparison.change
   const expenses = useAnimatedNumber(d.expenses)
-  // можно тратить в день — только в текущем периоде
-  const allowance = d.allowance ? allowanceItems(d.allowance) : []
   const compareText =
     change === 0
       ? `столько же, сколько ${comparison.label}`
@@ -106,12 +103,6 @@ const Summary = memo(({ d }: { d: Dashboard }) => {
           <span class="summary-caption">Остаток</span>
           <span class="summary-value num">{formatMoney(d.balance)}</span>
         </div>
-        {allowance.map((item) => (
-          <div class={`summary-cell${allowance.length === 1 ? " wide" : ""}`} key={item.label}>
-            <span class="summary-caption">{item.label}</span>
-            <span class={`summary-value num${item.over ? " over" : ""}`}>{item.value}</span>
-          </div>
-        ))}
       </div>
     </section>
   )

@@ -1203,36 +1203,6 @@ select.text-input {
   letter-spacing: -0.8px;
 }
 
-/* Можно тратить в день и сегодня осталось — под суммой за период */
-.spent-hero-allowance {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 24px;
-  margin-top: 8px;
-}
-
-.spent-hero-stat {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.spent-hero-stat-label {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--muted);
-}
-
-.spent-hero-stat-value {
-  font-family: var(--font-rounded);
-  font-size: 19px;
-  font-weight: 700;
-}
-
-.spent-hero-stat-value.over {
-  color: var(--danger);
-}
-
 .composer {
   display: flex;
   flex-direction: column;
@@ -1881,14 +1851,6 @@ select.text-input {
 
 .summary-income {
   color: var(--accent);
-}
-
-.summary-cell.wide {
-  grid-column: 1 / -1;
-}
-
-.summary-value.over {
-  color: var(--danger);
 }
 
 .donut-card {
