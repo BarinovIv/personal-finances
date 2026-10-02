@@ -194,6 +194,7 @@ const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) 
   const [pickerFor, setPickerFor] = useState<number | null>(null)
   // шторка выбора сама всплывает, только когда строка дописана и набор затих
   const [autoPick, setAutoPick] = useState(false)
+  const [helpOpen, setHelpOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const input = useRef<HTMLInputElement>(null)
 
@@ -213,10 +214,10 @@ const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) 
 
   useEffect(() => {
     setAutoPick(false)
-    if (!active || awaiting < 0) return
+    if (!active || helpOpen || awaiting < 0) return
     const timer = window.setTimeout(() => setAutoPick(true), AUTO_PICK_DELAY_MS)
     return () => window.clearTimeout(timer)
-  }, [text, awaiting, active])
+  }, [text, awaiting, active, helpOpen])
 
   // шторка поверх открытой клавиатуры закрыта ею наполовину — убираем клавиатуру
   useEffect(() => {
@@ -382,8 +383,15 @@ const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) 
           <span class={`amount-preview num ${first.kind}`}>{first.amount ? signed(first) : "сумма?"}</span>
         </div>
       ) : null}
-      <EntryHelp />
-      {active && picking !== null && picked && (
+      <EntryHelp
+        open={active && helpOpen}
+        onOpen={() => {
+          input.current?.blur()
+          setHelpOpen(true)
+        }}
+        onClose={() => setHelpOpen(false)}
+      />
+      {active && !helpOpen && picking !== null && picked && (
         <Sheet
           label="Выбор категории"
           onClose={() => {

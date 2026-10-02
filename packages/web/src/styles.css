@@ -1091,18 +1091,23 @@ select.text-input {
   font-weight: 500;
 }
 
-.entry-help {
-  padding: 0 4px;
+.entry-help-button {
+  align-self: flex-start;
+  margin-top: -8px;
+  min-height: 36px;
+  padding: 6px 4px;
+  border: 0;
+  background: transparent;
   font-size: 13px;
-  line-height: 1.5;
-  color: var(--muted);
-}
-
-.entry-help summary {
-  min-height: 44px;
-  padding: 12px 0;
   color: var(--accent);
   cursor: pointer;
+}
+
+.entry-help {
+  padding: 0 4px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--muted);
 }
 
 .entry-help dl {
