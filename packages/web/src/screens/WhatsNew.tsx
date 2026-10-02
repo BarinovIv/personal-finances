@@ -1,7 +1,14 @@
-/** «Что нового» — коротко о последних изменениях приложения, по разделам. Новое — сверху. */
-const NEWS: ReadonlyArray<{ readonly title: string; readonly items: ReadonlyArray<string> }> = [
+/** "Что нового" — коротко о последних изменениях приложения, по разделам. Новое — сверху. */
+const releaseDateFormat = new Intl.DateTimeFormat("ru-RU", { dateStyle: "long", timeZone: "UTC" })
+
+const NEWS: ReadonlyArray<{
+  readonly title: string
+  readonly releaseDate: string
+  readonly items: ReadonlyArray<string>
+}> = [
   {
     title: "Калькулятор в строке ввода",
+    releaseDate: "2026-10-02",
     items: [
       "Введите \"каршеринг 370 + 550\" — сохранятся две операции; \"каршеринг 300*3\" — три по 300 ₽.",
       "Вычитание и деление считают сумму одной операции: \"каршеринг 1000 - 330\" → 670 ₽, \"каршеринг 400 / 2\" → 200 ₽.",
@@ -10,6 +17,7 @@ const NEWS: ReadonlyArray<{ readonly title: string; readonly items: ReadonlyArra
   },
   {
     title: "Пользователи и часовые пояса",
+    releaseDate: "2026-10-01",
     items: [
       "У каждого пользователя свой учёт. Владелец приглашает друзей и помогает сбросить забытый пароль в «Настройки → Пользователи».",
       "В настройках можно сменить пароль, отозвать вход на устройстве и выбрать часовой пояс. Регулярные операции появляются по вашему времени.",
@@ -19,6 +27,7 @@ const NEWS: ReadonlyArray<{ readonly title: string; readonly items: ReadonlyArra
   },
   {
     title: "Регулярные операции",
+    releaseDate: "2026-09-30",
     items: [
       "Регулярную операцию можно удалить — свайпом влево, как операцию в ленте, или в её карточке, с «Отменить». Уже созданные по ней операции остаются.",
       "Порядок списка меняется перетаскиванием за значок справа."
@@ -26,6 +35,7 @@ const NEWS: ReadonlyArray<{ readonly title: string; readonly items: ReadonlyArra
   },
   {
     title: "Ввод и цели",
+    releaseDate: "2026-09-30",
     items: [
       "Выбор категории открывается без клавиатуры и больше не прячется под таббаром.",
       "Закрытый выбор категории не мешает: строку можно отправить, выбор откроется снова.",
@@ -34,6 +44,7 @@ const NEWS: ReadonlyArray<{ readonly title: string; readonly items: ReadonlyArra
   },
   {
     title: "Цели",
+    releaseDate: "2026-09-29",
     items: [
       "Цель накопления: название, иконка, сумма и необязательный срок.",
       "«Отложить» и «Снять» в карточке цели; снять больше накопленного нельзя.",
@@ -44,6 +55,7 @@ const NEWS: ReadonlyArray<{ readonly title: string; readonly items: ReadonlyArra
   },
   {
     title: "Долги",
+    releaseDate: "2026-09-29",
     items: [
       "«Одолжил» и «Занял» в «Настройки → Долги», с подсказкой имён из уже встречавшихся.",
       "Долги сгруппированы по людям с сальдо: «Петя · должен мне · 1 500 ₽». «Петя» и «петя» — один человек.",
@@ -54,6 +66,7 @@ const NEWS: ReadonlyArray<{ readonly title: string; readonly items: ReadonlyArra
   },
   {
     title: "Лимиты категорий",
+    releaseDate: "2026-09-29",
     items: [
       "У категории расходов можно задать «Лимит в месяц» и убрать его; у доходов лимита нет.",
       "На дашборде — «3 200 из 15 000 ₽» и полоска; сверх лимита красным. Категория с лимитом видна и без трат: «0 из 5 000 ₽».",
@@ -63,6 +76,7 @@ const NEWS: ReadonlyArray<{ readonly title: string; readonly items: ReadonlyArra
   },
   {
     title: "Можно тратить в день",
+    releaseDate: "2026-09-29",
     items: [
       "На экране ввода и на дашборде — две цифры: «Можно тратить в день» и «Сегодня осталось».",
       "Сумма на день считается на начало дня из свободных денег: доходы − расходы − предстоящие списания.",
@@ -72,6 +86,7 @@ const NEWS: ReadonlyArray<{ readonly title: string; readonly items: ReadonlyArra
   },
   {
     title: "Отменить",
+    releaseDate: "2026-09-29",
     items: [
       "После любого изменения внизу появляется тост с кнопкой «Отменить».",
       "Сохранение строки: отмена удаляет все её операции и возвращает текст в поле ввода.",
@@ -84,6 +99,7 @@ const NEWS: ReadonlyArray<{ readonly title: string; readonly items: ReadonlyArra
   },
   {
     title: "Операции вне расходов и доходов",
+    releaseDate: "2026-09-29",
     items: [
       "Шесть новых видов: «Отложено», «Снято», «Одолжил», «Занял», «Мне вернули», «Я вернул».",
       "В ленте — с серым значком и названием цели или именем человека; находятся поиском.",
@@ -97,7 +113,9 @@ export const WhatsNewSection = () => (
   <>
     {NEWS.map((group) => (
       <section class="section" key={group.title}>
-        <h2 class="section-header">{group.title}</h2>
+        <h2 class="section-header">
+          {group.title} · <time dateTime={group.releaseDate}>{releaseDateFormat.format(new Date(group.releaseDate))}</time>
+        </h2>
         <ul class="card-list news-list">
           {group.items.map((item) => (
             <li class="row news-item" key={item}>
