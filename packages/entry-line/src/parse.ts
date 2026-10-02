@@ -1,19 +1,10 @@
 import type { OperationKind } from "@fin/domain"
 
-export type EntryProblem = "no-amount" | "no-description" | "no-person" | "no-goal" | "no-expense"
+export type EntryProblem = "no-amount" | "no-description" | "no-expense"
 
 /** Слова команды в начале операции; плюс всегда означает обычный доход. */
 export const ENTRY_COMMANDS: ReadonlyArray<{ readonly text: string; readonly kind: OperationKind }> = [
-  { text: "одолжил", kind: "lent" },
-  { text: "занял", kind: "borrowed" },
-  { text: "мне вернули", kind: "repaid-to-me" },
-  { text: "я вернул", kind: "repaid-by-me" },
-  { text: "вернул", kind: "repaid-by-me" },
-  { text: "возврат", kind: "refund" },
-  { text: "отложить", kind: "saved" },
-  { text: "отложил", kind: "saved" },
-  { text: "снять", kind: "withdrawn" },
-  { text: "снял", kind: "withdrawn" }
+  { text: "возврат", kind: "refund" }
 ]
 
 export interface ParsedEntryLine {
@@ -50,10 +41,6 @@ export const parseEntryLine = (line: string): ParsedEntryLine => {
     if (command) {
       kind = command.kind
       tokens = tokens.slice(command.text.split(" ").length)
-    } else if (tokens.length === 1 && (tokens[0]!.toLowerCase() === "мне" || tokens[0]!.toLowerCase() === "я")) {
-      // Начало двухсловной команды тоже не становится описанием расхода.
-      kind = tokens[0]!.toLowerCase() === "мне" ? "repaid-to-me" : "repaid-by-me"
-      tokens = []
     }
   }
 
@@ -61,25 +48,8 @@ export const parseEntryLine = (line: string): ParsedEntryLine => {
   const description = (amount ? amount.rest : tokens).join(" ")
   const problems: Array<EntryProblem> = []
   if (!amount) problems.push("no-amount")
-  if (!description) problems.push(missingTarget(kind))
+  if (!description) problems.push(kind === "refund" ? "no-expense" : "no-description")
   return { kind, amount: amount?.kopecks ?? null, description, dateShift, problems }
-}
-
-const missingTarget = (kind: OperationKind): EntryProblem => {
-  switch (kind) {
-    case "lent":
-    case "borrowed":
-    case "repaid-to-me":
-    case "repaid-by-me":
-      return "no-person"
-    case "saved":
-    case "withdrawn":
-      return "no-goal"
-    case "refund":
-      return "no-expense"
-    default:
-      return "no-description"
-  }
 }
 
 /**

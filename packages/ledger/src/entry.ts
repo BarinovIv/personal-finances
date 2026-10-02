@@ -1,9 +1,9 @@
-import { addDays, DEBT_OF_REPAYMENT, isMovement, isRepayment, type IsoDate, type OperationData, type OperationKind } from "@fin/domain"
+import { addDays, type IsoDate, type OperationData, type OperationKind } from "@fin/domain"
 import { parseEntryLine, parseEntryLines, type EntryProblem, type ParsedEntryLine } from "@fin/entry-line"
 import { suggestCategory, type CategorySource } from "./categorize"
 import type { LedgerContext } from "./context"
 import { limitWarnings, type LimitWarning } from "./limits"
-import { byDateDesc, goalSavings } from "./movements"
+import { byDateDesc } from "./movements"
 import { writeUndoable, type Undo } from "./undo"
 import type { OperationView } from "./views"
 
@@ -11,17 +11,17 @@ import type { OperationView } from "./views"
 export interface EntryChoice {
   readonly categoryId?: string | null
   readonly date?: IsoDate | null
-  /** Конкретная цель, расход или долг при совпадающих названиях. */
+  /** Конкретный расход для возврата при совпадающих названиях. */
   readonly targetId?: string | null
 }
 
-export type EntryPreviewProblem = EntryProblem | "no-category" | "no-debt" | "choose-target" | "too-much"
+export type EntryPreviewProblem = EntryProblem | "no-category" | "choose-target" | "too-much"
 
 export interface EntryTarget {
   readonly id: string
   readonly label: string
   readonly date: IsoDate | null
-  /** Остаток расхода/долга; у цели — уже накопленная сумма. */
+  /** Сумма расхода, которую ещё можно вернуть. */
   readonly remaining: number
 }
 
@@ -33,10 +33,7 @@ export interface EntryPreview {
   readonly categoryId: string | null
   /** Откуда категория: выбрана вручную, из истории или из словаря. */
   readonly categorySource: CategorySource | null
-  readonly person: string | null
-  readonly goalId: string | null
   readonly refundOf: string | null
-  readonly repaymentOf: string | null
   readonly targets: ReadonlyArray<EntryTarget>
   readonly problems: ReadonlyArray<EntryPreviewProblem>
 }
@@ -55,7 +52,7 @@ export type SubmitResult =
 export interface EntriesChoice {
   /** Категории по порядку операций в строке. */
   readonly categoryIds?: ReadonlyArray<string | null | undefined>
-  /** Цели, расходы или долги по порядку операций. */
+  /** Расходы для возврата по порядку операций. */
   readonly targetIds?: ReadonlyArray<string | null | undefined>
   /** Дата сразу для всех операций строки. */
   readonly date?: IsoDate | null
@@ -83,10 +80,7 @@ const previewParsed = (ctx: LedgerContext, parsed: ParsedEntryLine, choice: Entr
   const date = choice.date ?? addDays(ctx.today(), parsed.dateShift)
   let categoryId: string | null = null
   let categorySource: CategorySource | null = null
-  let person: string | null = null
-  let goalId: string | null = null
   let refundOf: string | null = null
-  let repaymentOf: string | null = null
   let description = parsed.description
   const targets = entryTargets(ctx, parsed)
   let problems: Array<EntryPreviewProblem> = [...parsed.problems]
@@ -105,27 +99,18 @@ const previewParsed = (ctx: LedgerContext, parsed: ParsedEntryLine, choice: Entr
       }
     }
     if (categoryId === null) problems.push("no-category")
-  } else if (parsed.kind === "lent" || parsed.kind === "borrowed") {
-    person = parsed.description || null
-  } else {
+  } else if (parsed.kind === "refund") {
     const target = choice.targetId
       ? targets.find((t) => t.id === choice.targetId)
       : parsed.description && targets.length === 1 ? targets[0] : undefined
     if (target) {
       // Выбор из списка позволяет заполнить команду, даже если имя ещё не набрано.
-      problems = problems.filter((p) => p !== "no-person" && p !== "no-goal" && p !== "no-expense")
+      problems = problems.filter((p) => p !== "no-expense")
       description = target.label
-      if (parsed.kind === "refund") {
-        refundOf = target.id
-        categoryId = ctx.records.get("operations", target.id)!.data.categoryId
-      } else if (isRepayment(parsed.kind)) {
-        repaymentOf = target.id
-        person = target.label
-      } else {
-        goalId = target.id
-      }
+      refundOf = target.id
+      categoryId = ctx.records.get("operations", target.id)!.data.categoryId
     } else if (parsed.description) {
-      problems.push(targets.length > 1 ? "choose-target" : missingOriginal(parsed.kind))
+      problems.push(targets.length > 1 ? "choose-target" : "no-expense")
     }
   }
   return {
@@ -135,10 +120,7 @@ const previewParsed = (ctx: LedgerContext, parsed: ParsedEntryLine, choice: Entr
     date,
     categoryId,
     categorySource,
-    person,
-    goalId,
     refundOf,
-    repaymentOf,
     targets,
     problems
   }
@@ -146,31 +128,22 @@ const previewParsed = (ctx: LedgerContext, parsed: ParsedEntryLine, choice: Entr
 
 const targetKey = (text: string) => text.trim().toLowerCase().replace(/ё/g, "е").replace(/\s+/g, " ")
 
-const missingOriginal = (kind: OperationKind): EntryPreviewProblem =>
-  kind === "refund" ? "no-expense" : isRepayment(kind) ? "no-debt" : "no-goal"
-
 /** Кандидаты только своего вида и с точным совпадением имени; одинаковые названия остаются отдельными. */
 const entryTargets = (ctx: LedgerContext, parsed: ParsedEntryLine): Array<EntryTarget> => {
   const matches = (label: string) => !parsed.description || targetKey(label) === targetKey(parsed.description)
-  if (parsed.kind === "saved" || parsed.kind === "withdrawn") {
-    return ctx.records.live("goals").filter((r) => matches(r.data.name)).map((r) => ({
-      id: r.id, label: r.data.name, date: null, remaining: goalSavings(ctx, r.id)
-    }))
-  }
-  const kind = parsed.kind
-  if (kind !== "refund" && !isRepayment(kind)) return []
+  if (parsed.kind !== "refund") return []
   const completed = new Map<string, number>()
   for (const { data } of ctx.operations()) {
-    const original = kind === "refund" ? data.refundOf : data.repaymentOf
+    const original = data.refundOf
     if (original) completed.set(original, (completed.get(original) ?? 0) + data.amount)
   }
   return ctx.operations()
-    .filter((r) => r.data.kind === (kind === "refund" ? "expense" : DEBT_OF_REPAYMENT[kind]))
-    .filter((r) => matches(kind === "refund" ? r.data.description : r.data.person ?? ""))
+    .filter((r) => r.data.kind === "expense")
+    .filter((r) => matches(r.data.description))
     .sort((a, b) => byDateDesc(a.data, b.data))
     .map((r) => ({
       id: r.id,
-      label: kind === "refund" ? r.data.description : r.data.person ?? "",
+      label: r.data.description,
       date: r.data.date,
       remaining: r.data.amount - (completed.get(r.id) ?? 0)
     }))
@@ -181,16 +154,13 @@ const entryTargets = (ctx: LedgerContext, parsed: ParsedEntryLine): Array<EntryT
 const checkCaps = (previews: ReadonlyArray<EntryPreview>): Array<EntryPreview> => {
   const balances = new Map<string, number>()
   return previews.map((preview) => {
-    const { kind, amount, goalId, refundOf, repaymentOf } = preview
-    if (preview.problems.length > 0 || amount === null) return preview
-    const id = goalId ?? refundOf ?? repaymentOf
-    if (!id) return preview
-    const key = `${goalId ? "goal" : refundOf ? "refund" : "debt"}:${id}`
-    const initial = preview.targets.find((target) => target.id === id)!.remaining
-    const available = balances.get(key) ?? initial
-    const next = kind === "saved" ? available + amount : available - amount
+    const { amount, refundOf } = preview
+    if (preview.problems.length > 0 || amount === null || !refundOf) return preview
+    const initial = preview.targets.find((target) => target.id === refundOf)!.remaining
+    const available = balances.get(refundOf) ?? initial
+    const next = available - amount
     if (next < 0) return { ...preview, problems: [...preview.problems, "too-much"] }
-    balances.set(key, next)
+    balances.set(refundOf, next)
     return preview
   })
 }
@@ -217,16 +187,13 @@ const saveAll = async (ctx: LedgerContext, previews: ReadonlyArray<EntryPreview>
     const data: OperationData = {
       kind: p.kind,
       amount: p.amount!,
-      description: isMovement(p.kind) ? "" : p.description,
+      description: p.description,
       categoryId: p.categoryId ?? "",
       date: p.date,
       createdAt: stamp,
       categorizedAt: stamp,
       refundOf: p.refundOf,
-      recurringId: null,
-      ...(p.goalId ? { goalId: p.goalId } : {}),
-      ...(p.person && (p.kind === "lent" || p.kind === "borrowed") ? { person: p.person } : {}),
-      ...(p.repaymentOf ? { repaymentOf: p.repaymentOf } : {})
+      recurringId: null
     }
     return { collection: "operations" as const, id: ctx.newId(), data }
   })

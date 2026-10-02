@@ -61,20 +61,11 @@ export const EntryHelp = ({ onClose }: { onClose: () => void }) => {
               <code>вчера такси 450</code> · <code>позавчера кино 800</code>
               <span class="entry-help-note">Без даты — сегодня. Дата в начале — общая, если у операции нет своей.</span>
             </dd>
-            <dt>Долги и возвраты</dt>
+            <dt>Возврат покупки</dt>
             <dd>
-              <code>одолжил Петя 2к</code> · <code>занял Петя 1к</code>
+              <code>возврат шаурма 150</code>
               <span class="entry-help-note">
-                Погашение: <code>мне вернули Петя 500</code> или <code>я вернул Петя 500</code>.
-                Возврат покупки: <code>возврат шаурма 150</code>.
                 Если совпадений несколько — выберите нужную операцию.
-              </span>
-            </dd>
-            <dt>Цели</dt>
-            <dd>
-              <code>отложил отпуск 3к</code> · <code>снял отпуск 1к</code>
-              <span class="entry-help-note">
-                Цель должна уже существовать в разделе <a href="#/settings/goals" onClick={onClose}>"Цели"</a>.
               </span>
             </dd>
           </dl>
