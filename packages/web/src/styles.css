@@ -1593,12 +1593,11 @@ select.text-input {
   color: var(--muted);
 }
 
-/* Строка операции: свайп влево открывает «Удалить», появление/исчезание анимированы */
+/* Строка операции: свайп влево открывает «Удалить», исчезание анимировано */
 .op-row-wrap {
   --separator-inset: 66px;
   display: flex;
   align-items: stretch;
-  animation: fin-row-in 0.45s var(--spring-smooth);
 }
 
 .op-row-wrap.leaving {
@@ -2785,13 +2784,6 @@ select.text-input {
   from {
     opacity: 0;
     transform: translateY(24px) scale(0.9);
-  }
-}
-
-@keyframes fin-row-in {
-  from {
-    opacity: 0;
-    transform: translateY(-8px);
   }
 }
 
