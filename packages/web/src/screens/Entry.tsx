@@ -28,6 +28,7 @@ import { limitNotes, showToast } from "../toast"
 import { useTabActive } from "../tabActivity"
 
 const problemText: Record<EntryPreviewProblem, string> = {
+  "invalid-calculation": "Проверьте выражение: суммы должны быть положительными, число повторов — целым от 1 до 1000. Смешанные действия не поддерживаются.",
   "no-amount": "Не вижу сумму — добавьте число, например «кофе 250».",
   "no-description": "Добавьте описание — что это было?",
   "no-category": "Выберите категорию."
@@ -210,7 +211,7 @@ const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) 
   const categoryOf = (p: EntryPreview) =>
     p.categoryId ? ledger.categories(p.kind).find((c) => c.id === p.categoryId) : undefined
   const today = ledger.today()
-  const awaiting = previews.findIndex((p) => needsPick(p) && !p.problems.includes("no-amount"))
+  const awaiting = previews.findIndex((p) => needsPick(p) && p.problems.every((problem) => problem === "no-category"))
   const picking = !has ? null : (pickerFor ?? (autoPick && awaiting >= 0 ? awaiting : null))
   const picked = picking === null ? undefined : previews[picking]
 
@@ -440,7 +441,9 @@ const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) 
           )}
         </Sheet>
       )}
-      {error && <div class="hint error">{error}</div>}
+      {(error || previews.some((p) => p.problems.includes("invalid-calculation"))) && (
+        <div class="hint error">{error ?? problemText["invalid-calculation"]}</div>
+      )}
     </div>
   )
 })

@@ -46,6 +46,13 @@ export const EntryHelp = ({ onClose }: { onClose: () => void }) => {
               <code>шаурма 150 шашлык 200</code>
               <span class="entry-help-note">Можно разделять запятой или точкой с запятой.</span>
             </dd>
+            <dt>Калькулятор</dt>
+            <dd>
+              <code>каршеринг 370 + 550</code> — две операции: 370 ₽ и 550 ₽.
+              <span class="entry-help-note"><code>каршеринг 300*3</code> — три операции по 300 ₽.</span>
+              <span class="entry-help-note"><code>каршеринг 1000 - 330</code> — 670 ₽; <code>каршеринг 400 / 2</code> — 200 ₽.</span>
+              <span class="entry-help-note">Пробелы вокруг знаков необязательны.</span>
+            </dd>
             <dt>Доход</dt>
             <dd>
               <code>+зарплата 95к</code>
