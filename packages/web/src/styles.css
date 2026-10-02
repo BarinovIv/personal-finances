@@ -1091,22 +1091,95 @@ select.text-input {
   font-weight: 500;
 }
 
-.entry-help-button {
-  align-self: flex-start;
-  margin-top: -8px;
-  min-height: 36px;
-  padding: 6px 4px;
+.entry-help-trigger {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.entry-help-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
   border: 0;
   background: transparent;
-  font-size: 13px;
-  color: var(--accent);
+  color: var(--muted);
   cursor: pointer;
 }
 
+.entry-help-icon span {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.entry-help-trigger [role="tooltip"] {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 2;
+  width: max-content;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--ink);
+  color: var(--bg);
+  font-size: 12px;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.entry-help-trigger:hover [role="tooltip"],
+.entry-help-trigger:focus-within [role="tooltip"] {
+  visibility: visible;
+}
+
+.sheet:has(.entry-help) {
+  bottom: 0;
+  width: min(544px, 100%);
+  border-radius: 28px 28px 0 0;
+}
+
+.sheet:has(.entry-help) .sheet-body {
+  padding-bottom: max(20px, env(safe-area-inset-bottom));
+}
+
 .entry-help {
-  padding: 0 4px;
+  padding: 0 8px;
   font-size: 14px;
   line-height: 1.45;
+  color: var(--muted);
+}
+
+.entry-help-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.entry-help-header h2 {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.2;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.entry-help-close {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--fill);
   color: var(--muted);
 }
 
@@ -1115,19 +1188,30 @@ select.text-input {
 }
 
 .entry-help dt {
-  margin-top: 12px;
+  margin-top: 20px;
+  font-size: 11px;
   font-weight: 600;
-  color: var(--ink);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .entry-help dd {
-  margin: 4px 0 0;
+  margin: 8px 0 0;
   overflow-wrap: anywhere;
 }
 
-.entry-help b {
-  font-weight: 600;
+.entry-help code {
+  padding: 2px 5px;
+  border-radius: 5px;
+  background: var(--fill);
+  font-size: 14px;
   color: var(--ink);
+}
+
+.entry-help-note {
+  display: block;
+  margin-top: 6px;
+  font-size: 13px;
 }
 
 .entry-help a {

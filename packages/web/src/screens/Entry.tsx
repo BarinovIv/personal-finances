@@ -195,6 +195,7 @@ const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) 
   // шторка выбора сама всплывает, только когда строка дописана и набор затих
   const [autoPick, setAutoPick] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
+  const [inputFocused, setInputFocused] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const input = useRef<HTMLInputElement>(null)
 
@@ -326,6 +327,8 @@ const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) 
           autocapitalize="off"
           enterKeyHint="done"
           value={text}
+          onFocus={() => setInputFocused(true)}
+          onBlur={() => setInputFocused(false)}
           onInput={(e) => {
             const value = e.currentTarget.value
             setText(value)
@@ -342,6 +345,22 @@ const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) 
             }
           }}
         />
+        {!inputFocused && text === "" && (
+          <span class="entry-help-trigger">
+            <button
+              type="button"
+              class="entry-help-icon"
+              aria-label="Примеры ввода"
+              aria-describedby="entry-help-tooltip"
+              aria-haspopup="dialog"
+              aria-expanded={helpOpen}
+              onClick={() => setHelpOpen(true)}
+            >
+              <span aria-hidden="true">?</span>
+            </button>
+            <span id="entry-help-tooltip" role="tooltip">Примеры ввода</span>
+          </span>
+        )}
         {has && (
           <button type="button" class="send-button" aria-label="Добавить" disabled={!canAdd} onClick={() => void add()}>
             <ArrowUpIcon />
@@ -383,14 +402,7 @@ const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) 
           <span class={`amount-preview num ${first.kind}`}>{first.amount ? signed(first) : "сумма?"}</span>
         </div>
       ) : null}
-      <EntryHelp
-        open={active && helpOpen}
-        onOpen={() => {
-          input.current?.blur()
-          setHelpOpen(true)
-        }}
-        onClose={() => setHelpOpen(false)}
-      />
+      {active && helpOpen && <EntryHelp onClose={() => setHelpOpen(false)} />}
       {active && !helpOpen && picking !== null && picked && (
         <Sheet
           label="Выбор категории"
