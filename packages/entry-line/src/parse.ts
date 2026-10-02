@@ -1,7 +1,23 @@
-export type EntryProblem = "no-amount" | "no-description"
+import type { OperationKind } from "@fin/domain"
+
+export type EntryProblem = "no-amount" | "no-description" | "no-person" | "no-goal" | "no-expense"
+
+/** Слова команды в начале операции; плюс всегда означает обычный доход. */
+export const ENTRY_COMMANDS: ReadonlyArray<{ readonly text: string; readonly kind: OperationKind }> = [
+  { text: "одолжил", kind: "lent" },
+  { text: "занял", kind: "borrowed" },
+  { text: "мне вернули", kind: "repaid-to-me" },
+  { text: "я вернул", kind: "repaid-by-me" },
+  { text: "вернул", kind: "repaid-by-me" },
+  { text: "возврат", kind: "refund" },
+  { text: "отложить", kind: "saved" },
+  { text: "отложил", kind: "saved" },
+  { text: "снять", kind: "withdrawn" },
+  { text: "снял", kind: "withdrawn" }
+]
 
 export interface ParsedEntryLine {
-  readonly kind: "expense" | "income"
+  readonly kind: OperationKind
   /** Копейки или null, если суммы нет. */
   readonly amount: number | null
   readonly description: string
@@ -26,12 +42,44 @@ export const parseEntryLine = (line: string): ParsedEntryLine => {
     tokens = tokens.filter((_, i) => i !== dateAt)
   }
 
+  if (kind !== "income") {
+    const command = ENTRY_COMMANDS.find(({ text }) => {
+      const words = text.split(" ")
+      return words.every((word, i) => tokens[i]?.toLowerCase() === word)
+    })
+    if (command) {
+      kind = command.kind
+      tokens = tokens.slice(command.text.split(" ").length)
+    } else if (tokens.length === 1 && (tokens[0]!.toLowerCase() === "мне" || tokens[0]!.toLowerCase() === "я")) {
+      // Начало двухсловной команды тоже не становится описанием расхода.
+      kind = tokens[0]!.toLowerCase() === "мне" ? "repaid-to-me" : "repaid-by-me"
+      tokens = []
+    }
+  }
+
   const amount = takeAmount(tokens)
   const description = (amount ? amount.rest : tokens).join(" ")
   const problems: Array<EntryProblem> = []
   if (!amount) problems.push("no-amount")
-  if (!description) problems.push("no-description")
+  if (!description) problems.push(missingTarget(kind))
   return { kind, amount: amount?.kopecks ?? null, description, dateShift, problems }
+}
+
+const missingTarget = (kind: OperationKind): EntryProblem => {
+  switch (kind) {
+    case "lent":
+    case "borrowed":
+    case "repaid-to-me":
+    case "repaid-by-me":
+      return "no-person"
+    case "saved":
+    case "withdrawn":
+      return "no-goal"
+    case "refund":
+      return "no-expense"
+    default:
+      return "no-description"
+  }
 }
 
 /**
@@ -106,7 +154,8 @@ const amountAtEdge = (tokens: ReadonlyArray<string>, edge: "start" | "end") => {
   for (let n = Math.min(tokens.length, 5); n >= 2; n--) {
     const candidate = take(n).join(" ")
     if (GROUPED.test(candidate)) {
-      return { kopecks: Math.round(Number(candidate.replace(/ /g, "").replace(",", ".")) * 100), rest: rest(n) }
+      const kopecks = Math.round(Number(candidate.replace(/ /g, "").replace(",", ".")) * 100)
+      return validAmount(kopecks) ? { kopecks, rest: rest(n) } : null
     }
   }
   const single = tokens.length > 0 ? parseAmountToken(take(1)[0]!) : null
@@ -114,6 +163,8 @@ const amountAtEdge = (tokens: ReadonlyArray<string>, edge: "start" | "end") => {
 }
 
 const AMOUNT = /^(\d+(?:[.,]\d+)?)(к|k|т|тыс\.?)?(₽|р|р\.|руб\.?)?$/i
+
+const validAmount = (kopecks: number) => Number.isSafeInteger(kopecks) && kopecks > 0
 
 /** Один токен суммы → копейки, иначе null. */
 const parseAmountToken = (token: string): number | null => {
@@ -128,6 +179,6 @@ const parseAmountToken = (token: string): number | null => {
     else if (fraction !== undefined && fraction.length > 2) return null
   }
   const value = Number(text.replace(",", ".")) * (thousands ? 1000 : 1)
-  if (!Number.isFinite(value)) return null
-  return Math.round(value * 100)
+  const kopecks = Math.round(value * 100)
+  return validAmount(kopecks) ? kopecks : null
 }
