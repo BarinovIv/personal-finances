@@ -14,6 +14,7 @@ import type { Sync } from "@fin/sync"
 import { CategoryBadge } from "../components/CategoryBadge"
 import { CategoryFilter } from "../components/CategoryFilter"
 import { CategoryGrid } from "../components/CategoryGrid"
+import { EntryHelp } from "../components/EntryHelp"
 import { operationTitle } from "../components/OperationBadge"
 import { OperationRow } from "../components/OperationRow"
 import { Sheet } from "../components/Sheet"
@@ -378,11 +379,8 @@ const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) 
           {dateChip}
           <span class={`amount-preview num ${first.kind}`}>{first.amount ? signed(first) : "сумма?"}</span>
         </div>
-      ) : ledger.days().length === 0 ? (
-        <div class="hint">
-          Например: <b>футболка 1500</b> · <b>+зарплата 95000</b> · <b>вчера такси 450</b> · <b>шаурма 340 такси 500</b>
-        </div>
       ) : null}
+      <EntryHelp />
       {picking !== null && picked && (
         <Sheet
           label="Выбор категории"
