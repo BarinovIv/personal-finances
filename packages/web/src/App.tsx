@@ -10,6 +10,7 @@ import { OperationScreen } from "./screens/Operation"
 import { SettingsScreen, type SettingsSub } from "./screens/Settings"
 import { auth, dashboardMemory, getServices, navigate, refreshOtherTabs, useRoute, type AppServices } from "./state"
 import { ToastHost } from "./toast"
+import { TabView } from "./tabActivity"
 
 type Tab = "entry" | "dashboard" | "settings"
 
@@ -80,17 +81,22 @@ const Main = ({ services, isOwner, onSignedOut, onSessionChanged, welcome }: {
   return (
     <div class={`app${tab ? " has-tabbar" : ""}`}>
       {welcome && <p class="welcome-note">Если добавите приложение на домашний экран из Safari, в нём нужно будет войти ещё раз с тем же логином и паролем.</p>}
+      <TabView active={tab === "entry" || (!op && !goal && !settingsSub && tab === null)}>
+        <EntryScreen ledger={ledger} sync={sync} />
+      </TabView>
+      <TabView active={tab === "dashboard"}>
+        <DashboardScreen ledger={ledger} />
+      </TabView>
+      <TabView active={tab === "settings"}>
+        <SettingsScreen ledger={ledger} sync={sync} auth={auth} device={services.device} isOwner={isOwner} onSignedOut={onSignedOut} sub={null} />
+      </TabView>
       {op ? (
         <OperationScreen ledger={ledger} id={decodeURIComponent(op[1]!)} />
       ) : goal ? (
         <GoalScreen ledger={ledger} id={decodeURIComponent(goal[1]!)} />
-      ) : tab === "dashboard" ? (
-        <DashboardScreen ledger={ledger} />
-      ) : tab === "settings" || settingsSub ? (
+      ) : settingsSub ? (
         <SettingsScreen ledger={ledger} sync={sync} auth={auth} device={services.device} isOwner={isOwner} onSignedOut={onSignedOut} sub={settingsSub} />
-      ) : (
-        <EntryScreen ledger={ledger} sync={sync} />
-      )}
+      ) : null}
       {tab && <TabBar current={tab} />}
       <ToastHost />
     </div>

@@ -25,6 +25,7 @@ import { useAnimatedNumber } from "../animatedNumber"
 import { plural } from "../format"
 import { navigate, useLedgerVersion } from "../state"
 import { limitNotes, showToast } from "../toast"
+import { useTabActive } from "../tabActivity"
 
 const problemText: Record<EntryPreviewProblem, string> = {
   "no-amount": "Не вижу сумму — добавьте число, например «кофе 250».",
@@ -186,6 +187,7 @@ const SpentHero = memo(({ ledger }: { ledger: Ledger }) => {
 /** Строка ввода с распознаванием; её состояние живёт здесь, чтобы набор текста не трогал остальной экран. */
 const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) => {
   useLedgerVersion(ledger)
+  const active = useTabActive()
   const [text, setText] = useState("")
   const [choice, setChoice] = useState<EntriesChoice>({})
   // для какой операции строки открыт выбор категории
@@ -211,15 +213,15 @@ const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) 
 
   useEffect(() => {
     setAutoPick(false)
-    if (awaiting < 0) return
+    if (!active || awaiting < 0) return
     const timer = window.setTimeout(() => setAutoPick(true), AUTO_PICK_DELAY_MS)
     return () => window.clearTimeout(timer)
-  }, [text, awaiting])
+  }, [text, awaiting, active])
 
   // шторка поверх открытой клавиатуры закрыта ею наполовину — убираем клавиатуру
   useEffect(() => {
-    if (picking !== null) input.current?.blur()
-  }, [picking !== null])
+    if (active && picking !== null) input.current?.blur()
+  }, [picking !== null, active])
 
   const reset = () => {
     setText("")
@@ -381,7 +383,7 @@ const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) 
         </div>
       ) : null}
       <EntryHelp />
-      {picking !== null && picked && (
+      {active && picking !== null && picked && (
         <Sheet
           label="Выбор категории"
           onClose={() => {
