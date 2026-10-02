@@ -63,11 +63,19 @@ export const EntryHelp = ({ onClose }: { onClose: () => void }) => {
             </dd>
             <dt>Долги и возвраты</dt>
             <dd>
-              "Одолжил" / "Занял" — в <a href="#/settings/debts" onClick={onClose}>"Долгах"</a>, погашение — в карточке долга.
-              Возврат покупки — в карточке расхода.
+              Одолжил Пете 2 000 ₽ → он вернул 500 ₽. За покупку вернули 150 ₽.
+              <span class="entry-help-note">
+                "Одолжил" / "Занял" — в <a href="#/settings/debts" onClick={onClose}>"Долгах"</a>, погашение — в карточке долга.
+                Возврат покупки — в карточке расхода.
+              </span>
             </dd>
             <dt>Цели</dt>
-            <dd>"Отложить" / "Снять" — в карточке <a href="#/settings/goals" onClick={onClose}>цели</a>.</dd>
+            <dd>
+              На отпуск: отложить 3 000 ₽ → снять 1 000 ₽.
+              <span class="entry-help-note">
+                "Отложить" / "Снять" — в карточке <a href="#/settings/goals" onClick={onClose}>цели</a>.
+              </span>
+            </dd>
           </dl>
         </div>
       )}
