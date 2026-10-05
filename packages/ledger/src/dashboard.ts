@@ -76,8 +76,9 @@ export interface Dashboard {
   /** Доходы минус расходы. Операции вне расходов и доходов сюда не входят. */
   readonly balance: number
   /**
-   * Свободные деньги периода: доходы − расходы ± операции вне расходов и доходов − предстоящие списания
-   * (они есть только у текущего периода). Меньше нуля — перерасход.
+   * Свободные деньги периода: доходы − расходы ± операции вне расходов и доходов
+   * + предстоящие регулярные доходы − предстоящие списания (ожидания есть только у текущего периода).
+   * Меньше нуля — перерасход.
    */
   readonly free: number
   /** По убыванию суммы. Доходы сюда не входят. */
@@ -157,6 +158,7 @@ export const buildDashboard = (ctx: LedgerContext, query: DashboardQuery): Dashb
   }
 
   const upcoming = upcomingIn(ctx, period)
+  const upcomingIncome = upcomingIn(ctx, period, "income").total
 
   const trend: Array<TrendBar> = []
   const trendEndOffset = offset >= 0 ? offset : Math.min(0, offset + TREND_LENGTH - 1)
@@ -180,7 +182,7 @@ export const buildDashboard = (ctx: LedgerContext, query: DashboardQuery): Dashb
     expenses,
     income,
     balance: income - expenses,
-    free: freeMoney(totals, upcoming.total),
+    free: freeMoney(totals, upcoming.total, upcomingIncome),
     categories,
     comparison: {
       current,
@@ -190,6 +192,6 @@ export const buildDashboard = (ctx: LedgerContext, query: DashboardQuery): Dashb
     },
     trend,
     upcoming,
-    allowance: dailyAllowance(ops, period, today, upcoming.total)
+    allowance: dailyAllowance(ops, period, today, upcoming.total, upcomingIncome)
   }
 }
