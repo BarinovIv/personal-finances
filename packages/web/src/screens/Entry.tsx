@@ -207,7 +207,7 @@ const SpentHero = memo(({ ledger }: { ledger: Ledger }) => {
     <button type="button" class="spent-hero" onClick={() => navigate("/dashboard")}>
       <h1 class="visually-hidden">Ввод</h1>
       <span class="spent-hero-label">Потрачено за период</span>
-      <span class="spent-hero-value num" data-title-actions-anchor>{formatMoney(expenses)}</span>
+      <span class="spent-hero-value num">{formatMoney(expenses)}</span>
     </button>
   )
 })

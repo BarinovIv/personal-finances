@@ -304,6 +304,7 @@ a {
 /* Экраны вкладок на ПК шире колонки приложения: свечение не упирается в её края,
    а содержимое остаётся в колонке */
 .tab-screen {
+  --title-top-space: 20px;
   position: relative;
   isolation: isolate;
   margin-inline: calc(50% - 50vw);
@@ -439,6 +440,11 @@ a {
   padding: env(safe-area-inset-top) max(16px, calc(50% - 264px)) 0;
 }
 
+.nav-bar:not(.tab-nav) {
+  min-height: calc(64px + env(safe-area-inset-top));
+  padding-top: calc(16px + env(safe-area-inset-top));
+}
+
 /* «Край прокрутки»: содержимое под шапкой размывается и тает, без жёсткой линии */
 .nav-bar::before {
   content: "";
@@ -495,7 +501,7 @@ a {
 }
 
 .large-title {
-  padding: calc(4px + env(safe-area-inset-top)) max(20px, calc(var(--title-actions-width, 0px) + 28px)) 6px 20px;
+  padding: calc(var(--title-top-space) + env(safe-area-inset-top)) max(20px, calc(var(--title-actions-width, 0px) + 28px)) 6px 20px;
   transition: opacity 0.2s ease;
 }
 
@@ -978,6 +984,10 @@ select.row-input {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.cat-badge-emoji {
+  color: var(--ink);
 }
 
 /* ───────────── Кнопки и поля ───────────── */
@@ -1657,6 +1667,10 @@ select.text-input {
 /* обводка цветом подложки отделяет иконки друг от друга */
 .badge-stack .cat-badge {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--surface), var(--accent) 13%);
+}
+
+.badge-stack .cat-badge-emoji {
+  box-shadow: none;
 }
 
 .badge-stack .cat-badge + .cat-badge {
@@ -2475,6 +2489,10 @@ select.text-input {
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.14);
 }
 
+.op-hero .cat-badge-emoji {
+  box-shadow: none;
+}
+
 .op-hero-amount {
   font-family: var(--font-rounded);
   font-size: 46px;
@@ -2705,6 +2723,17 @@ select.text-input {
 
 .icon-swatch[aria-pressed="true"] {
   color: #fff;
+}
+
+.icon-swatch-emoji {
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink);
+}
+
+.icon-swatch-emoji[aria-pressed="true"] {
+  color: var(--ink);
+  box-shadow: inset 0 0 0 2px var(--accent);
 }
 
 /* ───────────── Цели ───────────── */
@@ -3141,11 +3170,14 @@ html.vt-backward::view-transition-new(root) {
 
 /* Поля общего черновика сохраняют вид карточки операции. */
 .op-inline-amount {
+  position: relative;
   display: flex;
   align-items: baseline;
   justify-content: center;
   gap: 4px;
   max-width: 100%;
+  padding-inline: 24px;
+  cursor: text;
 }
 
 .op-inline-amount input {
@@ -3171,6 +3203,29 @@ html.vt-backward::view-transition-new(root) {
   font-family: inherit;
   text-align: center;
   caret-color: var(--accent);
+}
+
+.op-inline-description-field {
+  position: relative;
+  width: 100%;
+  padding-inline: 24px;
+  cursor: text;
+}
+
+.op-edit-hint {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  display: flex;
+  color: var(--muted);
+  opacity: 0.6;
+  transform: translateY(-50%);
+}
+
+.op-inline-amount:focus-within .op-edit-hint,
+.op-inline-description-field:focus-within .op-edit-hint {
+  color: var(--accent);
+  opacity: 1;
 }
 
 .op-inline-amount input:focus-visible,

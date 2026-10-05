@@ -8,7 +8,7 @@ import { kindLabel, OperationBadge, operationTitle } from "../components/Operati
 import { signedAmount } from "../components/OperationRow"
 import { Sheet } from "../components/Sheet"
 import { SwipeBack } from "../components/SwipeBack"
-import { CheckIcon, CloseIcon, ForwardIcon, RefundIcon, RepeatIcon, TrashIcon } from "../icons"
+import { CheckIcon, CloseIcon, EditIcon, ForwardIcon, RefundIcon, RepeatIcon, TrashIcon } from "../icons"
 import { canNavigate, goBack, setNavigationGuard, useLedgerVersion } from "../state"
 import { limitNotes, showToast } from "../toast"
 import { DebtRepayments, isDebtOperation } from "./Debt"
@@ -238,9 +238,13 @@ const ViewCard = ({ ledger, op, onEdit, editor }: { ledger: Ledger; op: Operatio
                   style={{ width: `${Math.max(1, editor.draft.amount.length) + 0.3}ch` }}
                   value={editor.draft.amount} onInput={(e) => editor.change("amount", e.currentTarget.value)} />
                 <span aria-hidden="true">₽</span>
+                <span class="op-edit-hint" aria-hidden="true"><EditIcon /></span>
               </label>
-              <input id="op-desc" class="op-hero-desc op-inline-description" type="text" aria-label="Описание" disabled={editor.saving}
-                value={editor.draft.description} onInput={(e) => editor.change("description", e.currentTarget.value)} />
+              <label class="op-inline-description-field">
+                <input id="op-desc" class="op-hero-desc op-inline-description" type="text" aria-label="Описание" disabled={editor.saving}
+                  value={editor.draft.description} onInput={(e) => editor.change("description", e.currentTarget.value)} />
+                <span class="op-edit-hint" aria-hidden="true"><EditIcon /></span>
+              </label>
             </>
           ) : (
             <><span class={`op-hero-amount num ${op.kind}`}>{signedAmount(op)}</span><span class="op-hero-desc">{operationTitle(op)}</span></>
