@@ -1,7 +1,7 @@
 import type { SyncRecord } from "@fin/domain"
 import { LocalUserChanged, type LedgerDevicePort, type LedgerSyncPort } from "@fin/ledger"
 import { SyncRecord as SyncRecordSchema, SyncResponse } from "@fin/protocol"
-import { Cause, Duration, Effect, Either, Exit, Fiber, Queue, Schema } from "effect"
+import { Duration, Effect, Either, Fiber, Queue, Schema } from "effect"
 import { request, Unauthorized, ServerError, type RequestError, type Transport } from "./http"
 
 /** «синхронизировано» / «ждёт сети» / нужен вход. */
@@ -155,21 +155,11 @@ export const createSync = (options: SyncOptions): Sync => {
   })
 
   let fiber: Fiber.RuntimeFiber<never> | null = null
-  const manual = new Set<Fiber.RuntimeFiber<SyncOutcome>>()
   let unsubscribe: (() => void) | null = null
   const wake = () => Effect.runSync(Queue.offer(wakeups, undefined))
 
   return {
-    syncNow: () => {
-      const attempt = Effect.runFork(once)
-      manual.add(attempt)
-      attempt.addObserver(() => manual.delete(attempt))
-      return Effect.runPromise(Fiber.await(attempt)).then((exit) => {
-        if (Exit.isSuccess(exit)) return exit.value
-        if (Cause.isInterruptedOnly(exit.cause)) return "offline"
-        return Effect.runPromise(Effect.failCause(exit.cause))
-      })
-    },
+    syncNow: () => Effect.runPromise(once),
     start: () => {
       if (fiber) return
       lastOutcome = null
@@ -182,9 +172,9 @@ export const createSync = (options: SyncOptions): Sync => {
     stop: async () => {
       unsubscribe?.()
       unsubscribe = null
-      await Effect.runPromise(Fiber.interruptAll([...manual, ...(fiber ? [fiber] : [])]))
+      if (fiber) await Effect.runPromise(Fiber.interrupt(fiber))
       fiber = null
-      // Смена cookie и очистка выполняются после освобождения очереди обменов.
+      // Ручной syncNow тоже может быть в полёте: смена cookie и очистка ждут его завершения.
       await Effect.runPromise(lock.withPermits(1)(Effect.void))
     },
     wake,

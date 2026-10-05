@@ -47,11 +47,9 @@ const calculatorTokens = (line: string) =>
     const parts = token.split(/([+*/-])/).filter(Boolean)
     const previousParts = tokens[i - 1]?.split(/[+*/-]/).filter(Boolean) ?? []
     const followsAmount = previousParts.length > 0 && previousParts.every((part) => AMOUNT.test(part) || CURRENCY.test(part))
-    // "магазин 24/7" — описание, в том числе рядом с вычисляемой суммой.
-    const openingHours = token === "24/7" && /\p{L}/u.test(tokens[i - 1] ?? "") && !followsAmount
     const numeric = parts.every((part) => /^[+*/-]$/.test(part) || AMOUNT.test(part) || CURRENCY.test(part))
     const followsOperator = i > 0 && /^[+*/-]$/.test(tokens[i - 1]!)
-    return numeric && !openingHours && (!/^[+*/-]/.test(token) || followsAmount || followsOperator) ? parts : [token]
+    return numeric && (!/^[+*/-]/.test(token) || followsAmount || followsOperator) ? parts : [token]
   })
 
 /** null — обычная сумма; пустой массив сумм — некорректное выражение. */
