@@ -328,7 +328,7 @@ const ViewCard = ({ ledger, op, onEdit, editor }: { ledger: Ledger; op: Operatio
         {info && <RefundsList ledger={ledger} info={info} onOpenForm={() => setRefundOpen(true)} />}
         {isDebtOperation(op) && <DebtRepayments ledger={ledger} debt={op} />}
         <div class="card-list">
-          {op.kind === "expense" && !op.recurringId && (
+          {(op.kind === "expense" || op.kind === "income") && !op.recurringId && (
             <button type="button" class="row row-button action-row" onClick={() => setRecurringOpen(true)}>
               <RepeatIcon size={18} />
               <span>Сделать регулярной</span>
@@ -351,7 +351,7 @@ const ViewCard = ({ ledger, op, onEdit, editor }: { ledger: Ledger; op: Operatio
         </Sheet>
       )}
       {refundOpen && info && <RefundForm ledger={ledger} op={op} info={info} onDone={() => setRefundOpen(false)} />}
-      {recurringOpen && (
+      {recurringOpen && (op.kind === "expense" || op.kind === "income") && (
         <Sheet label="Новая регулярная операция" onClose={() => setRecurringOpen(false)}>
           {(close) => (
             <RecurringForm
@@ -360,7 +360,7 @@ const ViewCard = ({ ledger, op, onEdit, editor }: { ledger: Ledger; op: Operatio
               fixedKind
               close={close}
               initial={{
-                kind: "expense",
+                kind: op.kind === "income" ? "income" : "expense",
                 description: op.description,
                 amount: amountText(op.amount),
                 categoryId: op.category?.id ?? "",
@@ -374,13 +374,13 @@ const ViewCard = ({ ledger, op, onEdit, editor }: { ledger: Ledger; op: Operatio
                   dayOfMonth: Number(draft.day)
                 })
                 if (result.ok) showToast({
-                  text: "Расход стал регулярным",
+                  text: op.kind === "income" ? "Доход стал регулярным" : "Расход стал регулярным",
                   action: { label: "Отменить", run: () => result.undo() }
                 })
                 return result
               }}
             >
-              <span class="hint">Повторения начнутся после сегодня. Уже внесённый расход сохранится.</span>
+              <span class="hint">Повторения начнутся после сегодня. Уже внесённая операция сохранится.</span>
             </RecurringForm>
           )}
         </Sheet>

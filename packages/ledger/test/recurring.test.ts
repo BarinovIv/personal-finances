@@ -150,8 +150,9 @@ describe("регулярные операции на устройстве", () =
       for (const id of ["missing", deleted.id]) {
         expect(await ledger.makeRecurring(id, input)).toEqual({ ok: false, problem: "not-found" })
       }
-      for (const id of [income.id, refund.operation.id, debt.operation.id]) {
-        expect(await ledger.makeRecurring(id, input)).toEqual({ ok: false, problem: "not-expense" })
+      expect(await ledger.makeRecurring(income.id, input)).toEqual({ ok: false, problem: "bad-category" })
+      for (const id of [refund.operation.id, debt.operation.id]) {
+        expect(await ledger.makeRecurring(id, input)).toEqual({ ok: false, problem: "unsupported-kind" })
       }
       expect(ledger.recurring()).toEqual([])
       expect(ledger.operation(expense.id)).toEqual(expense)
