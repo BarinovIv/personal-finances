@@ -242,6 +242,7 @@ const ViewCard = ({ ledger, op, onEdit, editor }: { ledger: Ledger; op: Operatio
               </label>
               <label class="op-inline-description-field">
                 <input id="op-desc" class="op-hero-desc op-inline-description" type="text" aria-label="Описание" disabled={editor.saving}
+                  style={{ width: `${Math.max(6, [...editor.draft.description].length)}ch` }}
                   value={editor.draft.description} onInput={(e) => editor.change("description", e.currentTarget.value)} />
                 <span class="op-edit-hint" aria-hidden="true"><EditIcon /></span>
               </label>
