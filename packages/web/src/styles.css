@@ -3194,8 +3194,10 @@ html.vt-backward::view-transition-new(root) {
 }
 
 .op-inline-description {
-  width: 100%;
+  width: auto;
+  flex: 0 1 auto;
   min-width: 0;
+  max-width: calc(100% - 22px);
   padding: 4px 0;
   border: 0;
   background: transparent;
@@ -3206,10 +3208,19 @@ html.vt-backward::view-transition-new(root) {
 }
 
 .op-inline-description-field {
-  position: relative;
-  width: 100%;
-  padding-inline: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: fit-content;
+  max-width: 100%;
   cursor: text;
+}
+
+.op-inline-description-field .op-edit-hint {
+  position: static;
+  flex-shrink: 0;
+  transform: none;
 }
 
 .op-edit-hint {

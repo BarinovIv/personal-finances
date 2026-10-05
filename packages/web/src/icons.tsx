@@ -25,7 +25,21 @@ export const SlidersIcon = () => <SfSymbol name="gear_alt_fill" size={25} />
 
 export const CheckIcon = ({ size = 22 }: { size?: number }) => <SfSymbol name="checkmark" size={size} />
 
-export const EditIcon = ({ size = 16 }: { size?: number }) => <SfSymbol name="square_pencil_fill" size={size} />
+export const EditIcon = ({ size = 16 }: { size?: number }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="1.4"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    aria-hidden="true"
+  >
+    <path d="m2.1 13.9.7-3L10.7 3a1.85 1.85 0 0 1 2.6 2.6l-7.9 7.9-3.3.4Zm7.5-9.2 2.6 2.6" />
+  </svg>
+)
 
 export const ArrowUpIcon = ({ size = 20 }: { size?: number }) => <SfSymbol name="arrow_up" size={size} />
 
