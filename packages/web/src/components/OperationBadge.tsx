@@ -37,5 +37,5 @@ const movementLook = (kind: MovementKind) => ({
 /** Значок операции: цвет и иконка категории, а у операций вне расходов и доходов — свой нейтральный значок. */
 export const OperationBadge = ({ op, size }: { op: Pick<OperationView, "kind" | "category">; size?: number }) => {
   if (op.category) return <CategoryBadge category={op.category} size={size} />
-  return isMovement(op.kind) ? <CategoryBadge category={movementLook(op.kind)} size={size} symbol /> : null
+  return isMovement(op.kind) ? <CategoryBadge category={movementLook(op.kind)} size={size} /> : null
 }

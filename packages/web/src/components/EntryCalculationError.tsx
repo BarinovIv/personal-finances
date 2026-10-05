@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "preact/hooks"
 import { Sheet } from "./Sheet"
 
-export const EntryError = ({ message, onClose }: { message: string; onClose: () => void }) => {
+export const EntryCalculationError = ({ message, onClose }: { message: string; onClose: () => void }) => {
   const dismiss = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
@@ -13,7 +13,7 @@ export const EntryError = ({ message, onClose }: { message: string; onClose: () 
   }, [])
 
   return (
-    <Sheet label="Ошибка ввода" onClose={onClose}>
+    <Sheet label="Ошибка в выражении" onClose={onClose}>
       {(close) => (
         <div class="sheet-form" onKeyDown={(e) => {
           if (e.key === "Tab") {
@@ -21,7 +21,7 @@ export const EntryError = ({ message, onClose }: { message: string; onClose: () 
             dismiss.current?.focus({ preventScroll: true })
           }
         }}>
-          <h2 class="sheet-title">Ошибка ввода</h2>
+          <h2 class="sheet-title">Ошибка в выражении</h2>
           <div class="hint error">{message}</div>
           <button ref={dismiss} type="button" class="secondary-button" onClick={close}>Понятно</button>
         </div>

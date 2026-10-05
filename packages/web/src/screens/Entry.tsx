@@ -15,7 +15,7 @@ import { CategoryBadge } from "../components/CategoryBadge"
 import { CategoryFilter } from "../components/CategoryFilter"
 import { CategoryGrid } from "../components/CategoryGrid"
 import { EntryHelp } from "../components/EntryHelp"
-import { EntryError } from "../components/EntryError"
+import { EntryCalculationError } from "../components/EntryCalculationError"
 import { operationTitle } from "../components/OperationBadge"
 import { OperationRow } from "../components/OperationRow"
 import { Sheet } from "../components/Sheet"
@@ -30,17 +30,9 @@ import { useTabActive } from "../tabActivity"
 
 const problemText: Record<EntryPreviewProblem, string> = {
   "invalid-calculation": "Проверьте выражение: суммы должны быть положительными, число повторов — целым от 1 до 1000. Смешанные действия не поддерживаются.",
-  "no-amount": "Не вижу сумму — добавьте число, например \"кофе 250\".",
+  "no-amount": "Не вижу сумму — добавьте число, например «кофе 250».",
   "no-description": "Добавьте описание — что это было?",
   "no-category": "Выберите категорию."
-}
-
-const blockingProblem = (previews: ReadonlyArray<EntryPreview>) => {
-  for (let index = 0; index < previews.length; index++) {
-    const problem = previews[index]!.problems.find((p) => p !== "no-category")
-    if (problem) return { index, problem }
-  }
-  return null
 }
 
 /** Сколько тает поиск при закрытии — совпадает с `fin-sink` у `.search-mode.leaving` в styles.css. */
@@ -102,28 +94,15 @@ export const EntryScreen = ({ ledger, sync }: { ledger: Ledger; sync: Sync }) =>
   const [query, setQuery] = useState("")
   const [filterCategories, setFilterCategories] = useState<ReadonlyArray<string>>(NO_CATEGORIES)
   const searchInput = useRef<HTMLInputElement>(null)
-  const searchButton = useRef<HTMLButtonElement>(null)
-  const feedScroll = useRef(0)
-  const closeTimer = useRef<number>()
   const { leaving, remove } = useRemoveWithUndo(ledger)
 
   const searchOpen = search !== "closed"
 
   useEffect(() => {
-    if (search === "open") searchInput.current?.focus({ preventScroll: true })
+    if (search === "open") searchInput.current?.focus()
   }, [search])
 
-  useEffect(() => () => window.clearTimeout(closeTimer.current), [])
-
-  const openSearch = () => {
-    const screen = searchButton.current?.closest<HTMLElement>(".screen")
-    feedScroll.current = screen?.scrollTop ?? 0
-    if (screen) screen.scrollTop = 0
-    setComposerReveal(false)
-    setSearch("open")
-  }
-
-  /** Уходит только поиск; обычная лента возвращается к прежней прокрутке. */
+  /** Закрытие зеркалит открытие: поиск тает, затем строка ввода и лента въезжают на его место. */
   const closeSearch = () => {
     if (search !== "open") return
     searchInput.current?.blur()
@@ -132,14 +111,10 @@ export const EntryScreen = ({ ledger, sync }: { ledger: Ledger; sync: Sync }) =>
       setQuery("")
       setFilterCategories(NO_CATEGORIES)
       setComposerReveal(true)
-      requestAnimationFrame(() => {
-        const screen = searchButton.current?.closest<HTMLElement>(".screen")
-        if (screen) screen.scrollTop = feedScroll.current
-      })
     }
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return finish()
     setSearch("closing")
-    closeTimer.current = window.setTimeout(finish, SEARCH_CLOSE_MS)
+    window.setTimeout(finish, SEARCH_CLOSE_MS)
   }
 
   return (
@@ -151,21 +126,17 @@ export const EntryScreen = ({ ledger, sync }: { ledger: Ledger; sync: Sync }) =>
           <SyncBadge sync={sync} />
           <button
             type="button"
-            ref={searchButton}
             class={`glass-button${search === "open" ? " active" : ""}`}
             aria-label="Поиск"
             aria-pressed={search === "open"}
-            onClick={() => (search === "open" ? closeSearch() : search === "closed" && openSearch())}
+            onClick={() => (search === "open" ? closeSearch() : search === "closed" && setSearch("open"))}
           >
             <SearchIcon />
           </button>
         </>
       }
     >
-      <div hidden={searchOpen}>
-        <Composer ledger={ledger} reveal={composerReveal} enabled={!searchOpen} />
-      </div>
-      {searchOpen && (
+      {searchOpen ? (
         <div class={`search-mode${search === "closing" ? " leaving" : ""}`}>
           <div class="search-bar">
             <label class="search-field">
@@ -185,12 +156,15 @@ export const EntryScreen = ({ ledger, sync }: { ledger: Ledger; sync: Sync }) =>
           </div>
           <CategoryFilter ledger={ledger} selected={filterCategories} onChange={setFilterCategories} />
         </div>
+      ) : (
+        <Composer ledger={ledger} reveal={composerReveal} />
       )}
       <Feed
         ledger={ledger}
         searching={searchOpen}
         query={query}
         categoryIds={filterCategories}
+        motion={search === "closing" ? "leaving" : search === "closed" && composerReveal ? "reveal" : null}
         leaving={leaving}
         onDelete={remove}
       />
@@ -207,16 +181,15 @@ const SpentHero = memo(({ ledger }: { ledger: Ledger }) => {
     <button type="button" class="spent-hero" onClick={() => navigate("/dashboard")}>
       <h1 class="visually-hidden">Ввод</h1>
       <span class="spent-hero-label">Потрачено за период</span>
-      <span class="spent-hero-value num" data-title-actions-anchor>{formatMoney(expenses)}</span>
+      <span class="spent-hero-value num">{formatMoney(expenses)}</span>
     </button>
   )
 })
 
 /** Строка ввода с распознаванием; её состояние живёт здесь, чтобы набор текста не трогал остальной экран. */
-const Composer = memo(({ ledger, reveal, enabled }: { ledger: Ledger; reveal: boolean; enabled: boolean }) => {
+const Composer = memo(({ ledger, reveal }: { ledger: Ledger; reveal: boolean }) => {
   useLedgerVersion(ledger)
-  const tabActive = useTabActive()
-  const active = tabActive && enabled
+  const active = useTabActive()
   const [text, setText] = useState("")
   const [choice, setChoice] = useState<EntriesChoice>({})
   // для какой операции строки открыт выбор категории
@@ -224,9 +197,9 @@ const Composer = memo(({ ledger, reveal, enabled }: { ledger: Ledger; reveal: bo
   // шторка выбора сама всплывает, только когда строка дописана и набор затих
   const [autoPick, setAutoPick] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
-  const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const submitting = useRef(false)
+  const [calculationErrorOpen, setCalculationErrorOpen] = useState(false)
   const [inputFocused, setInputFocused] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const input = useRef<HTMLInputElement>(null)
   const pendingChoice = useRef<EntriesChoice | null>(null)
 
@@ -234,10 +207,10 @@ const Composer = memo(({ ledger, reveal, enabled }: { ledger: Ledger; reveal: bo
   const first = previews[0]!
   const many = previews.length > 1
   const has = text.trim() !== ""
-  const blocked = blockingProblem(previews)
-  const hasError = has && blocked !== null
+  const invalidCalculation = previews.some((p) => p.problems.includes("invalid-calculation"))
   const needsPick = (p: EntryPreview) => p.description !== "" && p.categoryId === null
   // без категории отправить можно: отправка откроет выбор категории
+  const canAdd = has && previews.every((p) => p.problems.every((problem) => problem === "no-category"))
   const categoryOf = (p: EntryPreview) =>
     p.categoryId ? ledger.categories(p.kind).find((c) => c.id === p.categoryId) : undefined
   const today = ledger.today()
@@ -247,10 +220,10 @@ const Composer = memo(({ ledger, reveal, enabled }: { ledger: Ledger; reveal: bo
 
   useEffect(() => {
     setAutoPick(false)
-    if (!active || helpOpen || errorMessage || hasError || awaiting < 0) return
+    if (!active || helpOpen || calculationErrorOpen || invalidCalculation || awaiting < 0) return
     const timer = window.setTimeout(() => setAutoPick(true), AUTO_PICK_DELAY_MS)
     return () => window.clearTimeout(timer)
-  }, [text, awaiting, active, helpOpen, errorMessage, hasError])
+  }, [text, awaiting, active, helpOpen, calculationErrorOpen, invalidCalculation])
 
   // шторка поверх открытой клавиатуры закрыта ею наполовину — убираем клавиатуру
   useEffect(() => {
@@ -261,86 +234,70 @@ const Composer = memo(({ ledger, reveal, enabled }: { ledger: Ledger; reveal: bo
     setText("")
     setChoice({})
     setPickerFor(null)
-    setErrorMessage(null)
+    setError(null)
+    setCalculationErrorOpen(false)
   }
 
   const pick = (index: number, categoryId: string): EntriesChoice => {
     const categoryIds = previews.map((_, i) => (i === index ? categoryId : (choice.categoryIds?.[i] ?? null)))
     const next = { ...choice, categoryIds }
     setChoice(next)
-    setErrorMessage(null)
+    setError(null)
     return next
   }
 
-  const explain = (items: ReadonlyArray<EntryPreview>, index: number, problem: EntryPreviewProblem) =>
-    items.length > 1 ? `Операция ${index + 1} ("${items[index]!.description || "без описания"}"): ${problemText[problem]}` : problemText[problem]
-
-  const showError = () => {
-    if (!blocked) return
-    setPickerFor(null)
-    setAutoPick(false)
-    setErrorMessage(explain(previews, blocked.index, blocked.problem))
-  }
-
   const add = async (submittedChoice: EntriesChoice = choice) => {
-    if (!text.trim() || submitting.current) return
-    submitting.current = true
-    try {
-      const submittedPreviews = ledger.previewEntries(text, submittedChoice)
-      const submittedError = blockingProblem(submittedPreviews)
-      if (submittedError) {
-        setPickerFor(null)
-        setAutoPick(false)
-        setErrorMessage(explain(submittedPreviews, submittedError.index, submittedError.problem))
-        return
-      }
-      const submittedFirst = submittedPreviews[0]!
-      const result = await ledger.submitEntries(text, submittedChoice)
-      if (!result.ok) {
-        const problem = result.problems[0]!
-        // без категории открывается выбор — он сам и есть объяснение
-        if (problem === "no-category") setPickerFor(result.index)
-        else setErrorMessage(explain(submittedPreviews, result.index, problem))
-        return
-      }
-      const ops = result.operations
-      let done: string
-      if (ops.length > 1) {
-        const total = ops.reduce((sum, op) => sum + (op.kind === "expense" ? op.amount : 0), 0)
-        const count = `${ops.length} ${plural(ops.length, "операция", "операции", "операций")}`
-        done = total > 0 ? `Добавлено: ${count} · ${formatMoney(total, { sign: "−" })}` : `Добавлено: ${count}`
-      } else {
-        const op = ops[0]!
-        const taught = submittedFirst.categorySource === "manual"
-        // строка ввода создаёт только расходы и доходы — у них категория есть всегда
-        const category = op.category!.name
-        done = taught ? `Запомнил: "${op.description}" → ${category}` : `Добавлено: ${op.description} · ${category}`
-      }
-      // «Отменить» удаляет всё сохранённое строкой и возвращает её в поле — поправить опечатку и сохранить заново
-      const line = text
-      const lineChoice = submittedChoice
-      showToast({
-        text: done,
-        notes: limitNotes(result.warnings),
-        action: {
-          label: "Отменить",
-          run: () => {
-            // фокус — прямо в нажатии, иначе телефон не откроет клавиатуру
-            input.current?.focus()
-            return result.undo().then((outcome) => {
-              if (!outcome.ok) return outcome
-              setText(line)
-              setChoice(lineChoice)
-              setErrorMessage(null)
-              return outcome
-            })
-          }
-        }
-      })
-      reset()
-    } finally {
-      submitting.current = false
+    const submittedPreviews = ledger.previewEntries(text, submittedChoice)
+    const submittedFirst = submittedPreviews[0]!
+    const submittedMany = submittedPreviews.length > 1
+    const result = await ledger.submitEntries(text, submittedChoice)
+    if (!result.ok) {
+      const problem = result.problems[0]!
+      // без категории открывается выбор — он сам и есть объяснение
+      if (problem === "no-category") setPickerFor(result.index)
+      else if (problem !== "invalid-calculation")
+        setError(
+          submittedMany
+            ? `«${submittedPreviews[result.index]!.description || "…"}»: ${problemText[problem]}`
+            : problemText[problem]
+        )
+      return
     }
+    const ops = result.operations
+    let done: string
+    if (ops.length > 1) {
+      const total = ops.reduce((sum, op) => sum + (op.kind === "expense" ? op.amount : 0), 0)
+      const count = `${ops.length} ${plural(ops.length, "операция", "операции", "операций")}`
+      done = total > 0 ? `Добавлено: ${count} · ${formatMoney(total, { sign: "−" })}` : `Добавлено: ${count}`
+    } else {
+      const op = ops[0]!
+      const taught = submittedFirst.categorySource === "manual"
+      // строка ввода создаёт только расходы и доходы — у них категория есть всегда
+      const category = op.category!.name
+      done = taught ? `Запомнил: "${op.description}" → ${category}` : `Добавлено: ${op.description} · ${category}`
+    }
+    // «Отменить» удаляет всё сохранённое строкой и возвращает её в поле — поправить опечатку и сохранить заново
+    const line = text
+    const lineChoice = submittedChoice
+    showToast({
+      text: done,
+      notes: limitNotes(result.warnings),
+      action: {
+        label: "Отменить",
+        run: () => {
+          // фокус — прямо в нажатии, иначе телефон не откроет клавиатуру
+          input.current?.focus()
+          return result.undo().then((outcome) => {
+            if (!outcome.ok) return outcome
+            setText(line)
+            setChoice(lineChoice)
+            setError(null)
+            return outcome
+          })
+        }
+      }
+    })
+    reset()
   }
 
   const finishPicker = () => {
@@ -376,7 +333,7 @@ const Composer = memo(({ ledger, reveal, enabled }: { ledger: Ledger; reveal: bo
           ref={input}
           id="line"
           aria-label="Что потратил или получил?"
-          aria-invalid={hasError || undefined}
+          aria-invalid={invalidCalculation || undefined}
           class="line-input"
           type="text"
           placeholder="футболка 1500"
@@ -389,7 +346,8 @@ const Composer = memo(({ ledger, reveal, enabled }: { ledger: Ledger; reveal: bo
           onInput={(e) => {
             const value = e.currentTarget.value
             setText(value)
-            setErrorMessage(null)
+            setError(null)
+            setCalculationErrorOpen(false)
             if (!value.trim()) {
               setChoice({})
               setPickerFor(null)
@@ -419,19 +377,24 @@ const Composer = memo(({ ledger, reveal, enabled }: { ledger: Ledger; reveal: bo
             <span id="entry-help-tooltip" role="tooltip">Примеры ввода</span>
           </span>
         )}
-        {hasError ? (
+        {invalidCalculation ? (
           <button
             type="button"
             class="entry-error-trigger"
-            aria-label="Ошибка ввода"
+            aria-label="Ошибка в выражении"
             aria-haspopup="dialog"
-            aria-expanded={errorMessage !== null}
-            onClick={showError}
+            aria-expanded={calculationErrorOpen}
+            onClick={() => {
+              input.current?.blur()
+              setPickerFor(null)
+              setAutoPick(false)
+              setCalculationErrorOpen(true)
+            }}
           >
             <WarningIcon />
           </button>
         ) : has && (
-          <button type="button" class="send-button" aria-label="Добавить" onClick={() => void add()}>
+          <button type="button" class="send-button" aria-label="Добавить" disabled={!canAdd} onClick={() => void add()}>
             <ArrowUpIcon />
           </button>
         )}
@@ -472,7 +435,7 @@ const Composer = memo(({ ledger, reveal, enabled }: { ledger: Ledger; reveal: bo
         </div>
       ) : null}
       {active && helpOpen && <EntryHelp onClose={() => setHelpOpen(false)} />}
-      {active && !helpOpen && !errorMessage && picking !== null && picked && (
+      {active && !helpOpen && !calculationErrorOpen && picking !== null && picked && (
         <Sheet
           key={`category-${picking}`}
           label="Выбор категории"
@@ -500,12 +463,13 @@ const Composer = memo(({ ledger, reveal, enabled }: { ledger: Ledger; reveal: bo
           )}
         </Sheet>
       )}
-      {active && errorMessage && (
-        <EntryError
-          message={errorMessage}
-          onClose={() => setErrorMessage(null)}
+      {active && calculationErrorOpen && invalidCalculation && (
+        <EntryCalculationError
+          message={problemText["invalid-calculation"]}
+          onClose={() => setCalculationErrorOpen(false)}
         />
       )}
+      {error && <div class="hint error">{error}</div>}
     </div>
   )
 })
@@ -513,6 +477,7 @@ const Composer = memo(({ ledger, reveal, enabled }: { ledger: Ledger; reveal: bo
 /**
  * Лента по дням — и обычная, и результаты поиска. Один и тот же экземпляр в обоих режимах:
  * при открытии поиска с пустым запросом строки не пересоздаются и сохраняют состояние свайпа.
+ * `motion` — как лента уходит вместе с поиском ("leaving") и возвращается после него ("reveal").
  */
 const Feed = memo(
   ({
@@ -520,6 +485,7 @@ const Feed = memo(
     searching,
     query,
     categoryIds,
+    motion,
     leaving,
     onDelete
   }: {
@@ -527,6 +493,7 @@ const Feed = memo(
     searching: boolean
     query: string
     categoryIds: ReadonlyArray<string>
+    motion: "leaving" | "reveal" | null
     leaving: ReadonlySet<string>
     onDelete: (op: OperationView) => void
   }) => {
@@ -541,7 +508,7 @@ const Feed = memo(
     const days = found?.days ?? all ?? []
 
     return (
-      <div class="feed">
+      <div class={`feed${motion ? ` ${motion}` : ""}`}>
         <div class="days">
           {found && (
             <div class="search-summary">

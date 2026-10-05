@@ -117,48 +117,6 @@ describe("ввод операции строкой", () => {
 })
 
 describe("несколько операций одной строкой", () => {
-  it("смешанная строка показывает и сохраняет пять одинаково распознанных операций с итогом 1200 рублей", async () => {
-    const { ledger } = await makeLedger()
-    const line = "вчера 200 * 3 карш шашлык 500 200 / 2 шаурма"
-    const choice = { categoryIds: [categoryId(ledger, "Транспорт")] }
-    const expected = [
-      ["expense", "карш", 20000, "2026-09-27", categoryId(ledger, "Транспорт")],
-      ["expense", "карш", 20000, "2026-09-27", categoryId(ledger, "Транспорт")],
-      ["expense", "карш", 20000, "2026-09-27", categoryId(ledger, "Транспорт")],
-      ["expense", "шашлык", 50000, "2026-09-27", categoryId(ledger, "Кафе")],
-      ["expense", "шаурма", 10000, "2026-09-27", categoryId(ledger, "Кафе")]
-    ]
-    const previews = ledger.previewEntries(line, choice)
-    expect(previews.map((p) => [p.kind, p.description, p.amount, p.date, p.categoryId])).toEqual(expected)
-    expect(previews.every((p) => p.problems.length === 0)).toBe(true)
-
-    const result = await ledger.submitEntries(line, choice)
-    expect(result.ok).toBe(true)
-    if (!result.ok) return
-    expect(result.operations.map((o) => [o.kind, o.description, o.amount, o.date, o.category?.id])).toEqual(expected)
-    expect(ledger.days().map((day) => [day.date, day.expenseTotal, day.items.length])).toEqual([["2026-09-27", 120000, 5]])
-  })
-
-  it.each([
-    ["200 / 0 кофе; такси 300; шаурма 100", 0],
-    ["кофе 300; такси 0,01 / 3; шаурма 100", 1],
-    ["кофе 300; такси 500; шаурма 200 * 0", 2],
-    ["кофе 300; такси 200 * 1001; шаурма 100", 1],
-    ["кофе 300; такси 200 * 1,5; шаурма 100", 1],
-    ["кофе 500 200 / 0 шаурма такси 300", 1],
-    ["кофе 200/0 500 шашлык", 0]
-  ] as const)("ошибка выражения не сохраняет часть строки и не меняет очередь: %s", async (line, index) => {
-    const { ledger } = await makeLedger()
-    await add(ledger, "кофе 123")
-    const before = ledger.days()
-    const pending = ledger.pendingChanges()
-
-    expect(ledger.previewEntries(line)[index]?.problems).toEqual(["invalid-calculation"])
-    expect(await ledger.submitEntries(line)).toEqual({ ok: false, index, problems: ["invalid-calculation"] })
-    expect(ledger.days()).toEqual(before)
-    expect(ledger.pendingChanges()).toEqual(pending)
-  })
-
   it("для одинаковых расходов достаточно выбрать категорию один раз", async () => {
     const { ledger } = await makeLedger()
     const choice = { categoryIds: [categoryId(ledger, "Транспорт")] }

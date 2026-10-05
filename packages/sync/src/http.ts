@@ -26,42 +26,33 @@ export const request = <A, I>(
   method: string,
   path: string,
   response: Schema.Schema<A, I>,
-  body?: unknown,
-  timeout = 30_000
+  body?: unknown
 ): Effect.Effect<A, RequestError> =>
-  Effect.acquireUseRelease(
-    Effect.sync(() => new AbortController()),
-    (controller) => Effect.gen(function* () {
-      const res = yield* Effect.tryPromise({
-        try: () =>
-          transport.fetch(
-            new Request(new URL(path, transport.baseUrl), {
-              method,
-              signal: controller.signal,
-              credentials: "same-origin",
-              headers: body === undefined ? {} : { "content-type": "application/json" },
-              ...(body === undefined ? {} : { body: JSON.stringify(body) })
-            })
-          ),
-        catch: (cause) => new Offline({ cause })
-      })
-      const text = yield* Effect.tryPromise({ try: () => res.text(), catch: (cause) => new Offline({ cause }) })
-      const json = parseJson(text)
-      if (res.status === 401 && isError(json, "unauthorized")) return yield* new Unauthorized()
-      if (res.status === 410 && isError(json, "user-deleted")) return yield* new UserDeleted()
-      if (!res.ok) {
-        const decoded = Schema.decodeUnknownOption(ApiError)(json)
-        return yield* new ServerError({ status: res.status, body: decoded._tag === "Some" ? decoded.value : undefined })
-      }
-      return yield* Schema.decodeUnknown(response)(json).pipe(
-        Effect.mapError(() => new ServerError({ status: res.status, body: undefined }))
-      )
-    }),
-    (controller) => Effect.sync(() => controller.abort())
-  ).pipe(Effect.timeoutFail({
-    duration: timeout,
-    onTimeout: () => new Offline({ cause: new Error("Сервер не ответил вовремя") })
-  }))
+  Effect.gen(function* () {
+    const res = yield* Effect.tryPromise({
+      try: () =>
+        transport.fetch(
+          new Request(new URL(path, transport.baseUrl), {
+            method,
+            credentials: "same-origin",
+            headers: body === undefined ? {} : { "content-type": "application/json" },
+            ...(body === undefined ? {} : { body: JSON.stringify(body) })
+          })
+        ),
+      catch: (cause) => new Offline({ cause })
+    })
+    const text = yield* Effect.tryPromise({ try: () => res.text(), catch: (cause) => new Offline({ cause }) })
+    const json = parseJson(text)
+    if (res.status === 401 && isError(json, "unauthorized")) return yield* new Unauthorized()
+    if (res.status === 410 && isError(json, "user-deleted")) return yield* new UserDeleted()
+    if (!res.ok) {
+      const decoded = Schema.decodeUnknownOption(ApiError)(json)
+      return yield* new ServerError({ status: res.status, body: decoded._tag === "Some" ? decoded.value : undefined })
+    }
+    return yield* Schema.decodeUnknown(response)(json).pipe(
+      Effect.mapError(() => new ServerError({ status: res.status, body: undefined }))
+    )
+  })
 
 const parseJson = (text: string): unknown => {
   try {

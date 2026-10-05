@@ -73,10 +73,6 @@ export const createUserDevice = ({ ledger, auth, sync }: UserDeviceOptions): Use
         state = { state: "user-deleted" }
         return state
       }
-      if (sync.status().state === "unauthorized") {
-        state = { state: "signed-out" }
-        return state
-      }
       const session = await auth.me(ledger.device.owner() ?? undefined)
       if (session.state === "signed-in") {
         await accept(session.user)
