@@ -30,10 +30,9 @@ export const CategoryStylePicker = ({
         <button
           key={i}
           type="button"
-          class="icon-swatch"
+          class="icon-swatch icon-swatch-emoji"
           aria-pressed={i === icon}
           aria-label={CATEGORY_EMOJI[i]?.label ?? "Другое"}
-          style={i === icon ? { background: `var(--palette-${color})` } : undefined}
           onClick={() => onChange({ icon: i })}
         >
           <CategoryGlyph icon={i} size={16} />

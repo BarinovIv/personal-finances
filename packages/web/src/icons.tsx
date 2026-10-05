@@ -25,6 +25,8 @@ export const SlidersIcon = () => <SfSymbol name="gear_alt_fill" size={25} />
 
 export const CheckIcon = ({ size = 22 }: { size?: number }) => <SfSymbol name="checkmark" size={size} />
 
+export const EditIcon = ({ size = 16 }: { size?: number }) => <SfSymbol name="square_pencil_fill" size={size} />
+
 export const ArrowUpIcon = ({ size = 20 }: { size?: number }) => <SfSymbol name="arrow_up" size={size} />
 
 export const ChevronDownIcon = ({ size = 14 }: { size?: number }) => <SfSymbol name="chevron_down" size={size} />

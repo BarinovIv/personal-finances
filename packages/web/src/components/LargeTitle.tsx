@@ -51,10 +51,8 @@ export const LargeTitle = ({
     if (!screen || !content || !buttons) return
     const measure = () => {
       screen.style.setProperty("--title-actions-width", `${buttons.getBoundingClientRect().width}px`)
-      const target = content.querySelector<HTMLElement>("[data-title-actions-anchor]") ?? content
-      const top = target.getBoundingClientRect().top - content.getBoundingClientRect().top
-      const center = top + target.getBoundingClientRect().height / 2 + 4
-      screen.style.setProperty("--title-actions-offset", `${Math.max(0, center - 24)}px`)
+      const center = content.getBoundingClientRect().height / 2
+      screen.style.setProperty("--title-actions-offset", `calc(var(--title-top-space) + ${center - 24}px)`)
     }
     measure()
     const observer = new ResizeObserver(measure)
