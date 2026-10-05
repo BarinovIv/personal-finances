@@ -432,10 +432,10 @@ a {
   top: 0;
   z-index: 10;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-columns: minmax(44px, 1fr) minmax(0, auto) minmax(44px, 1fr);
   align-items: center;
   gap: 8px;
-  min-height: calc(56px + env(safe-area-inset-top));
+  min-height: calc(48px + env(safe-area-inset-top));
   padding: env(safe-area-inset-top) max(16px, calc(50% - 264px)) 0;
 }
 
@@ -495,8 +495,39 @@ a {
 }
 
 .large-title {
-  padding: 0 20px 6px;
+  padding: calc(4px + env(safe-area-inset-top)) max(20px, calc(var(--title-actions-width, 0px) + 28px)) 6px 20px;
   transition: opacity 0.2s ease;
+}
+
+.tab-nav {
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin-bottom: calc(-48px - env(safe-area-inset-top));
+  pointer-events: none;
+}
+
+.tab-nav .nav-bar-side.trailing {
+  pointer-events: auto;
+  transform: translateY(var(--title-actions-offset, 0px));
+  transition: transform 0.25s var(--spring-smooth);
+}
+
+.tab-nav.collapsed .nav-bar-side.trailing {
+  transform: none;
+}
+
+.large-title-content {
+  min-width: 0;
+  container-type: inline-size;
+}
+
+.large-title-content .spent-hero {
+  width: 100%;
+}
+
+.large-title-content .spent-hero-value {
+  max-width: 100%;
+  font-size: clamp(24px, 19cqi, 44px);
+  overflow-wrap: anywhere;
 }
 
 .large-title.collapsed {
@@ -509,6 +540,7 @@ a {
   line-height: 41px;
   font-weight: 700;
   letter-spacing: 0.2px;
+  overflow-wrap: anywhere;
 }
 
 /* ───────────── Таббар ───────────── */
@@ -1573,14 +1605,12 @@ select.text-input {
   color: var(--muted);
 }
 
-.search-mode.leaving,
-.feed.leaving {
+.search-mode.leaving {
   animation: fin-sink 0.2s ease forwards;
   pointer-events: none;
 }
 
-.composer.reveal,
-.feed.reveal {
+.composer.reveal {
   animation: fin-rise 0.45s var(--spring-smooth);
 }
 
@@ -1962,11 +1992,18 @@ select.text-input {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 32px;
+  position: relative;
+  line-height: 18px;
   padding: 0;
   border: 0;
   background: none;
   text-align: left;
+}
+
+.summary-help-trigger::before {
+  content: "";
+  position: absolute;
+  inset: -7px -4px;
 }
 
 .summary-help-icon {
@@ -2782,6 +2819,8 @@ select.text-input {
   font-size: 13px;
   font-weight: 600;
   color: var(--muted);
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .sync-status.pending {
@@ -2809,11 +2848,16 @@ select.text-input {
   font-size: 15px;
   font-weight: 500;
   color: var(--ink);
-  animation: fin-toast-in 0.55s var(--spring-bouncy);
+  animation: fin-toast-in 0.55s var(--spring-bouncy) both;
 }
 
 .app:not(.has-tabbar) .toast {
   bottom: max(env(safe-area-inset-bottom), 16px);
+}
+
+.toast.leaving {
+  animation: fin-toast-out 0.24s var(--spring-smooth) both;
+  pointer-events: none;
 }
 
 .toast-body {
@@ -3008,6 +3052,13 @@ select.text-input {
   }
 }
 
+@keyframes fin-toast-out {
+  to {
+    opacity: 0;
+    transform: translateY(24px) scale(0.9);
+  }
+}
+
 @keyframes fin-row-out {
   from {
     max-height: 80px;
@@ -3077,4 +3128,59 @@ html.vt-backward::view-transition-new(root) {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+.category-emoji {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  line-height: 1;
+  font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
+}
+
+/* Поля общего черновика сохраняют вид карточки операции. */
+.op-inline-amount {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 4px;
+  max-width: 100%;
+}
+
+.op-inline-amount input {
+  min-width: 0;
+  max-width: calc(100% - 2ch);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: center;
+  caret-color: var(--accent);
+}
+
+.op-inline-description {
+  width: 100%;
+  min-width: 0;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-family: inherit;
+  text-align: center;
+  caret-color: var(--accent);
+}
+
+.op-inline-amount input:focus-visible,
+.op-inline-description:focus-visible {
+  outline: 2px solid var(--accent-ring);
+  outline-offset: 4px;
+  border-radius: 6px;
+}
+
+.op-inline-date {
+  text-align: right;
+  color: var(--muted);
 }

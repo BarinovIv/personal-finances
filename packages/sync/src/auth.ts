@@ -56,8 +56,8 @@ const failure = (error: RequestError): ApiFailure => {
 }
 
 export const createAuthApi = (transport: Transport): AuthApi => {
-  const call = <A, I>(method: string, path: string, schema: Schema.Schema<A, I>, body?: unknown): Promise<ApiResult<A>> =>
-    request(transport, method, path, schema, body).pipe(
+  const call = <A, I>(method: string, path: string, schema: Schema.Schema<A, I>, body?: unknown, timeout?: number): Promise<ApiResult<A>> =>
+    request(transport, method, path, schema, body, timeout).pipe(
       Effect.map((value): ApiResult<A> => ({ ok: true, value })),
       Effect.catchAll((error) => Effect.succeed<ApiResult<A>>(failure(error))),
       Effect.runPromise
@@ -71,7 +71,7 @@ export const createAuthApi = (transport: Transport): AuthApi => {
     return result.ok ? { ok: true, value: undefined } : result
   }
   const me = async (userId?: string): Promise<UserSession> => {
-    const result = await call("GET", `/api/me${userId ? `?userId=${encodeURIComponent(userId)}` : ""}`, UserResponse)
+    const result = await call("GET", `/api/me${userId ? `?userId=${encodeURIComponent(userId)}` : ""}`, UserResponse, undefined, 3_000)
     return result.ok ? { state: "signed-in", user: result.value.user }
       : { state: result.reason === "user-deleted" ? "user-deleted"
         : result.reason === "unauthorized" ? "signed-out" : "offline" }

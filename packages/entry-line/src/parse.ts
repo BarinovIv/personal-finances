@@ -1,5 +1,5 @@
-import { CURRENCY, DATE_WORDS } from "./constants"
-import { isAmount, takeAmount, takeCalculation } from "./helpers"
+import { AMOUNT, CURRENCY, DATE_WORDS, GROUPED } from "./constants"
+import { amountAtEdge, isAmount, takeAmount, takeCalculation } from "./helpers"
 
 export type EntryProblem = "no-amount" | "no-description" | "invalid-calculation"
 
@@ -72,7 +72,7 @@ const splitAfterAmounts = (tokens: ReadonlyArray<string>): Array<Array<string>> 
   let current: Array<string> = []
   tokens.forEach((token, i) => {
     current.push(token)
-    if (endsEntry(current, tokens[i + 1], tokens[i + 2])) {
+    if (endsEntry(current, tokens.slice(i + 1))) {
       groups.push(current)
       current = []
     }
@@ -81,11 +81,17 @@ const splitAfterAmounts = (tokens: ReadonlyArray<string>): Array<Array<string>> 
   return groups
 }
 
-const endsEntry = (current: ReadonlyArray<string>, next: string | undefined, afterNext: string | undefined) => {
+const endsEntry = (current: ReadonlyArray<string>, remaining: ReadonlyArray<string>) => {
+  const [next, afterNext] = remaining
   if (next === undefined || !current.some(isWord)) return false
   const last = current.at(-1)!
+  // После суммы перед описанием следующее описание со своей суммой начинает операцию.
+  // "99,90 молоко такси 300"; много слов без новой суммы остаются одним описанием.
+  if (isWord(last) && isWord(next) && amountAtEdge(current, "start") &&
+      takeAmount(remaining)?.rest.some(isWord)) return true
   const onAmount = isAmount(last) || (CURRENCY.test(last) && isAmount(current.at(-2) ?? "")) || takeCalculation(current) !== null
   if (!onAmount) return false
+  if (startsFollowingAmount(current, remaining)) return true
   // «такси 450 вчера» — дата этой же операции, «такси 450 вчера кино 800» — уже следующей
   if (isDateWord(next)) return afterNext !== undefined && isWord(afterNext)
   if (next === "+" && (afterNext === undefined || (!isWord(afterNext) && !isDateWord(afterNext)))) return false
@@ -93,7 +99,37 @@ const endsEntry = (current: ReadonlyArray<string>, next: string | undefined, aft
   return next.startsWith("+") || isWord(next)
 }
 
-const isDateWord = (token: string) => DATE_WORDS.has(token.toLowerCase())
+/**
+ * Сумма следующей операции может стоять перед её описанием: "кофе 500 200 / 2 шаурма".
+ * Короткая первая группа сохраняет разряды ("кофе 1 500 / 2"). При трёхзначной
+ * первой сумме и собственном описании после следующей суммы предпочитаем две операции;
+ * явный разделитель позволяет однозначно записать разряды любой длины.
+ */
+const startsFollowingAmount = (current: ReadonlyArray<string>, remaining: ReadonlyArray<string>) => {
+  if (/[+*/-]$/.test(current.at(-1)!)) return false
+  const next = remaining[0]!
+  const number = next.split(/[+*/-]/)[0]!
+  if (!AMOUNT.test(number)) return false
+  const currentCalculation = takeCalculation(current)
+  const descriptionAt = remaining.findIndex(isWord)
+  if (descriptionAt < 0) return false
+
+  const amount = takeAmount(current)
+  if (currentCalculation === null && amount) {
+    const groups = current.slice(amount.rest.length)
+    // Компактные и разделённые пробелами знаки следуют одному правилу разрядов.
+    const shortGroup = /^\d{1,2}$/.test(groups[0] ?? "")
+    const grouped = GROUPED.test([...groups, number].join(" "))
+    if (shortGroup && grouped) return false
+    // Собственная сумма после следующего описания сохраняет разряды и цифры описания:
+    // "кофе 123 456 такси 300", "бензин 95 3000 такси 300".
+    if ((grouped || shortGroup) && takeCalculation(remaining.slice(0, descriptionAt)) === null &&
+        remaining.slice(descriptionAt + 1).some((token) => AMOUNT.test(token) || takeCalculation([token]) !== null)) return false
+  }
+  return true
+}
+
+const isDateWord = (token: string) => DATE_WORDS.has(token.replace(/^\+/, "").toLowerCase())
 
 /** Слово описания: с буквами, но не сумма («2к»), не валюта и не дата. */
 const isWord = (token: string) => /\p{L}/u.test(token) && !isAmount(token) && !CURRENCY.test(token) && !isDateWord(token) && takeCalculation([token]) === null
