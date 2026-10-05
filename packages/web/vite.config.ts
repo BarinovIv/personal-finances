@@ -1,6 +1,6 @@
 import preact from "@preact/preset-vite"
 import { createHash } from "node:crypto"
-import { readdirSync, statSync } from "node:fs"
+import { readFileSync, readdirSync, statSync } from "node:fs"
 import { join, relative } from "node:path"
 import { build, defineConfig, type Plugin } from "vite"
 
@@ -28,7 +28,12 @@ const serviceWorker = (): Plugin => {
         h.update(item.type === "chunk" ? item.code : typeof item.source === "string" ? item.source : Buffer.from(item.source))
       }
       const publicDir = join(__dirname, "public")
-      for (const file of publicFiles(publicDir)) files.push(`/${relative(publicDir, file).split("\\").join("/")}`)
+      for (const file of publicFiles(publicDir)) {
+        const name = `/${relative(publicDir, file).split("\\").join("/")}`
+        files.push(name)
+        h.update(name)
+        h.update(readFileSync(file))
+      }
       hash = h.digest("hex").slice(0, 12)
     },
     async closeBundle() {
