@@ -2126,11 +2126,6 @@ select.text-input {
   line-height: 1.45;
 }
 
-.summary-cell:nth-child(2) .summary-tooltip {
-  right: 0;
-  left: auto;
-}
-
 .summary-total {
   font-family: var(--font-rounded);
   font-size: 44px;
@@ -2159,16 +2154,18 @@ select.text-input {
 }
 
 .summary-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
 .summary-cell {
   display: flex;
   flex-direction: column;
+  justify-content: space-between;
+  flex: 1 1 min-content;
   gap: 2px;
-  padding: 12px 14px;
+  padding: 12px 10px;
   border-radius: 16px;
   background: var(--fill);
 }
@@ -2176,7 +2173,7 @@ select.text-input {
 .summary-income,
 .summary-value {
   font-family: var(--font-rounded);
-  font-size: 19px;
+  font-size: 20px;
   font-weight: 700;
 }
 
@@ -2185,13 +2182,17 @@ select.text-input {
 }
 
 .summary-free {
-  grid-column: 1 / -1;
+  flex-grow: 1.4;
   background: var(--accent-soft);
+}
+
+.summary-free .summary-tooltip {
+  right: 0;
+  left: auto;
 }
 
 .summary-free .summary-value {
   color: var(--accent-strong);
-  font-size: 26px;
 }
 
 .summary-free.negative {

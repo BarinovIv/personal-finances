@@ -143,13 +143,6 @@ const Summary = memo(({ d }: { d: Dashboard }) => {
           />
           <span class="summary-income num">{formatMoney(d.income, { sign: "+" })}</span>
         </div>
-        <div class="summary-cell">
-          <SummaryCaption
-            label="Доходы − расходы"
-            help="Доходы минус расходы за этот период. Например: получил 50 000 ₽, потратил 20 000 ₽ — здесь 30 000 ₽. Даже если отложил на отпуск или одолжил другу, эта цифра не изменится."
-          />
-          <span class="summary-value num">{formatMoney(d.balance)}</span>
-        </div>
         <div class={`summary-cell summary-free${d.free < 0 ? " negative" : ""}`}>
           <SummaryCaption
             label="Свободные деньги"
