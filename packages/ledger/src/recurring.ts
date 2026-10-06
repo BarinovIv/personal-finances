@@ -1,5 +1,6 @@
 import {
   addDays,
+  inPeriod,
   pendingOccurrences,
   upcomingCharges,
   type CategoryKind,
@@ -194,8 +195,9 @@ export const reorderRecurring = async (ctx: LedgerContext, ids: ReadonlyArray<st
   if (changes.length > 0) await ctx.records.write(changes)
 }
 
-/** Предстоящие списания: регулярные расходы, которые ещё появятся до конца текущего периода. */
+/** Предстоящие списания: будущие появления и ожидающие подтверждения расходы текущего периода. */
 export const upcomingIn = (ctx: LedgerContext, period: Period): Upcoming => {
+  if (!inPeriod(period, ctx.today())) return { items: [], total: 0 }
   const items = upcomingCharges(ctx.records.live("recurring"), hasOperation(ctx), period, ctx.today()).map(
     ({ template, date }): UpcomingItem => ({
       templateId: template.id,
@@ -205,5 +207,17 @@ export const upcomingIn = (ctx: LedgerContext, period: Period): Upcoming => {
       category: ctx.categoryOf(template.data.categoryId, "expense")
     })
   )
+  for (const record of ctx.operations()) {
+    const { data } = record
+    if (!data.pending || data.kind !== "expense" || !data.recurringId || !inPeriod(period, data.date)) continue
+    items.push({
+      templateId: data.recurringId,
+      description: data.description,
+      date: data.date,
+      amount: data.amount,
+      category: ctx.categoryOf(data.categoryId, "expense")
+    })
+  }
+  items.sort((a, b) => a.date.localeCompare(b.date))
   return { items, total: items.reduce((sum, i) => sum + i.amount, 0) }
 }

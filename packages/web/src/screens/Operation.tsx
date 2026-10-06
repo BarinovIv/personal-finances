@@ -1,11 +1,12 @@
-import { formatDecimal, formatMoney, isMovement, parseMoney } from "@fin/domain"
-import { dayLabel, type Ledger, type OperationView, type RefundProblem, type RefundsInfo, type UpdateProblem } from "@fin/ledger"
+import { formatMoney, isMovement, parseMoney } from "@fin/domain"
+import { dayLabel, type Ledger, type OperationView, type RefundProblem, type RefundsInfo } from "@fin/ledger"
 import { useEffect, useState } from "preact/hooks"
 import { CategoryBadge } from "../components/CategoryBadge"
 import { CategoryGrid } from "../components/CategoryGrid"
 import { Header } from "../components/Header"
 import { kindLabel, OperationBadge, operationTitle } from "../components/OperationBadge"
 import { signedAmount } from "../components/OperationRow"
+import { RecurringAmountSheet } from "../components/RecurringOperation"
 import { Sheet } from "../components/Sheet"
 import { SwipeBack } from "../components/SwipeBack"
 import { CheckIcon, CloseIcon, ForwardIcon, RefundIcon, RepeatIcon, TrashIcon } from "../icons"
@@ -13,18 +14,8 @@ import { goBack, useLedgerVersion } from "../state"
 import { limitNotes, showToast } from "../toast"
 import { DebtRepayments, isDebtOperation } from "./Debt"
 import { RecurringForm } from "./Recurring"
-
-const problemText: Record<UpdateProblem, string> = {
-  "not-found": "Операция уже удалена.",
-  "bad-amount": "Проверьте сумму.",
-  "no-description": "Добавьте описание.",
-  "bad-category": "Выберите категорию.",
-  "below-refunds": "Сумма меньше уже оформленных возвратов.",
-  "below-repayments": "Сумма меньше уже погашенного.",
-  "no-person": "Укажите, кто."
-}
-
-const amountText = (kopecks: number) => formatDecimal(kopecks).replace(/,00$/, "")
+import { amountText, confirmRecurringOperation } from "../helpers"
+import { updateProblemText as problemText } from "../constants"
 
 const refundProblemText: Record<RefundProblem, string> = {
   "not-refundable": "Возврат оформляется только по расходу.",
@@ -161,16 +152,16 @@ const RefundForm = ({
 
 /** Подтверждение удаления — как action sheet в iOS: разрушительное действие и отдельная «Отмена». */
 const DeleteSheet = ({ op, onConfirm, onClose }: { op: OperationView; onConfirm: () => void; onClose: () => void }) => (
-  <Sheet label="Удаление операции" onClose={onClose}>
+  <Sheet label={op.pending ? "Пропуск операции" : "Удаление операции"} onClose={onClose}>
     {(close) => (
       <div class="sheet-form">
-        <div class="sheet-title">Удалить операцию?</div>
+        <div class="sheet-title">{op.pending ? "Пропустить в этом месяце?" : "Удалить операцию?"}</div>
         <p class="hint center">
           «{deletedText(op)}» · {formatMoney(op.amount)}
         </p>
         <div class="stacked-actions">
           <button type="button" class="secondary-button danger-button" onClick={onConfirm}>
-            Удалить
+            {op.pending ? "Пропустить" : "Удалить"}
           </button>
           <button type="button" class="secondary-button" onClick={close}>
             Отмена
@@ -184,7 +175,7 @@ const DeleteSheet = ({ op, onConfirm, onClose }: { op: OperationView; onConfirm:
 const remove = async (ledger: Ledger, op: OperationView) => {
   const undo = await ledger.deleteOperation(op.id)
   goBack("/")
-  showToast({ text: `Удалено: ${deletedText(op)}`, action: { label: "Отменить", run: () => undo() } })
+  showToast({ text: `${op.pending ? "Пропущено в этом месяце" : "Удалено"}: ${deletedText(op)}`, action: { label: "Отменить", run: () => undo() } })
 }
 
 const ViewCard = ({ ledger, op, onEdit }: { ledger: Ledger; op: OperationView; onEdit: () => void }) => {
@@ -193,7 +184,11 @@ const ViewCard = ({ ledger, op, onEdit }: { ledger: Ledger; op: OperationView; o
   const [recurringOpen, setRecurringOpen] = useState(false)
   const isRefund = op.kind === "refund"
   const movement = isMovement(op.kind)
-  const info = op.kind === "expense" ? ledger.refunds(op.id) : undefined
+  const info = op.kind === "expense" && !op.pending ? ledger.refunds(op.id) : undefined
+  const confirm = async () => {
+    const error = await confirmRecurringOperation(ledger, op)
+    if (error) showToast({ text: error })
+  }
 
   return (
     <>
@@ -211,7 +206,14 @@ const ViewCard = ({ ledger, op, onEdit }: { ledger: Ledger; op: OperationView; o
           <span class={`op-hero-amount num ${op.kind}`}>{signedAmount(op)}</span>
           <span class="op-hero-desc">{operationTitle(op)}</span>
         </section>
+        {op.pending && <p class="section-footer center">Ожидает подтверждения. Пока не входит в расходы и доходы.</p>}
         <div class="card-list">
+          {op.pending && (
+            <button type="button" class="row row-button action-row" onClick={() => void confirm()}>
+              <CheckIcon size={18} />
+              <span>Подтвердить операцию</span>
+            </button>
+          )}
           {op.category && (
             <div class="row info-row">
               <span class="row-label">Категория</span>
@@ -282,8 +284,8 @@ const ViewCard = ({ ledger, op, onEdit }: { ledger: Ledger; op: OperationView; o
             </button>
           )}
           <button type="button" class="row row-button action-row destructive" onClick={() => setDeleteOpen(true)}>
-            <TrashIcon size={18} />
-            <span>Удалить операцию</span>
+            {op.pending ? <CloseIcon size={18} /> : <TrashIcon size={18} />}
+            <span>{op.pending ? "Пропустить в этом месяце" : "Удалить операцию"}</span>
           </button>
         </div>
       </div>
@@ -465,10 +467,13 @@ export const OperationScreen = ({ ledger, id }: { ledger: Ledger; id: string }) 
   return (
     <SwipeBack onBack={(options) => goBack("/", options)}>
       <div class="screen column">
-        {mode === "view" ? (
+        {mode === "view" || op.recurringId ? (
           <ViewCard ledger={ledger} op={op} onEdit={() => setMode("edit")} />
         ) : (
           <EditForm key={`${op.id}:${op.updatedAt}`} ledger={ledger} op={op} onDone={() => setMode("view")} />
+        )}
+        {mode === "edit" && op.recurringId && (
+          <RecurringAmountSheet key={op.id} ledger={ledger} op={op} onClose={() => setMode("view")} />
         )}
       </div>
     </SwipeBack>

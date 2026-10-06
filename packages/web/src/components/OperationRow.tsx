@@ -2,48 +2,78 @@ import { formatMoney, isOutflow } from "@fin/domain"
 import type { CategoryView, OperationView } from "@fin/ledger"
 import { memo } from "preact/compat"
 import { OperationBadge, operationSubtitle, operationTitle } from "./OperationBadge"
-import { RefundIcon, RepeatIcon } from "../icons"
+import { CheckIcon, CloseIcon, RefundIcon, RepeatIcon, SfSymbol } from "../icons"
 import { QuickDeleteButton, SwipeDeleteButton, useSwipeDelete } from "./SwipeDelete"
+import { useRecurringHighlight } from "./helpers"
+import type { OperationRowProps } from "./types"
 
 /** «−1 500 ₽» для денег, которые ушли (расход, «Отложено», «Одолжил», «Я вернул»), иначе «+1 500 ₽». */
 export const signedAmount = (op: Pick<OperationView, "kind" | "amount">) =>
   formatMoney(op.amount, { sign: isOutflow(op.kind) ? "−" : "+" })
-
-interface OperationRowProps {
-  op: OperationView
-  sub?: string
-  onDelete?: (op: OperationView) => void
-  leaving?: boolean
-}
 
 /**
  * Строка операции. `onDelete`, если задан, включает свайп влево (тянет за пальцем) и
  * постоянную кнопку «Удалить» — доступную и без жеста, с компьютера. `leaving` проигрывает
  * анимацию исчезновения, не убирая строку из списка сразу (даёт время на «Отменить»).
  */
-const OperationRowView = ({ op, sub, onDelete, leaving }: OperationRowProps) => {
+const OperationRowView = (props: OperationRowProps) => {
+  const { op, sub, onDelete, onConfirm, onEditAmount, leaving } = props
+  const { row, highlight } = useRecurringHighlight(props)
   const swipe = useSwipeDelete(Boolean(onDelete))
   const label = `Удалить: ${operationTitle(op)}`
+  const pending = Boolean(op.recurringId && op.pending)
 
   return (
-    <div class={`op-row-wrap${leaving ? " leaving" : ""}`}>
+    <div ref={row} class={`op-row-wrap${leaving ? " leaving" : ""}${pending ? " pending" : ""}${highlight ? " recurring-new" : ""}`}>
       {/* красная кнопка видна, только пока строка сдвинута — иначе просвечивает в скруглённом углу карточки */}
       <div class={`op-row-swipe${swipe.revealing ? " revealing" : ""}`}>
         {onDelete && <SwipeDeleteButton label={label} onDelete={() => onDelete(op)} />}
-        <a class="op-row" href={`#/op/${op.id}`} style={swipe.style} {...swipe.handlers}>
-          <OperationBadge op={op} size={40} />
-          <span class="op-main">
-            <span class="op-desc">
-              {op.kind === "refund" && <RefundIcon label="Возврат" />}
-              <span>{operationTitle(op)}</span>
-              {op.recurringId && <RepeatIcon label="Регулярная операция" />}
+        <div class="op-row-content" style={swipe.style}>
+          <a
+            class="op-row"
+            href={`#/op/${op.id}`}
+            {...swipe.handlers}
+            onClick={(event) => {
+              if (op.recurringId && onEditAmount && !event.defaultPrevented) {
+                event.preventDefault()
+                onEditAmount(op)
+              }
+            }}
+          >
+            <OperationBadge op={op} size={40} />
+            <span class="op-main">
+              <span class="op-desc">
+                {op.kind === "refund" && <RefundIcon label="Возврат" />}
+                <span>{operationTitle(op)}</span>
+                {op.recurringId && <RepeatIcon label="Регулярная операция" />}
+              </span>
+              <span class="op-sub">{pending ? "Ожидает подтверждения · " : ""}{sub ?? operationSubtitle(op)}</span>
             </span>
-            <span class="op-sub">{sub ?? operationSubtitle(op)}</span>
-          </span>
-          <span class={`op-amount num ${op.kind}`}>{signedAmount(op)}</span>
-        </a>
+            {!(op.recurringId && onEditAmount) && <span class={`op-amount num ${op.kind}`}>{signedAmount(op)}</span>}
+          </a>
+          {op.recurringId && onEditAmount && (
+            <div class="op-recurring-side">
+              <span class={`op-amount num ${op.kind}`}>{signedAmount(op)}</span>
+              <div class="op-recurring-actions">
+                {pending && onConfirm && (
+                  <button type="button" class="op-recurring-action confirm" aria-label={`Подтвердить: ${operationTitle(op)}`} onClick={() => onConfirm(op)}>
+                    <CheckIcon size={18} />
+                  </button>
+                )}
+                {pending && onDelete && (
+                  <button type="button" class="op-recurring-action skip" aria-label={`Пропустить в этом месяце: ${operationTitle(op)}`} onClick={() => onDelete(op)}>
+                    <CloseIcon size={18} />
+                  </button>
+                )}
+                <button type="button" class="op-recurring-action" aria-label={`Изменить сумму: ${operationTitle(op)}`} onClick={() => onEditAmount(op)}>
+                  <SfSymbol name="square_pencil_fill" size={19} />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
-      {onDelete && <QuickDeleteButton label={label} onDelete={() => onDelete(op)} />}
+      {onDelete && !pending && <QuickDeleteButton label={label} onDelete={() => onDelete(op)} />}
     </div>
   )
 }
@@ -59,6 +89,8 @@ const sameOperation = (a: OperationView, b: OperationView) =>
     a.amount === b.amount &&
     a.description === b.description &&
     a.recurringId === b.recurringId &&
+    a.pending === b.pending &&
+    a.date === b.date &&
     a.person === b.person &&
     a.goalId === b.goalId &&
     a.goalName === b.goalName &&
@@ -71,5 +103,7 @@ const sameOperation = (a: OperationView, b: OperationView) =>
 export const OperationRow = memo(
   OperationRowView,
   (prev, next) =>
-    prev.sub === next.sub && prev.leaving === next.leaving && prev.onDelete === next.onDelete && sameOperation(prev.op, next.op)
+    prev.sub === next.sub && prev.leaving === next.leaving && prev.onDelete === next.onDelete &&
+    prev.onConfirm === next.onConfirm && prev.onEditAmount === next.onEditAmount &&
+    prev.hasSeen === next.hasSeen && prev.markSeen === next.markSeen && sameOperation(prev.op, next.op)
 )

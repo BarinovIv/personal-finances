@@ -17,6 +17,7 @@ export interface OperationPatch {
 
 export type UpdateProblem =
   | "not-found"
+  | "not-recurring"
   | "bad-amount"
   | "no-description"
   | "bad-category"
@@ -40,6 +41,32 @@ export const refundedAmount = (ctx: LedgerContext, expenseId: string, except?: s
     .filter((r) => r.data.refundOf === expenseId && r.id !== except)
     .reduce((sum, r) => sum + r.data.amount, 0)
 
+/** Подтверждение сохраняет запланированную дату и все данные отдельной операции. */
+export const confirmRecurringOperation = async (
+  ctx: LedgerContext,
+  id: string,
+  amount?: number
+): Promise<UpdateResult> => {
+  const record = ctx.records.get("operations", id)
+  if (!record || record.deleted) return { ok: false, problem: "not-found" }
+  const current = record.data
+  if (!current.recurringId || (current.kind !== "expense" && current.kind !== "income")) {
+    return { ok: false, problem: "not-recurring" }
+  }
+  const nextAmount = amount ?? current.amount
+  if (!Number.isInteger(nextAmount) || nextAmount <= 0) return { ok: false, problem: "bad-amount" }
+  if (current.kind === "expense" && nextAmount < refundedAmount(ctx, id)) {
+    return { ok: false, problem: "below-refunds" }
+  }
+  if (!current.pending && amount === undefined) {
+    return { ok: true, undo: async () => ({ ok: true }), warnings: [] }
+  }
+  const before = ctx.operations()
+  const data: OperationData = { ...current, amount: nextAmount, pending: false }
+  const undo = await writeUndoable(ctx.records, [{ collection: "operations", id, data }])
+  return { ok: true, undo, warnings: limitWarnings(ctx, before, [data.date]) }
+}
+
 /** Правка операции. Правка — это новая версия записи с новым временем (ADR-0001). */
 export const updateOperation = async (ctx: LedgerContext, id: string, patch: OperationPatch): Promise<UpdateResult> => {
   const record = ctx.records.get("operations", id)
@@ -47,7 +74,7 @@ export const updateOperation = async (ctx: LedgerContext, id: string, patch: Ope
   const current = record.data
   const next: OperationData = {
     ...current,
-    ...(patch.amount !== undefined ? { amount: patch.amount } : {}),
+    ...(patch.amount !== undefined ? { amount: patch.amount, ...(current.pending ? { pending: false } : {}) } : {}),
     ...(patch.description !== undefined ? { description: patch.description.trim() } : {}),
     ...(patch.categoryId !== undefined ? { categoryId: patch.categoryId } : {}),
     ...(patch.date !== undefined ? { date: patch.date } : {}),
@@ -120,7 +147,7 @@ export interface RefundsInfo {
 
 export const refundsOf = (ctx: LedgerContext, expenseId: string): RefundsInfo | undefined => {
   const record = ctx.records.get("operations", expenseId)
-  if (!record || record.deleted || record.data.kind !== "expense") return undefined
+  if (!record || record.deleted || record.data.pending || record.data.kind !== "expense") return undefined
   const items = ctx
     .operations()
     .filter((r) => r.data.refundOf === expenseId)

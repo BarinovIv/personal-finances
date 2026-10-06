@@ -21,6 +21,7 @@ export const groupByDay = (ctx: LedgerContext, records: ReadonlyArray<RecordOf<"
       let expenseTotal = 0
       let incomeTotal = 0
       for (const op of items) {
+        if (op.pending) continue
         if (op.kind === "expense") expenseTotal += op.amount
         if (op.kind === "refund") expenseTotal -= op.amount
         if (op.kind === "income") incomeTotal += op.amount

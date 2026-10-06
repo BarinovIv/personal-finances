@@ -203,10 +203,22 @@ describe("синхронизация", () => {
     expect(created.ok).toBe(true)
     await phone.sync.syncNow()
     // сегодня 28-е: операция создана сервером в том же обмене
-    expect(phone.ledger.days()[0]!.items).toMatchObject([{ description: "Спортзал", date: "2026-09-28" }])
-    expect(phone.ledger.dashboard({ mode: "month", offset: 0 }).upcoming.items).toEqual([])
+    expect(phone.ledger.days()[0]!.items).toMatchObject([{ description: "Спортзал", date: "2026-09-28", pending: true }])
+    expect(phone.ledger.dashboard({ mode: "month", offset: 0 })).toMatchObject({
+      expenses: 0, free: -300000, upcoming: { total: 300000 }
+    })
 
     await mac.sync.syncNow()
-    expect(mac.ledger.days()[0]!.items).toMatchObject([{ description: "Спортзал", recurringId: created.ok && created.id }])
+    expect(mac.ledger.days()[0]!.items).toMatchObject([{ description: "Спортзал", recurringId: created.ok && created.id, pending: true }])
+
+    const operation = phone.ledger.days()[0]!.items[0]!
+    expect((await phone.ledger.confirmRecurringOperation(operation.id, 280000)).ok).toBe(true)
+    await phone.sync.syncNow()
+    await mac.sync.syncNow()
+    expect(mac.ledger.operation(operation.id)).toMatchObject({ amount: 280000, pending: false, date: "2026-09-28" })
+    expect(mac.ledger.recurring()[0]?.amount).toBe(300000)
+    expect(mac.ledger.dashboard({ mode: "month", offset: 0 })).toMatchObject({
+      expenses: 280000, free: -280000, upcoming: { total: 0 }
+    })
   })
 })

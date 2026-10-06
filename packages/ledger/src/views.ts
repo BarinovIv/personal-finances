@@ -30,6 +30,8 @@ export interface OperationView {
   /** Для погашения — долг («Одолжил» или «Занял»). */
   readonly repaymentOf: string | null
   readonly recurringId: string | null
+  /** Отсутствующее поле означает подтверждённую операцию. */
+  readonly pending?: boolean
   readonly createdAt: number
   readonly updatedAt: number
 }

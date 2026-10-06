@@ -58,6 +58,22 @@ describe("синхронизация: сервер", () => {
       expect((yield* sync(mac, 1)).json).toEqual({ cursor: 1, changes: [], hasMore: false })
     }))
 
+  it.scoped("ожидание и подтверждение регулярной операции доходят до другого устройства", () =>
+    Effect.gen(function* () {
+      const phone = yield* signedIn
+      const mac = phone.device()
+      yield* mac.post("/api/login", { password: "верный-пароль" })
+      const base = op("rec:net:2026-09", 100, 65000)
+      const pending = { ...base, data: { ...base.data, recurringId: "net", pending: true } }
+      expect((yield* sync(phone, 0, [pending])).status).toBe(200)
+      expect((yield* sync(mac, 0)).json.changes).toEqual([pending])
+      const confirmed = { ...pending, updatedAt: 200, data: { ...pending.data, amount: 75000, pending: false } }
+      expect((yield* sync(phone, 1, [confirmed])).status).toBe(200)
+      expect((yield* sync(mac, 1)).json.changes).toEqual([confirmed])
+      expect((yield* sync(phone, 2, [{ ...base, data: { ...base.data, pending: true } }])).status).toBe(400)
+      expect((yield* sync(phone, 2, [{ ...pending, data: { ...pending.data, kind: "refund", refundOf: "original" } }])).status).toBe(400)
+    }))
+
   it.scoped("побеждает последняя правка; проигравший получает победившую версию", () =>
     Effect.gen(function* () {
       const server = yield* signedIn

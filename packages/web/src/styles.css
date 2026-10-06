@@ -1766,6 +1766,84 @@ select.text-input {
   overflow: hidden;
 }
 
+.op-row-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  background: var(--surface);
+  transition: transform 0.45s var(--spring-smooth);
+}
+
+.op-row-content .op-row {
+  flex: 1;
+  min-width: 0;
+}
+
+.op-recurring-side {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-end;
+  padding: 8px 12px 6px 0;
+}
+
+.op-recurring-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.op-recurring-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+}
+
+.op-recurring-action.confirm {
+  color: var(--accent);
+}
+
+.op-recurring-action.skip {
+  color: var(--danger);
+}
+
+.op-recurring-action:active {
+  background: color-mix(in srgb, var(--surface), var(--ink) 7%);
+}
+
+.op-row-content:has(> .op-recurring-side) .op-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.op-row-wrap.pending .op-row,
+.op-row-wrap.pending .op-row-content {
+  background: color-mix(in srgb, var(--surface), var(--accent) 4%);
+}
+
+.op-row-wrap.recurring-new .op-row-content {
+  animation: fin-recurring-highlight 1.4s ease-out;
+}
+
+.op-row-wrap.recurring-new .op-row {
+  background: transparent;
+}
+
+@keyframes fin-recurring-highlight {
+  from { background: color-mix(in srgb, var(--surface), var(--accent) 20%); }
+  to { background: color-mix(in srgb, var(--surface), var(--accent) 4%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .op-row-wrap.recurring-new .op-row-content { animation: none; }
+}
+
 .op-row {
   position: relative;
   z-index: 1;
@@ -2782,6 +2860,10 @@ select.text-input {
   font-size: 13px;
   font-weight: 600;
   color: var(--muted);
+}
+
+.sync-status.waiting {
+  color: var(--palette-yellow);
 }
 
 .sync-status.pending {

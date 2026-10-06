@@ -14,6 +14,7 @@ import {
   type DeleteCategoryResult
 } from "./category-admin"
 import { LedgerContext } from "./context"
+import { RECURRING_SEEN_PREFIX } from "./constants"
 import { exportCsv } from "./csv"
 import {
   addGoal,
@@ -45,6 +46,7 @@ import {
 } from "./entry"
 import {
   addRefund,
+  confirmRecurringOperation,
   deleteOperation,
   refundsOf,
   updateOperation,
@@ -154,6 +156,11 @@ export interface Ledger {
   operation(id: string): OperationView | undefined
   /** Правка из карточки операции; `undo` в результате возвращает прежнее. */
   updateOperation(id: string, patch: OperationPatch): Promise<UpdateResult>
+  /** Подтвердить регулярный расход или доход, при необходимости изменив только его сумму. */
+  confirmRecurringOperation(id: string, amount?: number): Promise<UpdateResult>
+  /** Просмотр операции хранится только на этом устройстве. */
+  hasSeenRecurringOperation(id: string): boolean
+  markRecurringOperationSeen(id: string): Promise<void>
   /** Удалить операцию вместе с её возвратами; результат — «Отменить». */
   deleteOperation(id: string): Promise<Undo>
   /** Возвраты расхода; для дохода и возврата — undefined. */
@@ -256,6 +263,9 @@ export const openLedger = async (options: LedgerOptions): Promise<Ledger> => {
       return record && !record.deleted ? ctx.toView(record) : undefined
     },
     updateOperation: (id, patch) => updateOperation(ctx, id, patch),
+    confirmRecurringOperation: (id, amount) => confirmRecurringOperation(ctx, id, amount),
+    hasSeenRecurringOperation: (id) => records.getMeta<boolean>(RECURRING_SEEN_PREFIX + id) === true,
+    markRecurringOperationSeen: (id) => records.saveMeta({ [RECURRING_SEEN_PREFIX + id]: true }),
     deleteOperation: (id) => deleteOperation(ctx, id),
     refunds: (id) => refundsOf(ctx, id),
     addRefund: (id, options) => addRefund(ctx, id, options),

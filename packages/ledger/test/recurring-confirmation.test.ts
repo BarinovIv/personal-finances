@@ -1,0 +1,151 @@
+import { describe, expect, it, vi } from "vitest"
+import { recurringOperation, recurringTemplate } from "./helpers"
+import { add, makeLedger } from "./support"
+
+describe("подтверждение регулярных операций", () => {
+  it("синхронизированные ожидающие расходы и доходы видны в ленте и поиске, но не в фактических итогах", async () => {
+    const { ledger, reopen } = await makeLedger()
+    await ledger.setCategoryLimit("subscriptions", 100000)
+    await add(ledger, "+Зарплата 10000")
+    await add(ledger, "Интернет дома 100", { categoryId: "food" })
+    const expense = recurringOperation({ categorizedAt: Date.parse("2026-09-29T12:00:00+03:00") })
+    const income = recurringOperation({ kind: "income", categoryId: "salary", amount: 500000, description: "Будущая зарплата" }, "rec:salary:2026-09")
+    await ledger.sync.receive([recurringTemplate(), expense, income], 1)
+
+    const dashboard = ledger.dashboard({ mode: "month", offset: 0 })
+    expect(dashboard).toMatchObject({ expenses: 10000, income: 1000000, balance: 990000, free: 925000 })
+    expect(dashboard.upcoming).toMatchObject({ total: 65000, items: [{ date: "2026-09-25", amount: 65000 }] })
+    expect(dashboard.categories.map((category) => category.id)).toEqual(["food"])
+    expect(dashboard.comparison.current).toBe(10000)
+    expect(dashboard.trend.at(-1)?.amount).toBe(10000)
+    expect(dashboard.allowance).toMatchObject({ free: 925000 })
+    expect(ledger.days().find((day) => day.date === "2026-09-25")).toMatchObject({
+      expenseTotal: 0, incomeTotal: 0, items: [expect.objectContaining({ pending: true }), expect.objectContaining({ pending: true })]
+    })
+    expect(ledger.search("Интернет дома")).toMatchObject({ count: 2, total: 10000 })
+    expect(ledger.search("Будущая зарплата")).toMatchObject({ count: 1, total: 0 })
+    expect(ledger.exportCsv()).not.toContain("Будущая зарплата")
+    expect(ledger.exportCsv()).not.toContain("25.09.2026")
+    expect(ledger.preview("Интернет дома 200")).toMatchObject({ categoryId: "food", categorySource: "history" })
+    expect(ledger.refunds(expense.id)).toBeUndefined()
+    expect(await ledger.addRefund(expense.id)).toEqual({ ok: false, problem: "not-refundable" })
+    expect((await reopen()).operation(expense.id)?.pending).toBe(true)
+  })
+
+  it("резерв использует данные операции после правки, паузы и удаления шаблона, без дубля", async () => {
+    const { ledger } = await makeLedger()
+    await ledger.sync.receive([recurringTemplate(), recurringOperation()], 1)
+    await ledger.updateRecurring("net", { amount: 99900, description: "Новое название", dayOfMonth: 29 })
+    expect(ledger.dashboard({ mode: "month", offset: 0 }).upcoming).toMatchObject({ total: 65000, items: [{ description: "Интернет дома", amount: 65000 }] })
+    await ledger.pauseRecurring("net")
+    expect(ledger.dashboard({ mode: "month", offset: 0 }).upcoming.total).toBe(65000)
+    await ledger.deleteRecurring("net")
+    expect(ledger.dashboard({ mode: "month", offset: 0 }).upcoming.total).toBe(65000)
+    expect(ledger.dashboard({ mode: "pay", offset: 0 }).upcoming.total).toBe(65000)
+    expect(ledger.dashboard({ mode: "month", offset: -1 }).upcoming.total).toBe(0)
+    await ledger.sync.receive([recurringOperation({ date: "2026-08-25" }, "rec:net:2026-08")], 2)
+    expect(ledger.dashboard({ mode: "month", offset: 0 }).upcoming.total).toBe(65000)
+  })
+
+  it("подтверждение с новой суммой сохраняет дату и шаблон, выдаёт предупреждение и отменяется", async () => {
+    const { ledger, store, reopen } = await makeLedger()
+    await ledger.sync.receive([recurringTemplate(), recurringOperation()], 1)
+    await ledger.setDashboardMode("month")
+    await ledger.setCategoryLimit("subscriptions", 100000)
+    await ledger.sync.acknowledge(ledger.pendingChanges())
+    const save = vi.spyOn(store, "save")
+    const before = ledger.recurring()
+    const result = await ledger.confirmRecurringOperation("rec:net:2026-09", 85000)
+    if (!result.ok) throw new Error(result.problem)
+    expect(save).toHaveBeenCalledTimes(1)
+    expect(result.warnings).toMatchObject([{ kind: "near", categoryId: "subscriptions" }])
+    expect(ledger.operation("rec:net:2026-09")).toMatchObject({ amount: 85000, pending: false, date: "2026-09-25", createdAt: 1 })
+    expect(ledger.recurring()).toEqual(before)
+    expect(ledger.pendingChanges()).toMatchObject([{ collection: "operations", data: { pending: false, amount: 85000, categorizedAt: 1 } }])
+    expect(ledger.dashboard({ mode: "month", offset: 0 })).toMatchObject({ expenses: 85000, upcoming: { total: 0 } })
+    expect((await reopen()).operation("rec:net:2026-09")?.pending).toBe(false)
+    expect(await result.undo()).toEqual({ ok: true })
+    expect(ledger.operation("rec:net:2026-09")).toMatchObject({ amount: 65000, pending: true })
+    expect(ledger.dashboard({ mode: "month", offset: 0 })).toMatchObject({ expenses: 0, upcoming: { total: 65000 } })
+  })
+
+  it("правка суммы подтверждает одним сохранением; описание и шаблон не меняются", async () => {
+    const { ledger, store } = await makeLedger()
+    await ledger.sync.receive([recurringTemplate(), recurringOperation()], 1)
+    const save = vi.spyOn(store, "save")
+    expect((await ledger.updateOperation("rec:net:2026-09", { description: "Другой интернет" })).ok).toBe(true)
+    expect(ledger.operation("rec:net:2026-09")?.pending).toBe(true)
+    save.mockClear()
+    const result = await ledger.updateOperation("rec:net:2026-09", { amount: 72000 })
+    expect(result.ok).toBe(true)
+    expect(save).toHaveBeenCalledTimes(1)
+    expect(ledger.operation("rec:net:2026-09")).toMatchObject({ amount: 72000, pending: false, description: "Другой интернет" })
+    expect(ledger.recurring()[0]?.amount).toBe(65000)
+  })
+
+  it("пропуск создаёт tombstone, убирает резерв и поддерживает отмену", async () => {
+    const { ledger } = await makeLedger()
+    await ledger.sync.receive([recurringTemplate(), recurringOperation()], 1)
+    const undo = await ledger.deleteOperation("rec:net:2026-09")
+    expect(ledger.operation("rec:net:2026-09")).toBeUndefined()
+    expect(ledger.pendingChanges()).toMatchObject([{ deleted: true, data: { pending: true } }])
+    expect(ledger.dashboard({ mode: "month", offset: 0 }).upcoming.total).toBe(0)
+    expect(await undo()).toEqual({ ok: true })
+    expect(ledger.operation("rec:net:2026-09")?.pending).toBe(true)
+    expect(ledger.dashboard({ mode: "month", offset: 0 }).upcoming.total).toBe(65000)
+  })
+
+  it("старые операции уже подтверждены; повторное подтверждение безопасно и сумма редактируется", async () => {
+    const { ledger, store } = await makeLedger()
+    const pending = recurringOperation()
+    const { pending: removed, ...data } = pending.data
+    expect(removed).toBe(true)
+    await ledger.sync.receive([{ ...pending, data }], 1)
+    expect(ledger.dashboard({ mode: "month", offset: 0 }).expenses).toBe(65000)
+    const save = vi.spyOn(store, "save")
+    expect((await ledger.confirmRecurringOperation(pending.id)).ok).toBe(true)
+    expect(save).not.toHaveBeenCalled()
+    expect((await ledger.confirmRecurringOperation(pending.id, 75000)).ok).toBe(true)
+    expect(ledger.operation(pending.id)).toMatchObject({ amount: 75000, pending: false })
+    expect((await ledger.addRefund(pending.id, { amount: 10000 })).ok).toBe(true)
+    expect(await ledger.confirmRecurringOperation(pending.id, 5000)).toEqual({ ok: false, problem: "below-refunds" })
+  })
+
+  it("неправильные суммы, обычные и удалённые операции не подтверждаются", async () => {
+    const { ledger } = await makeLedger()
+    await ledger.sync.receive([recurringOperation()], 1)
+    for (const amount of [0, -1, 1.5, NaN, Infinity]) {
+      expect(await ledger.confirmRecurringOperation("rec:net:2026-09", amount)).toEqual({ ok: false, problem: "bad-amount" })
+    }
+    const expense = await add(ledger, "Интернет 650")
+    expect(await ledger.confirmRecurringOperation(expense.id)).toEqual({ ok: false, problem: "not-recurring" })
+    await ledger.deleteOperation("rec:net:2026-09")
+    expect(await ledger.confirmRecurringOperation("rec:net:2026-09")).toEqual({ ok: false, problem: "not-found" })
+    expect(await ledger.confirmRecurringOperation("missing")).toEqual({ ok: false, problem: "not-found" })
+  })
+
+  it("доход начинает учитываться после подтверждения с исходной датой", async () => {
+    const { ledger } = await makeLedger()
+    const income = recurringOperation({ kind: "income", categoryId: "salary" })
+    await ledger.sync.receive([income], 1)
+    expect((await ledger.confirmRecurringOperation(income.id)).ok).toBe(true)
+    expect(ledger.dashboard({ mode: "month", offset: 0 })).toMatchObject({ income: 65000, expenses: 0, upcoming: { total: 0 } })
+    expect(ledger.operation(income.id)?.date).toBe("2026-09-25")
+  })
+
+  it("просмотр сохраняется на устройстве без финансовой синхронизации и стирается при выходе", async () => {
+    const { ledger, reopen } = await makeLedger()
+    await ledger.sync.receive([recurringOperation()], 1)
+    const before = ledger.operation("rec:net:2026-09")
+    expect(ledger.hasSeenRecurringOperation("rec:net:2026-09")).toBe(false)
+    await ledger.markRecurringOperationSeen("rec:net:2026-09")
+    expect(ledger.hasSeenRecurringOperation("rec:net:2026-09")).toBe(true)
+    expect(ledger.pendingChanges()).toEqual([])
+    expect(ledger.operation("rec:net:2026-09")).toEqual(before)
+    expect((await reopen()).hasSeenRecurringOperation("rec:net:2026-09")).toBe(true)
+    await ledger.device.clear()
+    expect(ledger.hasSeenRecurringOperation("rec:net:2026-09")).toBe(false)
+    expect((await reopen()).hasSeenRecurringOperation("rec:net:2026-09")).toBe(false)
+  })
+
+})

@@ -37,11 +37,15 @@ export const OperationData = Schema.Struct({
   categorizedAt: Schema.Number,
   refundOf: Schema.NullOr(Schema.String),
   recurringId: Schema.NullOr(Schema.String),
+  pending: Schema.optional(Schema.Boolean),
   goalId: Schema.optional(Schema.String),
   person: Schema.optional(Schema.String),
   repaymentOf: Schema.optional(Schema.String)
 }).pipe(
   Schema.filter((data) => {
+    if (data.pending && (!data.recurringId || (data.kind !== "expense" && data.kind !== "income"))) {
+      return "ожидать подтверждения может только регулярный расход или доход"
+    }
     switch (data.kind) {
       case "saved":
       case "withdrawn":

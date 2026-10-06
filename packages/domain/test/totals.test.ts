@@ -20,6 +20,16 @@ const op = (id: string, data: Partial<OperationData> & Pick<OperationData, "kind
 })
 
 describe("суммы за период", () => {
+  it("ожидающие подтверждения расходы и доходы не входят в фактические итоги", () => {
+    const ops = [
+      op("pending-expense", { kind: "expense", amount: 65000, date: "2026-09-10", recurringId: "net", pending: true }),
+      op("pending-income", { kind: "income", amount: 100000, date: "2026-09-10", recurringId: "salary", pending: true }),
+      op("old", { kind: "expense", amount: 20000, date: "2026-09-10", recurringId: "old" }),
+      op("confirmed", { kind: "income", amount: 30000, date: "2026-09-10", recurringId: "salary", pending: false })
+    ]
+    expect(periodTotals(ops, september)).toMatchObject({ expenses: 20000, income: 30000 })
+    expect(periodTotals(ops, september).categories.flatMap((category) => category.operations.map((record) => record.id))).toEqual(["old"])
+  })
   it("расходы за вычетом возвратов и доходы — только по операциям с датой в периоде", () => {
     const ops = [
       op("shoes", { kind: "expense", amount: 500000, date: "2026-09-10" }),
@@ -81,6 +91,15 @@ describe("суммы за период", () => {
 })
 
 describe("живые операции", () => {
+  it("ожидающий расход остаётся живым, а возврат до подтверждения скрыт", () => {
+    const records = [
+      op("expense", { kind: "expense", amount: 65000, date: "2026-09-10", recurringId: "net", pending: true }),
+      op("refund", { kind: "refund", amount: 10000, date: "2026-09-12", refundOf: "expense" })
+    ]
+    const live = liveOperations(records)
+    expect(live.map((record) => record.id)).toEqual(["expense"])
+    expect(periodTotals(live, september)).toMatchObject({ expenses: 0, income: 0, categories: [] })
+  })
   it("без удалённых и без возвратов удалённого расхода", () => {
     const records = [
       op("shoes", { kind: "expense", amount: 500000, date: "2026-09-10" }),

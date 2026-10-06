@@ -13,7 +13,7 @@ const useSyncState = (sync: Sync): SyncState => {
   return state
 }
 
-/** Когда всё синхронизировано — только тихий значок; текст появляется, если что-то не так. */
+/** Синхронизация обозначена значком; текст появляется, если нужен вход. */
 export const SyncBadge = memo(({ sync }: { sync: Sync }) => {
   const state = useSyncState(sync)
   if (state === "synced") {
@@ -23,10 +23,17 @@ export const SyncBadge = memo(({ sync }: { sync: Sync }) => {
       </span>
     )
   }
+  if (state === "pending") {
+    return (
+      <span class="sync-status waiting" role="status" aria-label="ждёт сети" title="ждёт сети">
+        <CloudIcon size={20} warning />
+      </span>
+    )
+  }
   return (
     <span class="sync-status pending" role="status">
       <CloudIcon size={14} />
-      {state === "pending" ? "ждёт сети" : "нужен вход"}
+      нужен вход
     </span>
   )
 })

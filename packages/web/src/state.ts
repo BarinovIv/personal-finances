@@ -2,6 +2,7 @@ import { indexedDbStore, LocalUserChanged, openLedger, type Ledger } from "@fin/
 import { createAuthApi, createSync, createUserDevice, type Sync, type Transport, type UserDevice } from "@fin/sync"
 import { useEffect, useState } from "preact/hooks"
 import { useTabActive } from "./tabActivity"
+import { shareRecurringViews } from "./helpers"
 
 const transport: Transport = { baseUrl: window.location.origin, fetch: (request) => fetch(request) }
 
@@ -28,7 +29,8 @@ let services: Promise<AppServices> | undefined
 
 /** Журнал на этом устройстве (IndexedDB) и его синхронизация в фоне. */
 export const getServices = () =>
-  (services ??= openLedger({ store: indexedDbStore() }).then((ledger) => {
+  (services ??= openLedger({ store: indexedDbStore() }).then((opened) => {
+    const ledger = shareRecurringViews(opened)
     const sync = createSync({ ledger, transport })
     const device = createUserDevice({ ledger, auth, sync })
     window.addEventListener("online", () => sync.wake())

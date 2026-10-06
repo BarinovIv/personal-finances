@@ -126,7 +126,8 @@ describe("регулярные операции: сервер", () => {
           createdAt: MSK("2026-09-28T12:00:00"),
           categorizedAt: MSK("2026-09-28T12:00:00"),
           refundOf: null,
-          recurringId: "net"
+          recurringId: "net",
+          pending: true
         }
       })
     }))
@@ -138,6 +139,20 @@ describe("регулярные операции: сервер", () => {
       yield* login(server)
       yield* server.post("/api/sync", { cursor: 0, changes: [template("rent", { dayOfMonth: 31, startDate: "2026-01-15" })] })
       expect(yield* generated(server)).toEqual({ "rec:rent:2026-01": "2026-01-31", "rec:rent:2026-02": "2026-02-28" })
+    }))
+
+  it.scoped("регулярный доход тоже появляется ожидающим подтверждения", () =>
+    Effect.gen(function* () {
+      yield* TestClock.setTime(MSK("2026-09-28T12:00:00"))
+      const server = yield* testServer()
+      yield* login(server)
+      const expense = template("salary", { startDate: "2026-09-01" })
+      const income = { ...expense, data: { ...expense.data, kind: "income", categoryId: "salary", description: "Зарплата" } }
+      expect((yield* server.post("/api/sync", { cursor: 0, changes: [income] })).status).toBe(200)
+      const response = yield* server.post("/api/sync", { cursor: 0, changes: [] })
+      expect(response.json.changes.find((record: { id: string }) => record.id === "rec:salary:2026-09")).toMatchObject({
+        data: { kind: "income", amount: 65000, date: "2026-09-10", pending: true }
+      })
     }))
 
   it.scoped("сервер не работал 2 месяца → при старте создаются 2 операции с реальными датами", () =>

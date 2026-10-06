@@ -18,6 +18,7 @@ import { EntryHelp } from "../components/EntryHelp"
 import { EntryCalculationError } from "../components/EntryCalculationError"
 import { operationTitle } from "../components/OperationBadge"
 import { OperationRow } from "../components/OperationRow"
+import { RecurringAmountSheet } from "../components/RecurringOperation"
 import { Sheet } from "../components/Sheet"
 import { SyncBadge } from "../components/SyncBadge"
 import { LargeTitle } from "../components/LargeTitle"
@@ -27,6 +28,7 @@ import { plural } from "../format"
 import { navigate, useLedgerVersion } from "../state"
 import { limitNotes, showToast } from "../toast"
 import { useTabActive } from "../tabActivity"
+import { confirmRecurringOperation } from "../helpers"
 
 const problemText: Record<EntryPreviewProblem, string> = {
   "invalid-calculation": "Проверьте выражение: суммы должны быть положительными, число повторов — целым от 1 до 1000. Смешанные действия не поддерживаются.",
@@ -67,7 +69,7 @@ const useRemoveWithUndo = (ledger: Ledger) => {
         }, 200)
       )
       showToast({
-        text: `Удалено: ${operationTitle(op)}`,
+        text: `${op.pending ? "Пропущено в этом месяце" : "Удалено"}: ${operationTitle(op)}`,
         action: {
           label: "Отменить",
           run: () => {
@@ -95,6 +97,14 @@ export const EntryScreen = ({ ledger, sync }: { ledger: Ledger; sync: Sync }) =>
   const [filterCategories, setFilterCategories] = useState<ReadonlyArray<string>>(NO_CATEGORIES)
   const searchInput = useRef<HTMLInputElement>(null)
   const { leaving, remove } = useRemoveWithUndo(ledger)
+  const [editingAmount, setEditingAmount] = useState<OperationView | null>(null)
+  const confirm = useCallback((op: OperationView) => {
+    void confirmRecurringOperation(ledger, op).then((error) => {
+      if (error) showToast({ text: error })
+    })
+  }, [ledger])
+  const hasSeen = useCallback((id: string) => ledger.hasSeenRecurringOperation(id), [ledger])
+  const markSeen = useCallback((id: string) => ledger.markRecurringOperationSeen(id), [ledger])
 
   const searchOpen = search !== "closed"
 
@@ -167,7 +177,12 @@ export const EntryScreen = ({ ledger, sync }: { ledger: Ledger; sync: Sync }) =>
         motion={search === "closing" ? "leaving" : search === "closed" && composerReveal ? "reveal" : null}
         leaving={leaving}
         onDelete={remove}
+        onConfirm={confirm}
+        onEditAmount={setEditingAmount}
+        hasSeen={hasSeen}
+        markSeen={markSeen}
       />
+      {editingAmount && <RecurringAmountSheet ledger={ledger} op={editingAmount} onClose={() => setEditingAmount(null)} details />}
     </LargeTitle>
   )
 }
@@ -487,7 +502,11 @@ const Feed = memo(
     categoryIds,
     motion,
     leaving,
-    onDelete
+    onDelete,
+    onConfirm,
+    onEditAmount,
+    hasSeen,
+    markSeen
   }: {
     ledger: Ledger
     searching: boolean
@@ -496,6 +515,10 @@ const Feed = memo(
     motion: "leaving" | "reveal" | null
     leaving: ReadonlySet<string>
     onDelete: (op: OperationView) => void
+    onConfirm: (op: OperationView) => void
+    onEditAmount: (op: OperationView) => void
+    hasSeen: (id: string) => boolean
+    markSeen: (id: string) => Promise<void>
   }) => {
     const version = useLedgerVersion(ledger)
     // подписи дней («Сегодня», «Вчера») зависят от даты — пересчитываем и при её смене
@@ -526,7 +549,8 @@ const Feed = memo(
                 </div>
                 <div class="card-list">
                   {day.items.map((op) => (
-                    <OperationRow key={op.id} op={op} onDelete={onDelete} leaving={leaving.has(op.id)} />
+                    <OperationRow key={op.id} op={op} onDelete={onDelete} onConfirm={onConfirm}
+                      onEditAmount={onEditAmount} hasSeen={hasSeen} markSeen={markSeen} leaving={leaving.has(op.id)} />
                   ))}
                 </div>
               </section>

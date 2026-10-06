@@ -101,7 +101,7 @@ export class LedgerContext {
       new History(
         this.records
           .live("operations")
-          .filter((r) => r.data.kind === "expense" || r.data.kind === "income")
+          .filter((r) => !r.data.pending && (r.data.kind === "expense" || r.data.kind === "income"))
           .map((r) => ({
             kind: r.data.kind as CategoryKind,
             description: r.data.description,
@@ -141,6 +141,7 @@ export class LedgerContext {
       person: (debt ? debt.data.person : data.person) ?? null,
       repaymentOf: data.repaymentOf ?? null,
       recurringId: data.recurringId,
+      ...(data.pending !== undefined ? { pending: data.pending } : {}),
       createdAt: data.createdAt,
       updatedAt: record.updatedAt
     }

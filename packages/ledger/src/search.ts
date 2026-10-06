@@ -48,7 +48,7 @@ export const searchOperations = (
   })
   return {
     count: matches.length,
-    total: matches.reduce((sum, r) => sum + (isMovement(r.data.kind) ? 0 : r.data.amount), 0),
+    total: matches.reduce((sum, r) => sum + (r.data.pending || isMovement(r.data.kind) ? 0 : r.data.amount), 0),
     days: groupByDay(ctx, matches)
   }
 }

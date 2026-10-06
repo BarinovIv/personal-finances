@@ -44,7 +44,8 @@ export const generateRecurringFor = (userId: string) => Effect.gen(function* () 
             createdAt: now,
             categorizedAt: now,
             refundOf: null,
-            recurringId: template.id
+            recurringId: template.id,
+            pending: true
           }
           yield* putIfNewer({ collection: "operations", id, updatedAt: now, deleted: false, data }, userId)
           created++

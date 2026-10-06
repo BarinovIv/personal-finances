@@ -70,7 +70,13 @@ export const NewsIcon = ({ size = 18 }: { size?: number }) => <SfSymbol name="bo
 
 export const PhoneIcon = ({ size = 18 }: { size?: number }) => <SfSymbol name="device_phone_portrait" size={size} />
 
-export const CloudIcon = ({ size = 16 }: { size?: number }) => <SfSymbol name="cloud" size={size} />
+export const CloudIcon = ({ size = 16, warning = false }: { size?: number; warning?: boolean }) => warning ? (
+  <svg width={size} height={size} viewBox="0 0 56 56" fill="currentColor" aria-hidden="true">
+    <path d={SYMBOLS.cloud.d} />
+    <path d="M26 22h4v11h-4z" />
+    <circle cx="28" cy="37" r="2" />
+  </svg>
+) : <SfSymbol name="cloud" size={size} />
 
 export const WarningIcon = () => (
   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

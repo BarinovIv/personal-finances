@@ -26,7 +26,7 @@ const describe = (data: OperationData) => data.description || `${OPERATION_KIND_
 export const exportCsv = (ctx: LedgerContext): string => {
   const rows = ctx
     .operations()
-    .slice()
+    .filter((record) => !record.data.pending)
     .sort((a, b) => (a.data.date === b.data.date ? a.data.createdAt - b.data.createdAt : a.data.date < b.data.date ? -1 : 1))
     .map((record) => {
       const op = ctx.toView(record)

@@ -35,7 +35,7 @@ export const liveOperations = (records: ReadonlyArray<OperationRecord>): Array<O
     const parent = parentOperation(r.data)
     if (!parent) return true
     const original = byId.get(parent)
-    return original !== undefined && !original.deleted
+    return original !== undefined && !original.deleted && !original.data.pending
   })
 }
 
@@ -61,7 +61,7 @@ export const periodTotals = (operations: ReadonlyArray<OperationRecord>, period:
   let movements = 0
   const byCategory = new Map<string, { amount: number; operations: Array<OperationRecord> }>()
   for (const record of operations) {
-    if (!inPeriod(period, record.data.date)) continue
+    if (record.data.pending || !inPeriod(period, record.data.date)) continue
     if (record.data.kind === "income") {
       income += record.data.amount
       continue
