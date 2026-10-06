@@ -1,7 +1,7 @@
 import {
   addDays,
   pendingOccurrences,
-  upcomingCharges,
+  upcomingOperations,
   type CategoryKind,
   type IsoDate,
   type Period,
@@ -116,29 +116,29 @@ export const addRecurring = async (ctx: LedgerContext, input: RecurringInput): P
   return { ok: true, id }
 }
 
-/** Расход становится регулярным; повторения начинаются после сегодня, без второго расхода за этот день. */
+/** Расход или доход становится регулярным; повторения начинаются после сегодня, без дубля за этот день. */
 export const makeRecurring = async (
   ctx: LedgerContext,
-  expenseId: string,
+  operationId: string,
   input: Omit<RecurringInput, "kind">
 ): Promise<MakeRecurringResult> => {
-  const expense = ctx.records.get("operations", expenseId)
-  if (!expense || expense.deleted) return { ok: false, problem: "not-found" }
-  if (expense.data.kind !== "expense") return { ok: false, problem: "not-expense" }
-  if (expense.data.recurringId) return { ok: false, problem: "already-recurring" }
-  const problem = validate(ctx, { ...input, kind: "expense" })
+  const operation = ctx.records.get("operations", operationId)
+  if (!operation || operation.deleted) return { ok: false, problem: "not-found" }
+  if (operation.data.kind !== "expense" && operation.data.kind !== "income") return { ok: false, problem: "unsupported-kind" }
+  if (operation.data.recurringId) return { ok: false, problem: "already-recurring" }
+  const problem = validate(ctx, { ...input, kind: operation.data.kind })
   if (problem) return { ok: false, problem }
   const id = ctx.newId()
   const data: RecurringData = {
     ...input,
-    kind: "expense",
+    kind: operation.data.kind,
     description: input.description.trim(),
     startDate: addDays(ctx.today(), 1),
     status: "active"
   }
   const undo = await writeUndoable(ctx.records, [
     { collection: "recurring", id, data },
-    { collection: "operations", id: expenseId, data: { ...expense.data, recurringId: id } }
+    { collection: "operations", id: operationId, data: { ...operation.data, recurringId: id } }
   ])
   return { ok: true, id, undo }
 }
@@ -194,16 +194,16 @@ export const reorderRecurring = async (ctx: LedgerContext, ids: ReadonlyArray<st
   if (changes.length > 0) await ctx.records.write(changes)
 }
 
-/** Предстоящие списания: регулярные расходы, которые ещё появятся до конца текущего периода. */
-export const upcomingIn = (ctx: LedgerContext, period: Period): Upcoming => {
-  const items = upcomingCharges(ctx.records.live("recurring"), hasOperation(ctx), period, ctx.today()).map(
-    ({ template, date }): UpcomingItem => ({
+/** Предстоящие регулярные операции выбранного вида до конца текущего периода; по умолчанию списания. */
+export const upcomingIn = (ctx: LedgerContext, period: Period, kind: CategoryKind = "expense"): Upcoming => {
+  const items = upcomingOperations(ctx.records.live("recurring"), hasOperation(ctx), period, ctx.today())
+    .filter(({ template }) => template.data.kind === kind)
+    .map(({ template, date }): UpcomingItem => ({
       templateId: template.id,
       description: template.data.description,
       date,
       amount: template.data.amount,
-      category: ctx.categoryOf(template.data.categoryId, "expense")
-    })
-  )
+      category: ctx.categoryOf(template.data.categoryId, kind)
+    }))
   return { items, total: items.reduce((sum, i) => sum + i.amount, 0) }
 }

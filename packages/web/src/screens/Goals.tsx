@@ -4,14 +4,14 @@ import type { ComponentChildren } from "preact"
 import { useState } from "preact/hooks"
 import { CategoryBadge } from "../components/CategoryBadge"
 import { Sheet } from "../components/Sheet"
-import { CategoryGlyph } from "../categoryIcons"
+import { SymbolGlyph } from "../categoryIcons"
 import { CheckIcon, CloseIcon, ForwardIcon, PlusIcon } from "../icons"
 
 /** У целей нет своего цвета: значок цели всегда одного цвета палитры, иконку выбирает пользователь. */
 const GOAL_COLOR = "teal"
 
 export const GoalBadge = ({ goal, size }: { goal: Pick<GoalView, "icon" | "name">; size?: number }) => (
-  <CategoryBadge category={{ name: goal.name, icon: goal.icon, color: GOAL_COLOR }} size={size} />
+  <CategoryBadge category={{ name: goal.name, icon: goal.icon, color: GOAL_COLOR }} size={size} symbol />
 )
 
 /** Полоска прогресса цели; достигнутая — цветом бренда. */
@@ -164,7 +164,7 @@ export const GoalForm = (props: {
             style={i === draft.icon ? { background: `var(--palette-${GOAL_COLOR})` } : undefined}
             onClick={() => set({ icon: i })}
           >
-            <CategoryGlyph icon={i} size={16} />
+            <SymbolGlyph icon={i} size={16} />
           </button>
         ))}
       </div>

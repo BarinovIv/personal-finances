@@ -1,8 +1,8 @@
 /// <reference lib="webworker" />
 /**
  * Service worker: оболочка приложения из кэша, поэтому холодный запуск работает без сети.
- * Версия и список файлов подставляются при сборке. Новая версия ставится в фоне, старый кэш
- * удаляется при активации — со следующего запуска приложение открывается уже новым.
+ * Версия и список файлов подставляются при сборке. Новая версия скачивается в фоне и ждёт
+ * закрытия всех окон приложения. При активации удаляется старый кэш; следующий запуск — новый.
  */
 declare const __VERSION__: string
 declare const __PRECACHE__: ReadonlyArray<string>
@@ -16,7 +16,6 @@ sw.addEventListener("install", (event: ExtendableEvent) => {
     caches
       .open(SHELL)
       .then((cache) => cache.addAll(__PRECACHE__.map((url) => new Request(url, { cache: "reload" }))))
-      .then(() => sw.skipWaiting())
   )
 })
 
@@ -25,7 +24,6 @@ sw.addEventListener("activate", (event: ExtendableEvent) => {
     caches
       .keys()
       .then((keys) => Promise.all(keys.filter((k) => k !== SHELL).map((k) => caches.delete(k))))
-      .then(() => sw.clients.claim())
   )
 })
 

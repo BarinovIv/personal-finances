@@ -1,4 +1,4 @@
-import { occurrencesBetween, pendingOccurrences, recurringOperationId } from "@fin/domain"
+import { occurrencesBetween, pendingOccurrences, recurringOperationId, yearMonthOf } from "@fin/domain"
 import { describe, expect, it, vi } from "vitest"
 import { add, categoryId, makeLedger, testClock } from "./support"
 
@@ -150,8 +150,9 @@ describe("регулярные операции на устройстве", () =
       for (const id of ["missing", deleted.id]) {
         expect(await ledger.makeRecurring(id, input)).toEqual({ ok: false, problem: "not-found" })
       }
-      for (const id of [income.id, refund.operation.id, debt.operation.id]) {
-        expect(await ledger.makeRecurring(id, input)).toEqual({ ok: false, problem: "not-expense" })
+      expect(await ledger.makeRecurring(income.id, input)).toEqual({ ok: false, problem: "bad-category" })
+      for (const id of [refund.operation.id, debt.operation.id]) {
+        expect(await ledger.makeRecurring(id, input)).toEqual({ ok: false, problem: "unsupported-kind" })
       }
       expect(ledger.recurring()).toEqual([])
       expect(ledger.operation(expense.id)).toEqual(expense)
@@ -278,6 +279,119 @@ describe("регулярные операции на устройстве", () =
     await ledger.reorderRecurring([a, c, b])
     const after = stamps()
     expect([a, b, c].filter((id) => after.get(id) !== before.get(id))).toEqual([b, c])
+  })
+
+  describe("свободные деньги с регулярными доходами", () => {
+    const receiveOccurrence = async (
+      ledger: Awaited<ReturnType<typeof makeLedger>>["ledger"],
+      templateId: string,
+      date: string
+    ) => {
+      const template = ledger.recurring().find((r) => r.id === templateId)!
+      const id = recurringOperationId(templateId, yearMonthOf(date))
+      await ledger.sync.receive([
+        {
+          collection: "operations",
+          id,
+          updatedAt: 1,
+          deleted: false,
+          data: {
+            kind: template.kind,
+            amount: template.amount,
+            description: template.description,
+            categoryId: template.category.id,
+            date,
+            createdAt: 1,
+            categorizedAt: 1,
+            refundOf: null,
+            recurringId: templateId
+          }
+        }
+      ], 1)
+      return id
+    }
+
+    it("зарплата 170 000, ожидаемая аренда 70 000 и ипотека 50 000 → свободно 190 000; ожидания не меняют учтённые итоги", async () => {
+      const { ledger } = await makeLedger()
+      await add(ledger, "+зарплата 170000", { date: "2026-09-20" })
+      await addTemplate(ledger, { kind: "income", category: "Зарплата", description: "Аренда", amount: 7000000, dayOfMonth: 30 })
+      await addTemplate(ledger, { description: "Ипотека", amount: 5000000, dayOfMonth: 30 })
+
+      expect(ledger.dashboard({ mode: "month", offset: 0 })).toMatchObject({
+        free: 19000000,
+        income: 17000000,
+        expenses: 0,
+        balance: 17000000,
+        categories: [],
+        upcoming: { total: 5000000, items: [{ description: "Ипотека" }] }
+      })
+    })
+
+    it("в день появления аренда и ипотека переходят из ожиданий в операции без повторного учёта; удалённая аренда не возвращается в ожидания", async () => {
+      const { ledger, clock } = await makeLedger()
+      await add(ledger, "+зарплата 170000", { date: "2026-09-20" })
+      const rent = await addTemplate(ledger, { kind: "income", category: "Зарплата", description: "Аренда", amount: 7000000, dayOfMonth: 30 })
+      const mortgage = await addTemplate(ledger, { description: "Ипотека", amount: 5000000, dayOfMonth: 30 })
+      const dashboard = () => ledger.dashboard({ mode: "month", offset: 0 })
+      expect(dashboard().free).toBe(19000000)
+
+      clock.set("2026-09-30T12:00:00+03:00")
+      expect(dashboard().free).toBe(19000000)
+      const rentOperation = await receiveOccurrence(ledger, rent, "2026-09-30")
+      expect(dashboard()).toMatchObject({ free: 19000000, income: 24000000, expenses: 0 })
+      await receiveOccurrence(ledger, mortgage, "2026-09-30")
+      expect(dashboard()).toMatchObject({ free: 19000000, income: 24000000, expenses: 5000000, upcoming: { total: 0 } })
+
+      await ledger.deleteOperation(rentOperation)
+      expect(dashboard()).toMatchObject({ free: 12000000, income: 17000000 })
+    })
+
+    it("доход 1-го включён в зарплатный период через границу месяца, но не в текущий месяц; доход 5-го относится к следующему периоду", async () => {
+      const { ledger } = await makeLedger()
+      await add(ledger, "+зарплата 170000", { date: "2026-09-20" })
+      await addTemplate(ledger, { kind: "income", category: "Зарплата", description: "Аренда", amount: 7000000, dayOfMonth: 1 })
+      await addTemplate(ledger, { kind: "income", category: "Зарплата", description: "Следующая зарплата", amount: 17000000, dayOfMonth: 5 })
+
+      expect(ledger.dashboard({ mode: "month", offset: 0 }).free).toBe(17000000)
+      expect(ledger.dashboard({ mode: "pay", offset: 0 }).free).toBe(24000000)
+    })
+
+    it.each([
+      ["пауза", "pauseRecurring"],
+      ["завершение", "endRecurring"],
+      ["удаление", "deleteRecurring"]
+    ] as const)("%s исключает ожидаемый доход, сохраняя уже учтённый", async (_, action) => {
+      const { ledger } = await makeLedger()
+      const paid = await addTemplate(ledger, { kind: "income", category: "Зарплата", description: "Зарплата", amount: 17000000, dayOfMonth: 28 })
+      await receiveOccurrence(ledger, paid, "2026-09-28")
+      const rent = await addTemplate(ledger, { kind: "income", category: "Зарплата", description: "Аренда", amount: 7000000, dayOfMonth: 30 })
+      expect(ledger.dashboard({ mode: "month", offset: 0 }).free).toBe(24000000)
+
+      expect((await ledger[action](rent)).ok).toBe(true)
+      expect((await ledger[action](paid)).ok).toBe(true)
+      expect(ledger.dashboard({ mode: "month", offset: 0 })).toMatchObject({ free: 17000000, income: 17000000 })
+    })
+
+    it("31-е февраля — последний день месяца: сегодняшний доход ожидается до появления операции", async () => {
+      const { ledger } = await makeLedger({ clock: testClock("2026-02-28T12:00:00+03:00") })
+      const rent = await addTemplate(ledger, { kind: "income", category: "Зарплата", description: "Аренда", amount: 7000000, dayOfMonth: 31 })
+      expect(ledger.dashboard({ mode: "month", offset: 0 })).toMatchObject({ free: 7000000, income: 0 })
+      await receiveOccurrence(ledger, rent, "2026-02-28")
+      expect(ledger.dashboard({ mode: "month", offset: 0 })).toMatchObject({ free: 7000000, income: 7000000 })
+    })
+
+    it("правка будущей аренды не меняет свободные деньги завершённого периода и уже учтённый доход", async () => {
+      const { ledger, clock } = await makeLedger()
+      const rent = await addTemplate(ledger, { kind: "income", category: "Зарплата", description: "Аренда", amount: 7000000, dayOfMonth: 30 })
+      clock.set("2026-09-30T12:00:00+03:00")
+      await receiveOccurrence(ledger, rent, "2026-09-30")
+      clock.set("2026-10-05T12:00:00+03:00")
+      expect((await ledger.updateRecurring(rent, { amount: 9000000 })).ok).toBe(true)
+
+      expect(ledger.dashboard({ mode: "month", offset: -1 })).toMatchObject({ free: 7000000, income: 7000000 })
+      expect(ledger.dashboard({ mode: "pay", offset: -1 })).toMatchObject({ free: 7000000, income: 7000000 })
+      expect(ledger.dashboard({ mode: "month", offset: 0 })).toMatchObject({ free: 9000000, income: 0 })
+    })
   })
 
   describe("предстоящие списания", () => {

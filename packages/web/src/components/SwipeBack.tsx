@@ -17,10 +17,12 @@ const prefersReducedMotion = () => window.matchMedia("(prefers-reduced-motion: r
  */
 export const SwipeBack = ({
   onBack,
+  canGoBack,
   children,
 }: {
   /** `animate: false` — экран уже увёл сам жест, переход назад не должен анимироваться повторно. */
   onBack: (options: { animate: boolean }) => void
+  canGoBack?: () => boolean
   children: ComponentChildren
 }) => {
   const ref = useRef<HTMLDivElement>(null)
@@ -70,6 +72,10 @@ export const SwipeBack = ({
     const dx = e.clientX - from.x
     const width = el.clientWidth || 1
     if (dx > width * THRESHOLD) {
+      if (canGoBack && !canGoBack()) {
+        reset(true)
+        return
+      }
       if (prefersReducedMotion()) {
         onBack({ animate: false })
         return

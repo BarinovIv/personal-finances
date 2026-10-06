@@ -26,6 +26,32 @@ const GLYPHS: Record<string, SymbolName> = {
 
 const DEFAULT_CATEGORY_ICON = "dots"
 
-export const CategoryGlyph = ({ icon, size = 13 }: { icon: string; size?: number }) => (
+export const SymbolGlyph = ({ icon, size = 13 }: { icon: string; size?: number }) => (
   <SfSymbol name={GLYPHS[icon] ?? GLYPHS[DEFAULT_CATEGORY_ICON]!} size={size} />
+)
+
+/** Системные эмодзи: сохранённые идентификаторы остаются прежними. */
+export const CATEGORY_EMOJI: Record<string, { emoji: string; label: string }> = {
+  cart: { emoji: "🛒", label: "Продукты" },
+  cup: { emoji: "☕", label: "Кафе" },
+  car: { emoji: "🚗", label: "Транспорт" },
+  shirt: { emoji: "👕", label: "Одежда" },
+  home: { emoji: "🏠", label: "Дом" },
+  heart: { emoji: "❤️", label: "Здоровье" },
+  star: { emoji: "⭐", label: "Развлечения" },
+  card: { emoji: "💳", label: "Карта" },
+  gift: { emoji: "🎁", label: "Подарки" },
+  dots: { emoji: "🔹", label: "Другое" },
+  banknote: { emoji: "💵", label: "Деньги" },
+  briefcase: { emoji: "💼", label: "Работа" },
+  wallet: { emoji: "👛", label: "Кошелёк" },
+  book: { emoji: "📚", label: "Книги" },
+  plane: { emoji: "✈️", label: "Путешествия" },
+  plus: { emoji: "➕", label: "Дополнительно" }
+}
+
+export const CategoryGlyph = ({ icon, size = 13 }: { icon: string; size?: number }) => (
+  <span class="category-emoji" aria-hidden="true" style={{ fontSize: `${size}px` }}>
+    {(CATEGORY_EMOJI[icon] ?? CATEGORY_EMOJI[DEFAULT_CATEGORY_ICON]!).emoji}
+  </span>
 )
