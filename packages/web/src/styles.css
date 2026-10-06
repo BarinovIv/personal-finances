@@ -2741,6 +2741,34 @@ select.text-input {
   gap: 12px;
 }
 
+.category-icon-input {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.category-icon-input:focus-within {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.category-icon-input input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  font-size: 16px;
+  cursor: pointer;
+}
+
 /* В панели серые кнопки и поля — на тон контрастнее её подложки */
 .sheet .secondary-button:not(.danger-button) {
   background: var(--fill-strong);
@@ -2813,6 +2841,11 @@ select.text-input {
 .icon-swatch-emoji[aria-pressed="true"] {
   color: var(--ink);
   box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.emoji-options {
+  max-height: 200px;
+  overflow-y: auto;
 }
 
 /* ───────────── Цели ───────────── */

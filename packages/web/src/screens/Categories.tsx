@@ -2,6 +2,7 @@ import { formatDecimal, formatMoney, parseMoney, type CategoryKind } from "@fin/
 import type { CategoryProblem, CategoryView, DeleteCategoryProblem, Ledger } from "@fin/ledger"
 import { useState } from "preact/hooks"
 import { CategoryBadge } from "../components/CategoryBadge"
+import { CategoryIconInput } from "../components/CategoryIconInput"
 import { CategoryStylePicker } from "../components/CategoryStylePicker"
 import { type RowDrag, useReorderableRows } from "../components/ReorderableRows"
 import { Sheet } from "../components/Sheet"
@@ -65,6 +66,8 @@ const CategoryRow = ({ ledger, category, drag }: { ledger: Ledger; category: Cat
 
   // поле лимита заполняется при открытии: `reset` после сохранения видит категорию ещё до правки
   const open = () => {
+    setName(category.name)
+    setStyle({ color: category.color, icon: category.icon })
     setLimit(limitText(category.limit))
     setError(null)
     setEditing(true)
@@ -156,7 +159,10 @@ const CategoryRow = ({ ledger, category, drag }: { ledger: Ledger; category: Cat
         {(close) => (
           <div class="sheet-form">
             <div class="sheet-title-row">
-              <CategoryBadge category={{ ...style, name }} size={36} />
+              <CategoryIconInput
+                category={{ ...style, name }}
+                onChange={(icon) => setStyle((current) => ({ ...current, icon }))}
+              />
               <input
                 class="text-input"
                 type="text"
@@ -237,7 +243,10 @@ const NewCategorySheet = ({ ledger, kind, onDone }: { ledger: Ledger; kind: Cate
         >
           <div class="sheet-title">{kind === "expense" ? "Новая категория расходов" : "Новая категория доходов"}</div>
           <div class="sheet-title-row">
-            <CategoryBadge category={{ ...style, name }} size={36} />
+            <CategoryIconInput
+              category={{ ...style, name }}
+              onChange={(icon) => setStyle((current) => ({ ...current, icon }))}
+            />
             <input
               class="text-input"
               type="text"

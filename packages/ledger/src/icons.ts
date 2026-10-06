@@ -1,4 +1,5 @@
 import type { CategoryKind } from "@fin/domain"
+import { isCategoryEmoji } from "./helpers"
 
 /** Встроенный набор пиктограмм категорий; рисуются приложением (см. `@fin/web`). */
 export const CATEGORY_ICONS: ReadonlyArray<string> = [
@@ -23,9 +24,9 @@ export const CATEGORY_ICONS: ReadonlyArray<string> = [
 const DEFAULT_ICON: Record<CategoryKind, string> = { expense: "dots", income: "wallet" }
 
 /**
- * Иконка категории. У категорий, созданных до появления иконок, поля нет — подставляется
+ * Встроенная иконка или эмодзи. У категорий, созданных до появления иконок, поля нет — подставляется
  * иконка по умолчанию для вида категории. Неизвестное имя (например, испорченное при синхронизации)
  * тоже заменяется значением по умолчанию.
  */
 export const normalizeIcon = (raw: string | undefined, kind: CategoryKind): string =>
-  raw !== undefined && CATEGORY_ICONS.includes(raw) ? raw : DEFAULT_ICON[kind]
+  raw !== undefined && (CATEGORY_ICONS.includes(raw) || isCategoryEmoji(raw)) ? raw : DEFAULT_ICON[kind]

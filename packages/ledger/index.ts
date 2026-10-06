@@ -7,6 +7,7 @@ export type {
   DeleteCategoryResult
 } from "./src/category-admin"
 export { CATEGORY_ICONS } from "./src/icons"
+export { isCategoryEmoji } from "./src/helpers"
 export { PALETTE_COLORS, type PaletteColor } from "./src/palette"
 export type { Comparison, Dashboard, DashboardCategory, DashboardQuery, TrendBar } from "./src/dashboard"
 export type { DailyAllowance, Period, PeriodMode } from "@fin/domain"

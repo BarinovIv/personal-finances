@@ -1,3 +1,4 @@
+import { isCategoryEmoji } from "@fin/ledger"
 import { SfSymbol } from "./icons"
 import type { SymbolName } from "./symbols"
 
@@ -52,6 +53,6 @@ export const CATEGORY_EMOJI: Record<string, { emoji: string; label: string }> = 
 
 export const CategoryGlyph = ({ icon, size = 13 }: { icon: string; size?: number }) => (
   <span class="category-emoji" aria-hidden="true" style={{ fontSize: `${size}px` }}>
-    {(CATEGORY_EMOJI[icon] ?? CATEGORY_EMOJI[DEFAULT_CATEGORY_ICON]!).emoji}
+    {isCategoryEmoji(icon) ? icon : (CATEGORY_EMOJI[icon] ?? CATEGORY_EMOJI[DEFAULT_CATEGORY_ICON]!).emoji}
   </span>
 )
