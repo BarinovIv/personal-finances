@@ -14,11 +14,12 @@ export const useAnimatedNumber = (target: number, duration = 450, initial = targ
     if (reducedMotion()) return setValue(target)
     const from = valueRef.current
     if (from === target) return
+    const step = from % 100 === 0 && target % 100 === 0 ? 100 : 1
     let raf = 0
     const start = performance.now()
     const tick = (now: number) => {
       const t = Math.min(1, (now - start) / duration)
-      setValue(Math.round(from + (target - from) * easeOutCubic(t)))
+      setValue(Math.round((from + (target - from) * easeOutCubic(t)) / step) * step)
       if (t < 1) raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)
