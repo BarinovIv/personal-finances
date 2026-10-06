@@ -15,8 +15,8 @@ const problemText: Record<MakeRecurringProblem, string> = {
   "no-description": "Добавьте описание.",
   "bad-category": "Выберите категорию.",
   "bad-day": "Число месяца — от 1 до 31.",
-  "not-expense": "Регулярной можно сделать только операцию расхода.",
-  "already-recurring": "Расход уже связан с регулярной операцией."
+  "unsupported-kind": "Регулярной можно сделать только операцию расхода или дохода.",
+  "already-recurring": "Операция уже связана с регулярной операцией."
 }
 
 const statusText = (r: RecurringView, today: string) =>

@@ -57,6 +57,24 @@ const prefersReducedMotion = () => window.matchMedia("(prefers-reduced-motion: r
 let lastPath = window.location.hash.replace(/^#/, "") || "/"
 /** Сколько раз сменился маршрут за время сессии — по нему судим, есть ли куда возвращаться реальной историей. */
 let routeChanges = 0
+let navigationGuard: (() => boolean) | null = null
+let approvedNavigation = false
+const historyIndexKey = "financesRouteIndex"
+const readHistoryIndex = (): number | null => {
+  const value = window.history.state?.[historyIndexKey]
+  return typeof value === "number" ? value : null
+}
+let historyIndex = readHistoryIndex() ?? 0
+const markHistoryEntry = () => window.history.replaceState({ ...window.history.state, [historyIndexKey]: historyIndex }, "")
+markHistoryEntry()
+
+/** Карточка может остановить любой переход, пока пользователь решает судьбу черновика. */
+export const setNavigationGuard = (guard: () => boolean) => {
+  navigationGuard = guard
+  return () => { if (navigationGuard === guard) navigationGuard = null }
+}
+
+export const canNavigate = () => navigationGuard?.() ?? true
 /** Экран уже увёл жест (наш свайп или системный свайп браузера) — вторая анимация перехода не нужна. */
 let skipNextTransition = false
 
@@ -90,17 +108,38 @@ const withRouteTransition = (nextPath: string, apply: () => void) => {
   void transition.finished.catch(() => {})
 }
 
+const routeSubscribers = new Set<(path: string) => void>()
+const readRoute = () => window.location.hash.replace(/^#/, "") || "/"
+// App и Main читают маршрут независимо; подтверждение и историю обрабатываем один раз.
+window.addEventListener("hashchange", () => {
+  const nextPath = readRoute()
+  // Вернулись к отменённому переходу реальной историей: карточка остаётся смонтированной.
+  if (nextPath === lastPath) {
+    approvedNavigation = false
+    return
+  }
+  const targetIndex = readHistoryIndex() ?? historyIndex + 1
+  const approved = approvedNavigation
+  approvedNavigation = false
+  if (!approved && !canNavigate()) {
+    skipNextTransition = false
+    // Не пишем новый hash: он создал бы лишнюю запись и ловушку для следующего "Назад".
+    window.history.go(historyIndex - targetIndex)
+    return
+  }
+  historyIndex = targetIndex
+  markHistoryEntry()
+  routeChanges++
+  withRouteTransition(nextPath, () => { for (const subscriber of routeSubscribers) subscriber(nextPath) })
+})
+
 /** Текущий маршрут из hash: `#/`, `#/dashboard`, `#/op/<id>`. */
 export const useRoute = () => {
-  const read = () => window.location.hash.replace(/^#/, "") || "/"
-  const [route, setRoute] = useState(read)
+  const [route, setRoute] = useState(readRoute)
   useEffect(() => {
-    const onChange = () => {
-      routeChanges++
-      withRouteTransition(read(), () => setRoute(read()))
-    }
-    window.addEventListener("hashchange", onChange)
-    return () => window.removeEventListener("hashchange", onChange)
+    routeSubscribers.add(setRoute)
+    setRoute(lastPath)
+    return () => { routeSubscribers.delete(setRoute) }
   }, [])
   return route
 }
@@ -115,7 +154,9 @@ export const navigate = (path: string) => {
  * `fallback` — запасной путь, если в этой сессии ещё не было переходов (например, открыли ссылку на операцию напрямую).
  * `animate: false` — экран уже уехал жестом «назад», повторно его анимировать не нужно.
  */
-export const goBack = (fallback: string, { animate = true }: { animate?: boolean } = {}) => {
+export const goBack = (fallback: string, { animate = true, skipGuard = false }: { animate?: boolean; skipGuard?: boolean } = {}) => {
+  if (!skipGuard && !canNavigate()) return
+  approvedNavigation = true
   if (!animate) skipNextTransition = true
   if (routeChanges > 0) window.history.back()
   else navigate(fallback)

@@ -1,5 +1,5 @@
 import { CATEGORY_ICONS, PALETTE_COLORS } from "@fin/ledger"
-import { CategoryGlyph } from "../categoryIcons"
+import { CATEGORY_EMOJI, CategoryGlyph } from "../categoryIcons"
 
 /** Выбор цвета и иконки при создании и правке категории (ADR-0004). */
 export const CategoryStylePicker = ({
@@ -30,9 +30,9 @@ export const CategoryStylePicker = ({
         <button
           key={i}
           type="button"
-          class="icon-swatch"
+          class="icon-swatch icon-swatch-emoji"
           aria-pressed={i === icon}
-          style={i === icon ? { background: `var(--palette-${color})` } : undefined}
+          aria-label={CATEGORY_EMOJI[i]?.label ?? "Другое"}
           onClick={() => onChange({ icon: i })}
         >
           <CategoryGlyph icon={i} size={16} />

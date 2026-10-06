@@ -201,8 +201,8 @@ export interface Ledger {
   /** Регулярные операции в порядке, заданном пользователем; без него — сначала действующие. */
   recurring(): ReadonlyArray<RecurringView>
   addRecurring(input: RecurringInput): Promise<RecurringResult>
-  /** Сделать расход регулярным с повторениями после сегодня; исходный расход сохраняется. С отменой. */
-  makeRecurring(expenseId: string, input: Omit<RecurringInput, "kind">): Promise<MakeRecurringResult>
+  /** Сделать расход или доход регулярным с повторениями после сегодня; исходная операция сохраняется. С отменой. */
+  makeRecurring(operationId: string, input: Omit<RecurringInput, "kind">): Promise<MakeRecurringResult>
   /** Правка шаблона не меняет уже созданные операции. */
   updateRecurring(id: string, patch: Partial<Omit<RecurringInput, "kind">>): Promise<RecurringResult>
   pauseRecurring(id: string): Promise<RecurringResult>

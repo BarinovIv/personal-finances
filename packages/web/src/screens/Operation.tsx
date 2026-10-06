@@ -1,6 +1,6 @@
 import { formatMoney, isMovement, parseMoney } from "@fin/domain"
 import { dayLabel, type Ledger, type OperationView, type RefundProblem, type RefundsInfo } from "@fin/ledger"
-import { useEffect, useState } from "preact/hooks"
+import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks"
 import { CategoryBadge } from "../components/CategoryBadge"
 import { CategoryGrid } from "../components/CategoryGrid"
 import { Header } from "../components/Header"
@@ -9,8 +9,8 @@ import { signedAmount } from "../components/OperationRow"
 import { RecurringAmountSheet } from "../components/RecurringOperation"
 import { Sheet } from "../components/Sheet"
 import { SwipeBack } from "../components/SwipeBack"
-import { CheckIcon, CloseIcon, ForwardIcon, RefundIcon, RepeatIcon, TrashIcon } from "../icons"
-import { goBack, useLedgerVersion } from "../state"
+import { CheckIcon, CloseIcon, EditIcon, ForwardIcon, RefundIcon, RepeatIcon, TrashIcon } from "../icons"
+import { canNavigate, goBack, setNavigationGuard, useLedgerVersion } from "../state"
 import { limitNotes, showToast } from "../toast"
 import { DebtRepayments, isDebtOperation } from "./Debt"
 import { RecurringForm } from "./Recurring"
@@ -178,10 +178,27 @@ const remove = async (ledger: Ledger, op: OperationView) => {
   showToast({ text: `${op.pending ? "Пропущено в этом месяце" : "Удалено"}: ${deletedText(op)}`, action: { label: "Отменить", run: () => undo() } })
 }
 
-const ViewCard = ({ ledger, op, onEdit }: { ledger: Ledger; op: OperationView; onEdit: () => void }) => {
+interface CardDraft {
+  amount: string
+  description: string
+  categoryId: string
+  date: string
+}
+
+interface CardEditor {
+  draft: CardDraft
+  change: (field: keyof CardDraft, value: string) => void
+  save: () => void
+  saving: boolean
+  dirty: boolean
+  error: string | null
+}
+
+const ViewCard = ({ ledger, op, onEdit, editor }: { ledger: Ledger; op: OperationView; onEdit?: () => void; editor?: CardEditor }) => {
   const [refundOpen, setRefundOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [recurringOpen, setRecurringOpen] = useState(false)
+  const [categoryOpen, setCategoryOpen] = useState(false)
   const isRefund = op.kind === "refund"
   const movement = isMovement(op.kind)
   const info = op.kind === "expense" && !op.pending ? ledger.refunds(op.id) : undefined
@@ -189,22 +206,45 @@ const ViewCard = ({ ledger, op, onEdit }: { ledger: Ledger; op: OperationView; o
     const error = await confirmRecurringOperation(ledger, op)
     if (error) showToast({ text: error })
   }
+  const category = editor ? ledger.categories(op.kind === "income" ? "income" : "expense").find((c) => c.id === editor.draft.categoryId) : op.category
 
   return (
     <>
       <Header
         title={screenTitle(op)}
         trailing={
-          <button type="button" class="glass-button text" onClick={onEdit}>
-            Изменить
-          </button>
+          editor ? (
+            <button type="button" class="glass-button prominent" aria-label="Сохранить изменения" disabled={editor.saving || !editor.dirty} onClick={editor.save}>
+              <CheckIcon size={20} />
+            </button>
+          ) : (
+            <button type="button" class="glass-button text" onClick={onEdit}>Изменить</button>
+          )
         }
       />
       <div class="page">
         <section class="op-hero">
-          <OperationBadge op={op} size={64} />
-          <span class={`op-hero-amount num ${op.kind}`}>{signedAmount(op)}</span>
-          <span class="op-hero-desc">{operationTitle(op)}</span>
+          <OperationBadge op={editor ? { ...op, category: category ?? null } : op} size={64} />
+          {editor ? (
+            <>
+              <label class={`op-hero-amount op-inline-amount num ${op.kind}`}>
+                <span aria-hidden="true">{op.kind === "income" ? "+" : "−"}</span>
+                <input id="op-amount" type="text" inputMode="decimal" aria-label="Сумма, ₽" disabled={editor.saving}
+                  style={{ width: `${Math.max(1, editor.draft.amount.length) + 0.3}ch` }}
+                  value={editor.draft.amount} onInput={(e) => editor.change("amount", e.currentTarget.value)} />
+                <span aria-hidden="true">₽</span>
+                <span class="op-edit-hint" aria-hidden="true"><EditIcon /></span>
+              </label>
+              <label class="op-inline-description-field">
+                <input id="op-desc" class="op-hero-desc op-inline-description" type="text" aria-label="Описание" disabled={editor.saving}
+                  style={{ width: `${Math.max(6, [...editor.draft.description].length)}ch` }}
+                  value={editor.draft.description} onInput={(e) => editor.change("description", e.currentTarget.value)} />
+                <span class="op-edit-hint" aria-hidden="true"><EditIcon /></span>
+              </label>
+            </>
+          ) : (
+            <><span class={`op-hero-amount num ${op.kind}`}>{signedAmount(op)}</span><span class="op-hero-desc">{operationTitle(op)}</span></>
+          )}
         </section>
         {op.pending && <p class="section-footer center">Ожидает подтверждения. Пока не входит в расходы и доходы.</p>}
         <div class="card-list">
@@ -214,7 +254,13 @@ const ViewCard = ({ ledger, op, onEdit }: { ledger: Ledger; op: OperationView; o
               <span>Подтвердить операцию</span>
             </button>
           )}
-          {op.category && (
+          {editor ? (
+            <button type="button" class="row row-button info-row" aria-label="Выбрать категорию" disabled={editor.saving} onClick={() => setCategoryOpen(true)}>
+              <span class="row-label">Категория</span>
+              <span class="row-value">{category && <CategoryBadge category={category} size={22} />}{category?.name ?? "Выберите"}</span>
+              <span class="row-chevron"><ForwardIcon size={16} /></span>
+            </button>
+          ) : op.category && (
             <div class="row info-row">
               <span class="row-label">Категория</span>
               <span class="row-value">
@@ -241,10 +287,16 @@ const ViewCard = ({ ledger, op, onEdit }: { ledger: Ledger; op: OperationView; o
               <span class="row-value">{op.description}</span>
             </div>
           )}
-          <div class="row info-row">
+          {editor ? (
+            <label class="row input-row info-row">
+              <span class="row-label">Дата</span>
+              <input id="op-date" class="row-input op-inline-date" type="date" aria-label="Дата" max={ledger.today()} disabled={editor.saving}
+                value={editor.draft.date} onInput={(e) => editor.change("date", e.currentTarget.value)} />
+            </label>
+          ) : <div class="row info-row">
             <span class="row-label">Дата</span>
             <span class="row-value">{dayLabel(op.date, ledger.today())}</span>
-          </div>
+          </div>}
           {isRefund && op.refundOf && (
             <a class="row row-button info-row" href={`#/op/${op.refundOf}`}>
               <span class="row-label">Исходный расход</span>
@@ -273,11 +325,12 @@ const ViewCard = ({ ledger, op, onEdit }: { ledger: Ledger; op: OperationView; o
             </a>
           )}
         </div>
+        {editor?.error && <div class="hint error" role="alert">{editor.error}</div>}
         {movement && <p class="section-footer">Не расход и не доход: в дашборд и категории не попадает, но меняет свободные деньги.</p>}
         {info && <RefundsList ledger={ledger} info={info} onOpenForm={() => setRefundOpen(true)} />}
         {isDebtOperation(op) && <DebtRepayments ledger={ledger} debt={op} />}
         <div class="card-list">
-          {op.kind === "expense" && !op.recurringId && (
+          {(op.kind === "expense" || op.kind === "income") && !op.recurringId && (
             <button type="button" class="row row-button action-row" onClick={() => setRecurringOpen(true)}>
               <RepeatIcon size={18} />
               <span>Сделать регулярной</span>
@@ -289,8 +342,18 @@ const ViewCard = ({ ledger, op, onEdit }: { ledger: Ledger; op: OperationView; o
           </button>
         </div>
       </div>
+      {categoryOpen && editor && (
+        <Sheet label="Категория операции" onClose={() => setCategoryOpen(false)}>
+          {(close) => <section class="sheet-form">
+            <div class="sheet-title">Категория</div>
+            <CategoryGrid categories={ledger.categories(op.kind === "income" ? "income" : "expense")} selected={editor.draft.categoryId}
+              onPick={(id) => { editor.change("categoryId", id); close() }} />
+            <p class="hint">Правки сохранятся после нажатия галочки.</p>
+          </section>}
+        </Sheet>
+      )}
       {refundOpen && info && <RefundForm ledger={ledger} op={op} info={info} onDone={() => setRefundOpen(false)} />}
-      {recurringOpen && (
+      {recurringOpen && (op.kind === "expense" || op.kind === "income") && (
         <Sheet label="Новая регулярная операция" onClose={() => setRecurringOpen(false)}>
           {(close) => (
             <RecurringForm
@@ -299,7 +362,7 @@ const ViewCard = ({ ledger, op, onEdit }: { ledger: Ledger; op: OperationView; o
               fixedKind
               close={close}
               initial={{
-                kind: "expense",
+                kind: op.kind === "income" ? "income" : "expense",
                 description: op.description,
                 amount: amountText(op.amount),
                 categoryId: op.category?.id ?? "",
@@ -313,13 +376,13 @@ const ViewCard = ({ ledger, op, onEdit }: { ledger: Ledger; op: OperationView; o
                   dayOfMonth: Number(draft.day)
                 })
                 if (result.ok) showToast({
-                  text: "Расход стал регулярным",
+                  text: op.kind === "income" ? "Доход стал регулярным" : "Расход стал регулярным",
                   action: { label: "Отменить", run: () => result.undo() }
                 })
                 return result
               }}
             >
-              <span class="hint">Повторения начнутся после сегодня. Уже внесённый расход сохранится.</span>
+              <span class="hint">Повторения начнутся после сегодня. Уже внесённая операция сохранится.</span>
             </RecurringForm>
           )}
         </Sheet>
@@ -327,6 +390,83 @@ const ViewCard = ({ ledger, op, onEdit }: { ledger: Ledger; op: OperationView; o
       {deleteOpen && <DeleteSheet op={op} onClose={() => setDeleteOpen(false)} onConfirm={() => void remove(ledger, op)} />}
     </>
   )
+}
+
+const cardDraft = (op: OperationView): CardDraft => ({
+  amount: amountText(op.amount), description: op.description, categoryId: op.category?.id ?? "", date: op.date
+})
+
+const draftChanged = (draft: CardDraft, saved: CardDraft) =>
+  draft.amount !== saved.amount || draft.description !== saved.description || draft.categoryId !== saved.categoryId || draft.date !== saved.date
+
+/** Один черновик на карточку; обновление журнала не заменяет внесённые правки. */
+const InlineCard = ({ ledger, op }: { ledger: Ledger; op: OperationView }) => {
+  const [draft, setDraft] = useState(() => cardDraft(op))
+  const baseline = useRef(cardDraft(op))
+  const [error, setError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const pending = useRef(false)
+  const dirty = draftChanged(draft, baseline.current)
+  const deleted = !ledger.operation(op.id)
+  const currentDirty = useRef(dirty)
+  currentDirty.current = dirty
+
+  useLayoutEffect(() => {
+    if (currentDirty.current || pending.current) return
+    baseline.current = cardDraft(op)
+    setDraft(baseline.current)
+  }, [op.updatedAt, dirty])
+
+  useLayoutEffect(() => {
+    const approve = () => !pending.current && (!currentDirty.current || window.confirm('Отбросить несохранённые правки? Нажмите "Отмена", чтобы остаться.'))
+    const cleanup = setNavigationGuard(approve)
+    const beforeUnload = (event: BeforeUnloadEvent) => {
+      if (!currentDirty.current && !pending.current) return
+      event.preventDefault()
+      event.returnValue = ""
+    }
+    window.addEventListener("beforeunload", beforeUnload)
+    return () => { cleanup(); window.removeEventListener("beforeunload", beforeUnload) }
+  }, [])
+
+  const save = async () => {
+    if (pending.current || !currentDirty.current) return
+    const amount = parseMoney(draft.amount)
+    if (amount === null) return setError(problemText["bad-amount"])
+    if (!draft.date || draft.date > ledger.today()) return setError("Выберите дату не позднее сегодня.")
+    pending.current = true
+    setSaving(true)
+    setError(null)
+    try {
+      const result = await ledger.updateOperation(op.id, { amount, description: draft.description, categoryId: draft.categoryId, date: draft.date })
+      if (!result.ok) return setError(problemText[result.problem])
+      const learned = draft.categoryId !== op.category?.id
+      const category = ledger.categories(op.kind === "income" ? "income" : "expense").find((c) => c.id === draft.categoryId)
+      const saved = ledger.operation(op.id)
+      if (saved) {
+        baseline.current = cardDraft(saved)
+        currentDirty.current = false
+        setDraft(baseline.current)
+      }
+      showToast({
+        text: learned ? `Сохранено. Запомню: "${draft.description.trim()}" → ${category?.name ?? ""}` : "Сохранено",
+        notes: limitNotes(result.warnings),
+        action: { label: "Отменить", run: () => result.undo() }
+      })
+    } catch {
+      setError("Не удалось сохранить. Правки остались в карточке; попробуйте ещё раз.")
+    } finally {
+      pending.current = false
+      setSaving(false)
+    }
+  }
+
+  if (deleted && !dirty) return <><Header title="Операция" /><div class="empty">Операция удалена</div></>
+
+  return <ViewCard ledger={ledger} op={op} editor={{
+    draft, dirty, saving, error: error ?? (deleted ? "Операция уже удалена. Несохранённые правки остались в карточке." : null), save: () => void save(),
+    change: (field, value) => { if (!pending.current) setDraft((previous) => ({ ...previous, [field]: value })) }
+  }} />
 }
 
 const EditForm = ({ ledger, op, onDone }: { ledger: Ledger; op: OperationView; onDone: () => void }) => {
@@ -453,7 +593,12 @@ export const OperationScreen = ({ ledger, id }: { ledger: Ledger; id: string }) 
   const [mode, setMode] = useState<"view" | "edit">("view")
   // при переходе на другую операцию (например, со ссылки исходного расхода) всегда открывается просмотр
   useEffect(() => setMode("view"), [id])
-  const op = ledger.operation(id)
+  const retained = useRef<OperationView | null>(null)
+  const live = ledger.operation(id)
+  if (live) retained.current = live
+  // Удаление при обмене не стирает открытый черновик: сохранение объяснит, что записи уже нет.
+  const previous = retained.current
+  const op = live ?? (previous?.id === id && !previous.recurringId && (previous.kind === "expense" || previous.kind === "income") ? previous : null)
 
   if (!op) {
     return (
@@ -465,9 +610,11 @@ export const OperationScreen = ({ ledger, id }: { ledger: Ledger; id: string }) 
   }
 
   return (
-    <SwipeBack onBack={(options) => goBack("/", options)}>
+    <SwipeBack canGoBack={canNavigate} onBack={(options) => goBack("/", { ...options, skipGuard: true })}>
       <div class="screen column">
-        {mode === "view" || op.recurringId ? (
+        {!op.recurringId && (op.kind === "expense" || op.kind === "income") ? (
+          <InlineCard key={op.id} ledger={ledger} op={op} />
+        ) : mode === "view" || op.recurringId ? (
           <ViewCard ledger={ledger} op={op} onEdit={() => setMode("edit")} />
         ) : (
           <EditForm key={`${op.id}:${op.updatedAt}`} ledger={ledger} op={op} onDone={() => setMode("view")} />
