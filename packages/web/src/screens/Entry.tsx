@@ -419,20 +419,16 @@ const Composer = memo(({ ledger, reveal, enabled }: { ledger: Ledger; reveal: bo
           }}
         />
         {!inputFocused && text === "" && (
-          <span class="entry-help-trigger">
-            <button
-              type="button"
-              class="entry-help-icon"
-              aria-label="Примеры ввода"
-              aria-describedby="entry-help-tooltip"
-              aria-haspopup="dialog"
-              aria-expanded={helpOpen}
-              onClick={() => setHelpOpen(true)}
-            >
-              <span aria-hidden="true">?</span>
-            </button>
-            <span id="entry-help-tooltip" role="tooltip">Примеры ввода</span>
-          </span>
+          <button
+            type="button"
+            class="entry-help-icon"
+            aria-label="Примеры ввода"
+            aria-haspopup="dialog"
+            aria-expanded={helpOpen}
+            onClick={() => setHelpOpen(true)}
+          >
+            <span aria-hidden="true">?</span>
+          </button>
         )}
         {hasError ? (
           <button
