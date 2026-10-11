@@ -1,4 +1,4 @@
-import { AMOUNT, CURRENCY, DATE_WORDS, MAX_CALCULATION_DEPTH, MISSING_OPERATOR, THOUSANDS_GROUP } from "./constants"
+import { AMOUNT, CURRENCY, DATE_WORDS, MAX_CALCULATION_DEPTH, MISSING_OPERATOR } from "./constants"
 import type { Calculation, EntryProblem, ParsedEntryLine, Rational } from "./types"
 
 const rational = (numerator: bigint, denominator = 1n): Rational => {
@@ -78,21 +78,12 @@ export const takeCalculation = (tokens: ReadonlyArray<string>, start: number): C
       return { numerator: sign * value.numerator, denominator: value.denominator }
     }
     const first = tokens[end] ?? ""
-    let groupEnd = end + 1
-    if ((depth > 0 ? /^\d+$/ : /^\d{1,2}$/).test(first)) {
-      while (THOUSANDS_GROUP.test(tokens[groupEnd] ?? "")) {
-        const group = tokens[groupEnd++]!
-        if (/[.,]/.test(group)) break
-      }
-    }
-    const operatorAt = CURRENCY.test(tokens[groupEnd] ?? "") ? groupEnd + 1 : groupEnd
-    const grouped = (!fractional || depth > 0) && groupEnd > end + 1 && (arithmetic || depth > 0 || (/^[+*/-]$/.test(tokens[operatorAt] ?? "") && !incomeMarker(tokens, operatorAt)))
-    const value = amountValue(grouped ? tokens.slice(end, groupEnd).join("") : first, fractional)
+    const value = amountValue(first, fractional)
     if (value === null) {
       invalid = true
       return rational(0n)
     }
-    end = grouped ? groupEnd : end + 1
+    end++
     if (CURRENCY.test(tokens[end] ?? "")) end++
     return { numerator: sign * value.numerator, denominator: value.denominator }
   }

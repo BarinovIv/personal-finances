@@ -117,6 +117,23 @@ describe("ввод операции строкой", () => {
 })
 
 describe("несколько операций одной строкой", () => {
+  it("предпросмотр и сохранение отделяют следующую сумму от короткого слагаемого", async () => {
+    const { ledger } = await makeLedger()
+    const line = "кафе 300 + 300 699 / 2 * 3 - 100 + 23 455"
+    const choice = { categoryIds: [categoryId(ledger, "Кафе")] }
+    const expected = [["кафе", 60000], ["кафе", 97150], ["кафе", 45500]]
+
+    const previews = ledger.previewEntries(line, choice)
+    expect(previews.map((p) => [p.description, p.amount])).toEqual(expected)
+    expect(previews.every((p) => p.problems.length === 0)).toBe(true)
+
+    const saved = await ledger.submitEntries(line, choice)
+    expect(saved.ok).toBe(true)
+    if (!saved.ok) return
+    expect(saved.operations.map((o) => [o.description, o.amount])).toEqual(expected)
+    expect(ledger.days()[0]!.expenseTotal).toBe(202650)
+  })
+
   it("каршеринг 150 + 150 400: предпросмотр и сохранение дают две операции, отмена убирает всю строку", async () => {
     const { ledger } = await makeLedger()
     await add(ledger, "кофе 123")
@@ -168,8 +185,9 @@ describe("несколько операций одной строкой", () => 
     ["кофе 300; такси 0,01 / 3; шаурма 100", 1],
     ["кофе 300; такси 500; шаурма 200 * 0", 2],
     ["кофе 300; такси 200 / (2 - 2); шаурма 100", 1],
-    ["кофе 300; такси 1000 - 1 500; шаурма 100", 1],
+    ["кофе 300; такси 1000 - 1500; шаурма 100", 1],
     ["кофе 300; такси (200 + 100; шаурма 100", 1],
+    ["кофе 300; такси (1 500); шаурма 100", 1],
     ["кофе 300; такси 99999999999999 * 100; шаурма 100", 1],
     ["кофе 300; такси 500; шаурма 200 +", 2],
     ["кофе 500 200 / 0 шаурма такси 300", 1],
@@ -347,9 +365,9 @@ describe("несколько операций одной строкой", () => 
     expect(ledger.days()[0]!.expenseTotal).toBe(20000)
   })
 
-  it("сохраняет результат выражений с приоритетом, скобками, разрядами и округлением только в конце", async () => {
+  it("сохраняет результат выражений с приоритетом, скобками, тысячами без пробелов и округлением только в конце", async () => {
     const { ledger } = await makeLedger()
-    const line = "кофе 100 + 50 * 2; (100 + 50) * 2; 1 500 * 2; (150 400) / 2; 200 * 1,5; 100 / 3 * 3; 100 - 200 + 300"
+    const line = "кофе 100 + 50 * 2; (100 + 50) * 2; 1500 * 2; (150400) / 2; 200 * 1,5; 100 / 3 * 3; 100 - 200 + 300"
     const expected = [20000, 30000, 300000, 7520000, 30000, 10000, 20000]
     const previews = ledger.previewEntries(line)
     expect(previews.map((p) => p.amount)).toEqual(expected)
