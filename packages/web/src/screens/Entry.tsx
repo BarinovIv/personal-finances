@@ -31,7 +31,7 @@ import { useTabActive } from "../tabActivity"
 import { confirmRecurringOperation } from "../helpers"
 
 const problemText: Record<EntryPreviewProblem, string> = {
-  "invalid-calculation": "Проверьте выражение: суммы должны быть положительными, число повторов — целым от 1 до 1000. Смешанные действия не поддерживаются.",
+  "invalid-calculation": "Проверьте знаки и скобки: результат должен быть положительной суммой. Делить на ноль нельзя.",
   "no-amount": "Не вижу сумму — добавьте число, например \"кофе 250\".",
   "no-description": "Добавьте описание — что это было?",
   "no-category": "Выберите категорию."

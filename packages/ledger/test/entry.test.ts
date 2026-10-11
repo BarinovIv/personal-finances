@@ -117,14 +117,38 @@ describe("ввод операции строкой", () => {
 })
 
 describe("несколько операций одной строкой", () => {
-  it("смешанная строка показывает и сохраняет пять одинаково распознанных операций с итогом 1200 рублей", async () => {
+  it("каршеринг 150 + 150 400: предпросмотр и сохранение дают две операции, отмена убирает всю строку", async () => {
+    const { ledger } = await makeLedger()
+    await add(ledger, "кофе 123")
+    const before = ledger.days()
+    const line = "каршеринг 150 + 150 400"
+    const choice = { categoryIds: [categoryId(ledger, "Транспорт")] }
+    const expected = [
+      ["expense", "каршеринг", 30000, "2026-09-28", categoryId(ledger, "Транспорт")],
+      ["expense", "каршеринг", 40000, "2026-09-28", categoryId(ledger, "Транспорт")]
+    ]
+
+    const previews = ledger.previewEntries(line, choice)
+    expect(previews.map((p) => [p.kind, p.description, p.amount, p.date, p.categoryId])).toEqual(expected)
+    expect(previews.every((p) => p.problems.length === 0)).toBe(true)
+
+    const saved = await ledger.submitEntries(line, choice)
+    expect(saved.ok).toBe(true)
+    if (!saved.ok) return
+    expect(saved.operations.map((o) => [o.kind, o.description, o.amount, o.date, o.category?.id])).toEqual(expected)
+    expect(ledger.days()[0]!.expenseTotal).toBe(82300)
+
+    expect(await saved.undo()).toEqual({ ok: true })
+    expect(ledger.days()).toEqual(before)
+    expect(saved.operations.map((o) => ledger.operation(o.id))).toEqual([undefined, undefined])
+  })
+
+  it("смешанная строка показывает и сохраняет три одинаково распознанных операции с итогом 1200 рублей", async () => {
     const { ledger } = await makeLedger()
     const line = "вчера 200 * 3 карш шашлык 500 200 / 2 шаурма"
     const choice = { categoryIds: [categoryId(ledger, "Транспорт")] }
     const expected = [
-      ["expense", "карш", 20000, "2026-09-27", categoryId(ledger, "Транспорт")],
-      ["expense", "карш", 20000, "2026-09-27", categoryId(ledger, "Транспорт")],
-      ["expense", "карш", 20000, "2026-09-27", categoryId(ledger, "Транспорт")],
+      ["expense", "карш", 60000, "2026-09-27", categoryId(ledger, "Транспорт")],
       ["expense", "шашлык", 50000, "2026-09-27", categoryId(ledger, "Кафе")],
       ["expense", "шаурма", 10000, "2026-09-27", categoryId(ledger, "Кафе")]
     ]
@@ -136,15 +160,18 @@ describe("несколько операций одной строкой", () => 
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(result.operations.map((o) => [o.kind, o.description, o.amount, o.date, o.category?.id])).toEqual(expected)
-    expect(ledger.days().map((day) => [day.date, day.expenseTotal, day.items.length])).toEqual([["2026-09-27", 120000, 5]])
+    expect(ledger.days().map((day) => [day.date, day.expenseTotal, day.items.length])).toEqual([["2026-09-27", 120000, 3]])
   })
 
   it.each([
     ["200 / 0 кофе; такси 300; шаурма 100", 0],
     ["кофе 300; такси 0,01 / 3; шаурма 100", 1],
     ["кофе 300; такси 500; шаурма 200 * 0", 2],
-    ["кофе 300; такси 200 * 1001; шаурма 100", 1],
-    ["кофе 300; такси 200 * 1,5; шаурма 100", 1],
+    ["кофе 300; такси 200 / (2 - 2); шаурма 100", 1],
+    ["кофе 300; такси 1000 - 1 500; шаурма 100", 1],
+    ["кофе 300; такси (200 + 100; шаурма 100", 1],
+    ["кофе 300; такси 99999999999999 * 100; шаурма 100", 1],
+    ["кофе 300; такси 500; шаурма 200 +", 2],
     ["кофе 500 200 / 0 шаурма такси 300", 1],
     ["кофе 200/0 500 шашлык", 0]
   ] as const)("ошибка выражения не сохраняет часть строки и не меняет очередь: %s", async (line, index) => {
@@ -159,15 +186,29 @@ describe("несколько операций одной строкой", () => 
     expect(ledger.pendingChanges()).toEqual(pending)
   })
 
+  it("недописанный доход после разделителя блокирует всю строку и сохраняет прежнюю очередь", async () => {
+    const { ledger } = await makeLedger()
+    await add(ledger, "кофе 123")
+    const before = ledger.days()
+    const pending = ledger.pendingChanges()
+    const choice = { categoryIds: [null, categoryId(ledger, "Подработка")] }
+
+    expect(await ledger.submitEntries("кофе 100; +", choice)).toEqual({
+      ok: false, index: 1, problems: ["no-amount", "no-description"]
+    })
+    expect(ledger.days()).toEqual(before)
+    expect(ledger.pendingChanges()).toEqual(pending)
+  })
+
   it("для одинаковых расходов достаточно выбрать категорию один раз", async () => {
     const { ledger } = await makeLedger()
     const choice = { categoryIds: [categoryId(ledger, "Транспорт")] }
 
-    expect(ledger.previewEntries("карш 100 + 100", choice)).toMatchObject([
+    expect(ledger.previewEntries("карш 100 100", choice)).toMatchObject([
       { description: "карш", amount: 10000, categoryId: categoryId(ledger, "Транспорт"), problems: [] },
       { description: "карш", amount: 10000, categoryId: categoryId(ledger, "Транспорт"), problems: [] }
     ])
-    expect(await ledger.submitEntries("карш 100 + 100", choice)).toMatchObject({
+    expect(await ledger.submitEntries("карш 100 100", choice)).toMatchObject({
       ok: true,
       operations: [
         { description: "карш", amount: 10000, category: { name: "Транспорт" } },
@@ -176,7 +217,7 @@ describe("несколько операций одной строкой", () => 
     })
   })
 
-  it.each(["карш 100 + 200", "Карш 100; карш 200"])(
+  it.each(["карш 100 200", "Карш 100; карш 200", "карш (50 + 50) 200"])(
     "выбор для второй операции подставляется и в первую: %s",
     async (line) => {
       const { ledger } = await makeLedger()
@@ -185,6 +226,13 @@ describe("несколько операций одной строкой", () => 
         { amount: 20000, categoryId: categoryId(ledger, "Транспорт"), problems: [] }
       ])
       expect(ledger.preview("карш 100").categoryId).toBeNull()
+      expect(await ledger.submitEntries(line, { categoryIds: [null, categoryId(ledger, "Транспорт")] })).toMatchObject({
+        ok: true,
+        operations: [
+          { amount: 10000, category: { name: "Транспорт" } },
+          { amount: 20000, category: { name: "Транспорт" } }
+        ]
+      })
     }
   )
 
@@ -205,7 +253,7 @@ describe("несколько операций одной строкой", () => 
   it("у одинаковых операций можно оставить разные явно выбранные категории", async () => {
     const { ledger } = await makeLedger()
     expect(
-      ledger.previewEntries("карш 100 + 200", {
+      ledger.previewEntries("карш 100 200", {
         categoryIds: [categoryId(ledger, "Транспорт"), categoryId(ledger, "Подарки")]
       })
     ).toMatchObject([
@@ -228,7 +276,7 @@ describe("несколько операций одной строкой", () => 
   it("неподходящая категория не переносится на одинаковые расходы", async () => {
     const { ledger } = await makeLedger()
     expect(
-      ledger.previewEntries("карш 100 + 100", { categoryIds: [categoryId(ledger, "Подработка")] })
+      ledger.previewEntries("карш 100 100", { categoryIds: [categoryId(ledger, "Подработка")] })
     ).toMatchObject([
       { categoryId: null, problems: ["no-category"] },
       { categoryId: null, problems: ["no-category"] }
@@ -259,6 +307,60 @@ describe("несколько операций одной строкой", () => 
     const { ledger } = await makeLedger()
     await ledger.submitEntries("шаурма 340 вчера такси 500", { date: "2026-09-20" })
     expect(ledger.days().map((d) => [d.date, d.items.length])).toEqual([["2026-09-20", 2]])
+  })
+
+  it("явная дата действует на следующие операции до следующей даты, включая разделители", async () => {
+    const { ledger } = await makeLedger()
+    const line = "вчера кофе 100; такси 200 сегодня кино 300\nужин 400"
+    const expected = [
+      ["кофе", 10000, "2026-09-27"],
+      ["такси", 20000, "2026-09-27"],
+      ["кино", 30000, "2026-09-28"],
+      ["ужин", 40000, "2026-09-28"]
+    ]
+    expect(ledger.previewEntries(line).map((p) => [p.description, p.amount, p.date])).toEqual(expected)
+
+    const saved = await ledger.submitEntries(line)
+    expect(saved.ok).toBe(true)
+    if (!saved.ok) return
+    expect(saved.operations.map((o) => [o.description, o.amount, o.date])).toEqual(expected)
+    expect(ledger.days().map((d) => [d.date, d.expenseTotal])).toEqual([
+      ["2026-09-28", 70000],
+      ["2026-09-27", 30000]
+    ])
+  })
+
+  it("доход наследуется следующей суммой без описания, новое описание начинает расход", async () => {
+    const { ledger } = await makeLedger()
+    const line = "+подработка 150 + 150 400 кофе 200"
+    const expected = [
+      ["income", "подработка", 30000, categoryId(ledger, "Подработка")],
+      ["income", "подработка", 40000, categoryId(ledger, "Подработка")],
+      ["expense", "кофе", 20000, categoryId(ledger, "Кафе")]
+    ]
+    expect(ledger.previewEntries(line).map((p) => [p.kind, p.description, p.amount, p.categoryId])).toEqual(expected)
+
+    const saved = await ledger.submitEntries(line)
+    expect(saved.ok).toBe(true)
+    if (!saved.ok) return
+    expect(saved.operations.map((o) => [o.kind, o.description, o.amount, o.category?.id])).toEqual(expected)
+    expect(ledger.days()[0]!.expenseTotal).toBe(20000)
+  })
+
+  it("сохраняет результат выражений с приоритетом, скобками, разрядами и округлением только в конце", async () => {
+    const { ledger } = await makeLedger()
+    const line = "кофе 100 + 50 * 2; (100 + 50) * 2; 1 500 * 2; (150 400) / 2; 200 * 1,5; 100 / 3 * 3; 100 - 200 + 300"
+    const expected = [20000, 30000, 300000, 7520000, 30000, 10000, 20000]
+    const previews = ledger.previewEntries(line)
+    expect(previews.map((p) => p.amount)).toEqual(expected)
+    expect(previews.every((p) => p.description === "кофе" && p.problems.length === 0)).toBe(true)
+
+    const saved = await ledger.submitEntries(line)
+    expect(saved.ok).toBe(true)
+    if (!saved.ok) return
+    expect(saved.operations.map((o) => o.amount)).toEqual(expected)
+    expect(saved.operations.every((o) => o.description === "кофе" && o.category?.name === "Кафе")).toBe(true)
+    expect(ledger.days()[0]!.expenseTotal).toBe(7930000)
   })
 
   it("если хоть одна не готова, не сохраняется ни одна, и понятно какая", async () => {

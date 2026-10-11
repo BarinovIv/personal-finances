@@ -45,28 +45,30 @@ export const EntryHelp = ({ onClose }: { onClose: () => void }) => {
             <dd>
               <code>шаурма 150 шашлык 200</code>
               <span class="entry-help-note">Можно разделять запятой или точкой с запятой.</span>
+              <span class="entry-help-note"><code>каршеринг 300 400</code> — две операции с одним описанием.</span>
             </dd>
             <dt>Калькулятор</dt>
             <dd>
-              <code>каршеринг 370 + 550</code> — две операции: 370 ₽ и 550 ₽.
-              <span class="entry-help-note"><code>каршеринг 300*3</code> — три операции по 300 ₽.</span>
+              <code>каршеринг 150 + 150 400</code> — две операции: 300 ₽ и 400 ₽.
+              <span class="entry-help-note"><code>каршеринг 300*3</code> — одна операция на 900 ₽.</span>
               <span class="entry-help-note"><code>каршеринг 1000 - 330</code> — 670 ₽; <code>каршеринг 400 / 2</code> — 200 ₽.</span>
-              <span class="entry-help-note">Пробелы вокруг знаков необязательны.</span>
+              <span class="entry-help-note">Сначала умножение и деление. Скобки меняют порядок: <code>(100 + 50) * 2</code> — 300 ₽. Пробелы вокруг знаков необязательны.</span>
             </dd>
             <dt>Доход</dt>
             <dd>
               <code>+зарплата 95к</code>
-              <span class="entry-help-note">"+" перед каждым доходом.</span>
+              <span class="entry-help-note">"+" перед описанием дохода; следующие суммы с тем же описанием тоже доходы.</span>
             </dd>
             <dt>Суммы</dt>
             <dd>
               <code>2к</code> = 2 000 ₽ · <code>1,5к</code> = 1 500 ₽
               <span class="entry-help-note">Также k, т, тыс, тыс. Копейки: <code>99,90</code> или <code>99.90</code>.</span>
+              <span class="entry-help-note"><code>1 500</code> — две суммы; <code>1 500 * 2</code> — 3 000 ₽. Для однозначного ввода тысяч пишите <code>1500</code> или <code>1,5к</code>.</span>
             </dd>
             <dt>Дата</dt>
             <dd>
               <code>вчера такси 450</code> · <code>позавчера кино 800</code>
-              <span class="entry-help-note">Без даты — сегодня. Дата в начале — общая, если у операции нет своей.</span>
+              <span class="entry-help-note">Без даты — сегодня. Указанная дата действует дальше до новой даты; <code>сегодня</code> возвращает ввод на сегодня.</span>
             </dd>
           </dl>
         </div>

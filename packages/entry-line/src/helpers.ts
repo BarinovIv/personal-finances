@@ -1,106 +1,214 @@
-import { AMOUNT, CURRENCY, DATE_WORDS, GROUPED, MAX_CALCULATOR_ENTRIES } from "./constants"
+import { AMOUNT, CURRENCY, DATE_WORDS, MAX_CALCULATION_DEPTH, MISSING_OPERATOR, THOUSANDS_GROUP } from "./constants"
+import type { Calculation, EntryProblem, ParsedEntryLine, Rational } from "./types"
 
-export const validAmount = (kopecks: number) => Number.isSafeInteger(kopecks) && kopecks > 0
-
-/** Один токен суммы → копейки, иначе null. */
-export const parseAmountToken = (token: string, allowZero = false): number | null => {
-  const m = AMOUNT.exec(token)
-  if (!m) return null
-  const [, number, thousands] = m
-  let text = number!
-  if (!thousands) {
-    // "1.500" — разряды, "99.90" — копейки
-    const fraction = /[.,](\d+)$/.exec(text)?.[1]
-    if (fraction !== undefined && fraction.length === 3) text = text.replace(/[.,]/, "")
-    else if (fraction !== undefined && fraction.length > 2) return null
+const rational = (numerator: bigint, denominator = 1n): Rational => {
+  if (denominator < 0n) {
+    numerator = -numerator
+    denominator = -denominator
   }
-  const value = Number(text.replace(",", ".")) * (thousands ? 1000 : 1)
-  const kopecks = Math.round(value * 100)
-  return validAmount(kopecks) || (allowZero && kopecks === 0) ? kopecks : null
+  let divisor = numerator < 0n ? -numerator : numerator
+  let remainder = denominator
+  while (remainder !== 0n) [divisor, remainder] = [remainder, divisor % remainder]
+  return { numerator: numerator / divisor, denominator: denominator / divisor }
 }
 
-export const isAmount = (token: string) => parseAmountToken(token) !== null
-
-export const amountAtEdge = (tokens: ReadonlyArray<string>, edge: "start" | "end", allowZero = false) => {
-  const take = (n: number) => (edge === "end" ? tokens.slice(-n) : tokens.slice(0, n))
-  const rest = (n: number) => (edge === "end" ? tokens.slice(0, tokens.length - n) : tokens.slice(n))
-  for (let n = Math.min(tokens.length, 5); n >= 2; n--) {
-    const candidate = take(n).join(" ")
-    if (GROUPED.test(candidate)) {
-      const kopecks = Math.round(Number(candidate.replace(/ /g, "").replace(",", ".")) * 100)
-      return validAmount(kopecks) || (allowZero && kopecks === 0) ? { kopecks, rest: rest(n) } : null
-    }
-  }
-  const single = tokens.length > 0 ? parseAmountToken(take(1)[0]!, allowZero) : null
-  return single !== null ? { kopecks: single, rest: rest(1) } : null
+export const amountValue = (token: string, fractional = false): Rational | null => {
+  const match = AMOUNT.exec(token)
+  if (!match) return null
+  let text = match[1]!
+  const thousands = match[2]
+  const fraction = /[.,](\d+)$/.exec(text)?.[1]
+  if (!fractional && !thousands && fraction?.length === 3) text = text.replace(/[.,]/, "")
+  else if (!fractional && !thousands && fraction !== undefined && fraction.length > 2) return null
+  if (!Number.isFinite(Number(text.replace(",", ".")) * (thousands ? 1000 : 1))) return null
+  const [whole, decimal = ""] = text.split(/[.,]/)
+  return rational(BigInt(`${whole}${decimal}`) * (thousands ? 1000n : 1n), 10n ** BigInt(decimal.length))
 }
 
-/** Сумма в конце строки, а если там её нет — в начале. */
-export const takeAmount = (tokens: ReadonlyArray<string>, allowZero = false) => {
-  const body = CURRENCY.test(tokens.at(-1) ?? "") ? tokens.slice(0, -1) : tokens
-  return amountAtEdge(body, "end", allowZero) ?? amountAtEdge(tokens, "start", allowZero)
-}
+export const isDateWord = (token: string) => DATE_WORDS.has(token.replace(/^\+/, "").toLowerCase())
 
-/** Разделяет арифметические знаки рядом с числами, сохраняя плюс дохода и знаки в описании. */
-const calculatorTokens = (line: string) =>
-  line.split(/\s+/).filter(Boolean).flatMap((token, i, tokens) => {
-    const parts = token.split(/([+*/-])/).filter(Boolean)
-    const previousParts = tokens[i - 1]?.split(/[+*/-]/).filter(Boolean) ?? []
-    const followsAmount = previousParts.length > 0 && previousParts.every((part) => AMOUNT.test(part) || CURRENCY.test(part))
-    // "магазин 24/7" — описание, в том числе рядом с вычисляемой суммой.
-    const openingHours = token === "24/7" && /\p{L}/u.test(tokens[i - 1] ?? "") && !followsAmount
-    const numeric = parts.every((part) => /^[+*/-]$/.test(part) || AMOUNT.test(part) || CURRENCY.test(part))
-    const followsOperator = i > 0 && /^[+*/-]$/.test(tokens[i - 1]!)
-    return numeric && !openingHours && (!/^[+*/-]/.test(token) || followsAmount || followsOperator) ? parts : [token]
+/** Знаки внутри названий и часы работы остаются текстом описания. */
+export const tokenize = (line: string): Array<string> => line.split(/\s+/).filter(Boolean).flatMap((token, index, tokens) => {
+  if (token === "24/7" && /\p{L}/u.test(tokens[index - 1] ?? "") && !AMOUNT.test(tokens[index - 1]!)) return [token]
+  const parts = token.split(/([+*/()-])/).filter(Boolean)
+  if (!parts.every((part) => /^[+*/()-]$/.test(part) || AMOUNT.test(part) || CURRENCY.test(part))) return [token]
+  return parts.flatMap((part, partIndex) => {
+    const previous = parts[partIndex - 1] ?? ""
+    const missing = (part === "(" && (AMOUNT.test(previous) || previous === ")")) || (AMOUNT.test(part) && previous === ")")
+    return missing ? [MISSING_OPERATOR, part] : [part]
   })
+})
 
-/** null — обычная сумма; пустой массив сумм — некорректное выражение. */
-export const takeCalculation = (tokens: ReadonlyArray<string>) => {
-  const original = tokens.filter((t) => !DATE_WORDS.has(t.toLowerCase()))
-  if (original[0]?.startsWith("+")) original[0] = original[0].slice(1)
-  if (CURRENCY.test(original.at(-1) ?? "")) original.pop()
-  const ordinary = takeAmount(original)
-  // Компактное "24/7" внутри описания не должно перехватывать обычную сумму с края.
-  if (ordinary?.rest.some((token) => /^[\d.,]+[+*/-][\d.,+*/-]+$/.test(token)) &&
-      !ordinary.rest.some((token) => /^[+*/-]/.test(token))) return null
-  const body = calculatorTokens(original.join(" "))
-  const operatorAt = body.findIndex((t, i) => i > 0 && /^[+*/-]$/.test(t) &&
-    (AMOUNT.test(body[i - 1]!) || (CURRENCY.test(body[i - 1]!) && AMOUNT.test(body[i - 2] ?? ""))))
-  if (operatorAt < 0) return null
+export const startsCalculation = (token: string) => AMOUNT.test(token) || /^[+*/()-]$/.test(token) || token === MISSING_OPERATOR
 
-  const first = takeAmount(body.slice(0, operatorAt), true)
-  if (!first) return { amounts: [], rest: body.slice(0, operatorAt) }
-  let rest = first.rest
-  const parts = body.slice(operatorAt)
-  const operators = parts.filter((t) => /^[+*/-]$/.test(t))
-  if (operators.length > 1 && !operators.every((t) => t === "+")) return { amounts: [], rest }
-  const amounts = [first.kopecks]
-  while (parts.length > 0) {
-    const operator = parts.shift()!
-    const nextOperator = parts.findIndex((t) => /^[+*/-]$/.test(t))
-    const operand = nextOperator < 0 ? parts.splice(0) : parts.splice(0, nextOperator)
-    const last = amounts.at(-1)!
-    if (operator === "*" || operator === "/") {
-      const numeric = operand[0]?.match(/^\d+(?:[.,]\d+)?$/)?.[0]
-      const factor = numeric === undefined ? NaN : Number(numeric.replace(",", "."))
-      if (operand.length > 1) {
-        if (rest.length > 0 || nextOperator >= 0) return { amounts: [], rest }
-        rest = operand.slice(1)
-      }
-      if (operator === "*") {
-        if (!/^\d+(?:[.,]0+)?$/.test(numeric ?? "") || !Number.isInteger(factor) || factor < 1 || factor > MAX_CALCULATOR_ENTRIES)
-          return { amounts: [], rest }
-        amounts.push(...Array<number>(factor - 1).fill(last))
-      } else amounts[amounts.length - 1] = Math.round(last / factor)
-    } else {
-      const parsed = takeAmount(operand, true)
-      if (!parsed || (parsed.rest.length > 0 && (rest.length > 0 || nextOperator >= 0))) return { amounts: [], rest }
-      if (parsed.rest.length > 0) rest = parsed.rest
-      if (operator === "+") amounts.push(parsed.kopecks)
-      else if (operator === "-") amounts[amounts.length - 1] = last - parsed.kopecks
-      else return { amounts: [], rest }
+export const incomeMarker = (tokens: ReadonlyArray<string>, index: number) =>
+  tokens[index] === "+" && /\p{L}/u.test(tokens[index + 1] ?? "") && !AMOUNT.test(tokens[index + 1]!) && !CURRENCY.test(tokens[index + 1]!)
+
+export const takeCalculation = (tokens: ReadonlyArray<string>, start: number): Calculation => {
+  let end = start
+  let arithmetic = false
+  let invalid = false
+  let depth = 0
+  const operand = (fractional = false): Rational => {
+    let sign = 1n
+    while (tokens[end] === "+" || tokens[end] === "-") {
+      arithmetic = true
+      if (tokens[end++] === "-") sign *= -1n
     }
-    if (!amounts.every(validAmount) || amounts.length > MAX_CALCULATOR_ENTRIES) return { amounts: [], rest }
+    if (tokens[end] === "(") {
+      arithmetic = true
+      if (depth >= MAX_CALCULATION_DEPTH) {
+        invalid = true
+        let nested = 1
+        end++
+        while (end < tokens.length && nested > 0 && (startsCalculation(tokens[end]!) || CURRENCY.test(tokens[end]!))) {
+          if (tokens[end] === "(") nested++
+          else if (tokens[end] === ")") nested--
+          end++
+        }
+        return rational(0n)
+      }
+      end++
+      depth++
+      const value = sum(fractional)
+      depth--
+      if (tokens[end] === ")") end++
+      else invalid = true
+      if (CURRENCY.test(tokens[end] ?? "")) end++
+      return { numerator: sign * value.numerator, denominator: value.denominator }
+    }
+    const first = tokens[end] ?? ""
+    let groupEnd = end + 1
+    if ((depth > 0 ? /^\d+$/ : /^\d{1,2}$/).test(first)) {
+      while (THOUSANDS_GROUP.test(tokens[groupEnd] ?? "")) {
+        const group = tokens[groupEnd++]!
+        if (/[.,]/.test(group)) break
+      }
+    }
+    const operatorAt = CURRENCY.test(tokens[groupEnd] ?? "") ? groupEnd + 1 : groupEnd
+    const grouped = (!fractional || depth > 0) && groupEnd > end + 1 && (arithmetic || depth > 0 || (/^[+*/-]$/.test(tokens[operatorAt] ?? "") && !incomeMarker(tokens, operatorAt)))
+    const value = amountValue(grouped ? tokens.slice(end, groupEnd).join("") : first, fractional)
+    if (value === null) {
+      invalid = true
+      return rational(0n)
+    }
+    end = grouped ? groupEnd : end + 1
+    if (CURRENCY.test(tokens[end] ?? "")) end++
+    return { numerator: sign * value.numerator, denominator: value.denominator }
   }
-  return { amounts, rest }
+  const product = (fractional = false): Rational => {
+    let value = operand(fractional)
+    while (tokens[end] === "*" || tokens[end] === "/" || tokens[end] === MISSING_OPERATOR) {
+      const operator = tokens[end++]
+      arithmetic = true
+      const right = operand(true)
+      if (operator === MISSING_OPERATOR || (operator === "/" && right.numerator === 0n)) {
+        invalid = true
+        value = rational(0n)
+      } else value = operator === "*"
+        ? rational(value.numerator * right.numerator, value.denominator * right.denominator)
+        : rational(value.numerator * right.denominator, value.denominator * right.numerator)
+    }
+    return value
+  }
+  const sum = (fractional = false): Rational => {
+    let value = product(fractional)
+    while ((tokens[end] === "+" || tokens[end] === "-") && !(depth === 0 && incomeMarker(tokens, end))) {
+      const operator = tokens[end++]
+      arithmetic = true
+      const right = product(fractional)
+      const leftNumerator = value.numerator * right.denominator
+      const rightNumerator = right.numerator * value.denominator
+      value = rational(operator === "+" ? leftNumerator + rightNumerator : leftNumerator - rightNumerator, value.denominator * right.denominator)
+    }
+    return value
+  }
+  const value = sum()
+  // Сохраняем неверные знаки в одном выражении, чтобы оно не исчезло из предпросмотра.
+  while (/^[+*/)-]$/.test(tokens[end] ?? "") && !incomeMarker(tokens, end)) {
+    invalid = true
+    arithmetic = true
+    end++
+  }
+  if (end === start) end++
+  // Положительную конечную сумму округляем один раз, включая ровно половину копейки.
+  const kopecks = value.numerator > 0n ? (value.numerator * 200n + value.denominator) / (value.denominator * 2n) : 0n
+  const valid = !invalid && kopecks > 0n && kopecks <= BigInt(Number.MAX_SAFE_INTEGER)
+  return { amount: valid ? Number(kopecks) : null, end, arithmetic }
+}
+
+export const entry = (description: string, kind: ParsedEntryLine["kind"], dateShift: number, calculation?: Calculation): ParsedEntryLine => {
+  const problems: Array<EntryProblem> = []
+  if (!calculation || calculation.amount === null) problems.push(calculation?.arithmetic ? "invalid-calculation" : "no-amount")
+  if (!description) problems.push("no-description")
+  return { kind, description, dateShift, amount: calculation?.amount ?? null, problems }
+}
+
+/** Числа через пробел повторяют последнее описание; явно указанная дата действует дальше. */
+export const parseEntries = (chunks: ReadonlyArray<string>): ReadonlyArray<ParsedEntryLine> => {
+  const entries: Array<ParsedEntryLine> = []
+  let dateShift = 0
+  let previous: ParsedEntryLine | undefined
+  for (const [chunkIndex, chunk] of chunks.entries()) {
+    const chunkEntryStart = entries.length
+    const tokens = tokenize(chunk)
+    let description: Array<string> = []
+    let kind: ParsedEntryLine["kind"] = "expense"
+    let index = 0
+    while (index < tokens.length) {
+      let token = tokens[index]!
+      if (isDateWord(token)) {
+        if (token.startsWith("+")) kind = "income"
+        dateShift = DATE_WORDS.get(token.replace(/^\+/, "").toLowerCase())!
+        if (index === tokens.length - 1 && description.length === 0 && entries.length > 0 &&
+            !chunks.slice(chunkIndex + 1).some((following) => following.trim())) {
+          const last = entries.at(-1)!
+          entries[entries.length - 1] = { ...last, dateShift }
+        }
+        index++
+        continue
+      }
+      if (token.startsWith("+") && (token.length > 1 || index === 0 || incomeMarker(tokens, index))) {
+        kind = "income"
+        token = token.slice(1)
+        if (!token) { index++; continue }
+      }
+      if (!startsCalculation(token)) {
+        description.push(token)
+        index++
+        continue
+      }
+      const calculation = takeCalculation(tokens, index)
+      index = calculation.end
+      const following: Array<string> = []
+      let next = index
+      while (next < tokens.length && !startsCalculation(tokens[next]!) && !isDateWord(tokens[next]!) && !tokens[next]!.startsWith("+")) {
+        following.push(tokens[next]!)
+        next++
+      }
+      if (description.length === 0 && following.length > 0) {
+        if (entries.length === chunkEntryStart && !calculation.arithmetic && /^\d+$/.test(token) && following.length === 1 && startsCalculation(tokens[next] ?? "")) {
+          description = [token, ...following]
+          index = next
+          continue
+        }
+        const hasFollowingAmount = next < tokens.length && startsCalculation(tokens[next]!)
+        const count = hasFollowingAmount ? (following.length > 1 ? 1 : previous ? 0 : following.length) : following.length
+        description = following.slice(0, count)
+        index += count
+      }
+      const ownDescription = description.length > 0
+      const parsed = entry(ownDescription ? description.join(" ") : previous?.description ?? "", ownDescription ? kind : previous?.kind ?? kind, dateShift, calculation)
+      entries.push(parsed)
+      previous = parsed
+      description = []
+      kind = "expense"
+    }
+    if (description.length > 0 || kind === "income") {
+      const parsed = entry(description.join(" "), kind, dateShift)
+      entries.push(parsed)
+      previous = parsed
+    }
+  }
+  return entries.length > 0 ? entries : [entry("", "expense", dateShift)]
 }

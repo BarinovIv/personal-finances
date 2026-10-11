@@ -45,7 +45,7 @@ describe("бывшие команды — обычные описания рас
     await add(ledger, "шаурма 300")
     const before = ledger.pendingChanges()
     for (const description of ["одолжил Петя", "мне вернули Петя", "возврат шаурма", "отложил отпуск"]) {
-      for (const amount of ["000 000", "0,000001к", "9".repeat(307), "90 071 992 547 410"]) {
+      for (const amount of ["000", "0,000001к", "9".repeat(307), "90071992547410"]) {
         const result = await ledger.submit(`${description} ${amount}`, { categoryId: categoryId(ledger, "Прочее") })
         expect(result).toEqual({ ok: false, problems: ["no-amount"] })
       }
