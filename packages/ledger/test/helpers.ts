@@ -1,4 +1,5 @@
 import type { OperationData, OperationRecord, RecurringData, RecurringRecord } from "@fin/domain"
+import type { BackupData } from "@fin/ledger"
 
 export const recurringOperation = (data: Partial<OperationData> = {}, id = "rec:net:2026-09"): OperationRecord => ({
   collection: "operations",
@@ -36,3 +37,6 @@ export const recurringTemplate = (data: Partial<RecurringData> = {}): RecurringR
     ...data
   }
 })
+
+/** Разобрать доверенный результат публичного экспортера для сравнения в тестах. */
+export const readBackup = (text: string): BackupData => JSON.parse(text)

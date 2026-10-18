@@ -1,3 +1,5 @@
+import { planBackup } from "./backup/helpers"
+import type { BackupPreview, BackupSnapshot } from "./backup/types"
 import {
   recordKey,
   type CategoryData,
@@ -33,6 +35,7 @@ export class Records {
   private saving: Promise<void> = Promise.resolve()
   private storageOwner: string | null
   private deviceEpoch = 0
+  private restoringBackup = false
   /** Растёт при каждом изменении — для кэширования расчётов. */
   version = 0
 
@@ -78,6 +81,7 @@ export class Records {
     changes: ReadonlyArray<{ collection: Collection; id: string; data: unknown; deleted?: boolean }>,
     updatedAt: number = this.stamp()
   ): Promise<void> {
+    if (this.restoringBackup) return Promise.reject(new Error("Выполняется восстановление резервной копии. Повторите изменение после завершения."))
     if (changes.length === 0) return this.saving
     const records = changes.map(
       (c): SyncRecord => ({ collection: c.collection, id: c.id, updatedAt, deleted: c.deleted ?? false, data: c.data })
@@ -93,6 +97,7 @@ export class Records {
     changes: ReadonlyArray<{ collection: Collection; id: string; data: unknown; deleted?: boolean }>,
     updatedAt: number
   ): Promise<void> {
+    if (this.restoringBackup) return Promise.reject(new Error("Выполняется восстановление резервной копии. Повторите изменение после завершения."))
     if (changes.length === 0) return this.saving
     const epoch = this.deviceEpoch
     const owner = this.storageOwner
@@ -119,6 +124,7 @@ export class Records {
 
   /** Записи с сервера: принимаются, если не старше локальных (ADR-0001). `meta` сохраняется вместе с ними. */
   applyRemote(records: ReadonlyArray<SyncRecord>, meta: Record<string, unknown> = {}): Promise<void> {
+    if (this.restoringBackup) return Promise.reject(new Error("Выполняется восстановление резервной копии. Повторите синхронизацию после завершения."))
     for (const [key, value] of Object.entries(meta)) this.meta.set(key, value)
     const accepted: Array<{ key: string; value: SyncRecord }> = []
     const superseded: Array<string> = []
@@ -142,6 +148,7 @@ export class Records {
 
   /** Сервер принял эти версии: убираем их из очереди, если после отправки их не правили. */
   acknowledge(records: ReadonlyArray<SyncRecord>): Promise<void> {
+    if (this.restoringBackup) return Promise.reject(new Error("Выполняется восстановление резервной копии. Повторите синхронизацию после завершения."))
     const done: Array<string> = []
     for (const sent of records) {
       const key = recordKey(sent.collection, sent.id)
@@ -160,6 +167,7 @@ export class Records {
   }
 
   saveMeta(meta: Record<string, unknown>): Promise<void> {
+    if (typeof meta.userId === "string" && meta.userId !== this.meta.get("userId")) this.deviceEpoch++
     for (const [key, value] of Object.entries(meta)) this.meta.set(key, value)
     return this.persist({ meta }, false)
   }
@@ -177,6 +185,59 @@ export class Records {
   subscribe(listener: () => void): () => void {
     this.listeners.add(listener)
     return () => this.listeners.delete(listener)
+  }
+
+  snapshot(): BackupSnapshot {
+    return { records: [...this.byKey.values()], outbox: [...this.outbox], meta: Object.fromEntries(this.meta) }
+  }
+
+  /** Сохранить объединённую копию целиком перед публикацией, сохраняя её исходные версии. */
+  restoreBackup(text: string): Promise<BackupPreview> {
+    if (this.restoringBackup) return Promise.reject(new Error("Выполняется восстановление резервной копии."))
+    this.restoringBackup = true
+    const epoch = this.deviceEpoch
+    const restoring = this.saving.catch((error) => {
+      if (error instanceof LocalUserChanged) throw error
+    }).then(async (): Promise<BackupPreview> => {
+      if (epoch !== this.deviceEpoch) throw new Error("Данные устройства изменились во время импорта.")
+      const snapshot = this.snapshot()
+      const plan = planBackup(snapshot, text)
+      if (!plan.preview.ok) return plan.preview
+      const owner = this.storageOwner
+      const keys = plan.records.map((record) => recordKey(record.collection, record.id))
+      for (const record of plan.records) this.lastStamp = Math.max(this.lastStamp, record.updatedAt)
+      await this.store.save({
+        records: plan.records.map((value, i) => ({ key: keys[i]!, value })),
+        outboxAdd: keys,
+        meta: plan.meta,
+        expectedOwner: owner
+      })
+      if (epoch !== this.deviceEpoch) throw new Error("Данные устройства изменились во время импорта.")
+      plan.records.forEach((record, i) => {
+        const key = keys[i]!
+        const current = this.byKey.get(key)
+        if (!current || current.updatedAt <= record.updatedAt) this.byKey.set(key, record)
+        this.outbox.add(key)
+      })
+      for (const [key, value] of Object.entries(plan.meta)) {
+        if (key === "syncCursor" || this.meta.get(key) === snapshot.meta[key]) this.meta.set(key, value)
+      }
+      this.version++
+      for (const listener of this.listeners) listener()
+      return plan.preview
+    })
+    const finished = restoring.finally(() => { this.restoringBackup = false })
+    this.saving = finished.then(() => {})
+    return finished
+  }
+
+  /** Снимок берётся в тот же шаг, в котором закончилась последняя известная запись. */
+  async durableSnapshot(): Promise<BackupSnapshot> {
+    while (true) {
+      const pending = this.saving
+      await pending
+      if (pending === this.saving) return this.snapshot()
+    }
   }
 
   /** Дождаться, пока все правки лягут в хранилище. */

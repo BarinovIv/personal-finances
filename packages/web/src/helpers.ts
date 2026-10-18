@@ -5,6 +5,17 @@ import { limitNotes, showToast } from "./toast"
 
 export const amountText = (kopecks: number) => formatDecimal(kopecks).replace(/,00$/, "")
 
+export const downloadText = (text: string, filename: string, contentType: string): void => {
+  const url = URL.createObjectURL(new Blob([text], { type: contentType }))
+  const link = document.createElement("a")
+  link.href = url
+  link.download = filename
+  document.body.append(link)
+  link.click()
+  link.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 10_000)
+}
+
 /** Открытые вкладки одного пользователя разделяют отметку первого показа на устройстве. */
 export const shareRecurringViews = (ledger: Ledger): Ledger => {
   if (typeof BroadcastChannel === "undefined") return ledger

@@ -1,3 +1,5 @@
+import { exportBackup, previewBackup, importBackup } from "./backup"
+import type { BackupPreview } from "./backup/types"
 import { APP_TIME_ZONE, type CategoryKind, type IsoDate, type PeriodMode, type SyncRecord } from "@fin/domain"
 import {
   addCategory,
@@ -220,7 +222,11 @@ export interface Ledger {
   setPaydays(days: ReadonlyArray<number>): Promise<{ ok: boolean }>
   /** IANA-часовой пояс; синхронизируется между устройствами пользователя. */
   setTimeZone(timeZone: string): Promise<{ ok: boolean }>
-  /** Все операции в CSV для Excel (UTF-8 с BOM, «;», десятичная запятая). */
+  /** Полная копия данных пользователя с исходными идентификаторами и связями. */
+  exportBackup(): Promise<string>
+  previewBackup(text: string): BackupPreview
+  importBackup(text: string): Promise<BackupPreview>
+  /** Все операции в CSV для Excel (UTF-8 с BOM, ";", десятичная запятая). */
   exportCsv(): string
   previewCsv(text: string): CsvPreview
   importCsv(text: string): Promise<CsvImportResult>
@@ -246,7 +252,7 @@ export const openLedger = async (options: LedgerOptions): Promise<Ledger> => {
     options.newId ?? randomId
   )
 
-  let csvImportQueue: Promise<void> = Promise.resolve()
+  let importQueue: Promise<void> = Promise.resolve()
 
   return {
     today: () => ctx.today(),
@@ -302,11 +308,18 @@ export const openLedger = async (options: LedgerOptions): Promise<Ledger> => {
     settings: () => readSettings(ctx),
     setTimeZone: (zone) => setTimeZone(ctx, zone),
     setPaydays: (days) => setPaydays(ctx, days),
+    exportBackup: () => exportBackup(ctx),
+    previewBackup: (text) => previewBackup(ctx, text),
+    importBackup: (text) => {
+      const importing = importQueue.then(() => importBackup(ctx, text))
+      importQueue = importing.then(() => {}, () => {})
+      return importing
+    },
     exportCsv: () => exportCsv(ctx),
     previewCsv: (text) => previewCsv(ctx, text),
     importCsv: (text) => {
-      const importing = csvImportQueue.then(() => importCsv(ctx, text))
-      csvImportQueue = importing.then(() => {}, () => {})
+      const importing = importQueue.then(() => importCsv(ctx, text))
+      importQueue = importing.then(() => {}, () => {})
       return importing
     },
     pendingChanges: () => records.pending(),

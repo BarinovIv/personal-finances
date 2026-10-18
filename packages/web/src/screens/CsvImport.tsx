@@ -1,17 +1,17 @@
 import type { CsvPreview, Ledger } from "@fin/ledger"
 import type { Sync } from "@fin/sync"
-import { useRef, useState } from "preact/hooks"
+import { useState } from "preact/hooks"
 import { CSV_IMPORT_MAX_BYTES, CSV_IMPORT_PREVIEW_LIMIT } from "../constants"
 import { amountText } from "../helpers"
 import { DownloadIcon } from "../icons"
+import type { DataTransferState } from "../types"
 
-export const CsvImport = ({ ledger, sync }: { ledger: Ledger; sync: Sync }) => {
+export const CsvImport = ({ ledger, sync, transfer }: { ledger: Ledger; sync: Sync; transfer: DataTransferState }) => {
   const [text, setText] = useState<string | null>(null)
   const [filename, setFilename] = useState("")
   const [preview, setPreview] = useState<CsvPreview | null>(null)
   const [note, setNote] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
-  const working = useRef(false)
+  const { busy, setBusy, working } = transfer
 
   return <section class="section">
     <h2>Импорт из CSV</h2>
