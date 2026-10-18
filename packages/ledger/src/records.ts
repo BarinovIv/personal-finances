@@ -32,6 +32,7 @@ export class Records {
   private lastStamp = 0
   private saving: Promise<void> = Promise.resolve()
   private storageOwner: string | null
+  private deviceEpoch = 0
   /** Растёт при каждом изменении — для кэширования расчётов. */
   version = 0
 
@@ -87,6 +88,35 @@ export class Records {
     return this.persist({ records: records.map((value, i) => ({ key: keys[i]!, value })), outboxAdd: keys })
   }
 
+  /** Новые записи импорта видны только после успешного сохранения всей пачки. */
+  writeDurable(
+    changes: ReadonlyArray<{ collection: Collection; id: string; data: unknown; deleted?: boolean }>,
+    updatedAt: number
+  ): Promise<void> {
+    if (changes.length === 0) return this.saving
+    const epoch = this.deviceEpoch
+    const owner = this.storageOwner
+    const records = changes.map((change): SyncRecord => ({ ...change, updatedAt, deleted: change.deleted ?? false }))
+    const keys = records.map((record) => recordKey(record.collection, record.id))
+    this.saving = this.saving.catch((error) => {
+      if (error instanceof LocalUserChanged) throw error
+    }).then(async () => {
+      if (this.deviceEpoch !== epoch) throw new Error("Данные устройства изменились во время импорта.")
+      await this.store.save({ records: records.map((value, i) => ({ key: keys[i]!, value })), outboxAdd: keys, expectedOwner: owner })
+      if (this.deviceEpoch !== epoch) throw new Error("Данные устройства изменились во время импорта.")
+      records.forEach((record, i) => {
+        const key = keys[i]!
+        const current = this.byKey.get(key)
+        if (current && current.updatedAt > record.updatedAt) return
+        this.byKey.set(key, record)
+        this.outbox.add(key)
+      })
+      this.version++
+      for (const listener of this.listeners) listener()
+    })
+    return this.saving
+  }
+
   /** Записи с сервера: принимаются, если не старше локальных (ADR-0001). `meta` сохраняется вместе с ними. */
   applyRemote(records: ReadonlyArray<SyncRecord>, meta: Record<string, unknown> = {}): Promise<void> {
     for (const [key, value] of Object.entries(meta)) this.meta.set(key, value)
@@ -136,6 +166,7 @@ export class Records {
 
   /** Стереть данные пользователя, включая очередь, курсор и производные расчёты. */
   clear(): Promise<void> {
+    this.deviceEpoch++
     this.byKey.clear()
     this.outbox.clear()
     this.meta.clear()

@@ -16,6 +16,8 @@ import {
 import { LedgerContext } from "./context"
 import { RECURRING_SEEN_PREFIX } from "./constants"
 import { exportCsv } from "./csv"
+import { importCsv, previewCsv } from "./csv-import"
+import type { CsvPreview, CsvImportResult } from "./types"
 import {
   addGoal,
   archiveGoal,
@@ -220,6 +222,8 @@ export interface Ledger {
   setTimeZone(timeZone: string): Promise<{ ok: boolean }>
   /** Все операции в CSV для Excel (UTF-8 с BOM, «;», десятичная запятая). */
   exportCsv(): string
+  previewCsv(text: string): CsvPreview
+  importCsv(text: string): Promise<CsvImportResult>
   /** Изменения, которые ещё не ушли на сервер. */
   pendingChanges(): ReadonlyArray<SyncRecord>
   readonly sync: LedgerSyncPort
@@ -241,6 +245,8 @@ export const openLedger = async (options: LedgerOptions): Promise<Ledger> => {
     options.timeZone ?? APP_TIME_ZONE,
     options.newId ?? randomId
   )
+
+  let csvImportQueue: Promise<void> = Promise.resolve()
 
   return {
     today: () => ctx.today(),
@@ -297,6 +303,12 @@ export const openLedger = async (options: LedgerOptions): Promise<Ledger> => {
     setTimeZone: (zone) => setTimeZone(ctx, zone),
     setPaydays: (days) => setPaydays(ctx, days),
     exportCsv: () => exportCsv(ctx),
+    previewCsv: (text) => previewCsv(ctx, text),
+    importCsv: (text) => {
+      const importing = csvImportQueue.then(() => importCsv(ctx, text))
+      csvImportQueue = importing.then(() => {}, () => {})
+      return importing
+    },
     pendingChanges: () => records.pending(),
     device: {
       owner: () => records.getMeta<string>(OWNER) ?? null,

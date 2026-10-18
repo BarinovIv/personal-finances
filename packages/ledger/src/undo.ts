@@ -15,10 +15,12 @@ type Change = { readonly collection: Collection; readonly id: string; readonly d
 export const writeUndoable = async (
   records: Records,
   changes: ReadonlyArray<Change>,
-  updatedAt: number = records.stamp()
+  updatedAt: number = records.stamp(),
+  durable = false
 ): Promise<Undo> => {
   const before = changes.map((c) => records.get(c.collection, c.id))
-  await records.write(changes, updatedAt)
+  if (durable) await records.writeDurable(changes, updatedAt)
+  else await records.write(changes, updatedAt)
   return async () => {
     const now = changes.map((c) => records.get(c.collection, c.id))
     if (now.some((r) => !r || r.updatedAt !== updatedAt)) return { ok: false }

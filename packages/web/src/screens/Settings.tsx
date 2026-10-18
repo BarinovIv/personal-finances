@@ -18,6 +18,7 @@ import { PasswordSection } from "./Password"
 import { TimeZoneSection } from "./TimeZone"
 import { UsersSection } from "./Users"
 import { authErrorText } from "./Login"
+import { CsvImport } from "./CsvImport"
 
 export type SettingsSub = "paydays" | "recurring" | "categories" | "goals" | "debts" | "export" | "devices" | "news" | "password" | "users" | "timezone"
 
@@ -163,7 +164,7 @@ const SUB_TITLE: Record<SettingsSub, string> = {
   categories: "Категории",
   goals: "Цели",
   debts: "Долги",
-  export: "Выгрузка",
+  export: "Импорт и выгрузка",
   devices: "Устройства",
   news: "Что нового",
   password: "Пароль",
@@ -285,6 +286,7 @@ export const SettingsScreen = (props: {
       return (
         <SettingsSubPage sub="export">
           <Export ledger={props.ledger} />
+          <CsvImport ledger={props.ledger} sync={props.sync} />
         </SettingsSubPage>
       )
     case "devices":
