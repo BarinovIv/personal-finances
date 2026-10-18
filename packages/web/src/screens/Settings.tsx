@@ -1,14 +1,14 @@
 import type { Ledger } from "@fin/ledger"
 import type { AuthApi, SessionInfo, Sync, UserDevice } from "@fin/sync"
 import type { ComponentChildren } from "preact"
-import { useEffect, useRef, useState } from "preact/hooks"
+import { useEffect, useState } from "preact/hooks"
 import { Header } from "../components/Header"
 import { LargeTitle } from "../components/LargeTitle"
 import { SwipeBack } from "../components/SwipeBack"
 import { SyncBadge } from "../components/SyncBadge"
 import { lastActive } from "../format"
 import { CalendarIcon, DebtIcon, DownloadIcon, ForwardIcon, GridIcon, LogoutIcon, LoopIcon, NewsIcon, PhoneIcon, SlidersIcon, StarIcon } from "../icons"
-import { goBack, setNavigationGuard, useLedgerVersion } from "../state"
+import { goBack, useLedgerVersion } from "../state"
 import { CategoriesSection } from "./Categories"
 import { DebtsSection } from "./Debts"
 import { GoalsSection } from "./Goals"
@@ -18,9 +18,7 @@ import { PasswordSection } from "./Password"
 import { TimeZoneSection } from "./TimeZone"
 import { UsersSection } from "./Users"
 import { authErrorText } from "./Login"
-import { CsvImport } from "./CsvImport"
-import { BackupSection } from "./Backup"
-import { downloadText } from "../helpers"
+import { DataTransfer } from "./DataTransfer"
 
 export type SettingsSub = "paydays" | "recurring" | "categories" | "goals" | "debts" | "export" | "devices" | "news" | "password" | "users" | "timezone"
 
@@ -65,37 +63,6 @@ const Paydays = ({ ledger }: { ledger: Ledger }) => {
       </button>
     </section>
   )
-}
-
-const Export = ({ ledger, disabled }: { ledger: Ledger; disabled: boolean }) => (
-  <section class="section">
-    <div class="card-list">
-      <button
-        type="button"
-        class="row row-button action-row"
-        disabled={disabled}
-        onClick={() => {
-          downloadText(ledger.exportCsv(), `finances-${ledger.today()}.csv`, "text/csv;charset=utf-8")
-        }}
-      >
-        <DownloadIcon />
-        <span>Скачать всё в CSV</span>
-      </button>
-    </div>
-    <p class="section-footer">Все операции, включая возвраты и регулярные, — файл открывается в Excel.</p>
-  </section>
-)
-
-const DataTransfer = ({ ledger, sync }: { ledger: Ledger; sync: Sync }) => {
-  const [busy, setBusy] = useState(false)
-  const working = useRef(false)
-  const transfer = { busy, setBusy, working }
-  useEffect(() => setNavigationGuard(() => !working.current), [])
-  return <>
-    <BackupSection ledger={ledger} sync={sync} transfer={transfer} />
-    <Export ledger={ledger} disabled={busy} />
-    <CsvImport ledger={ledger} sync={sync} transfer={transfer} />
-  </>
 }
 
 const Devices = ({ auth, device, timeZone, onSignedOut }: { auth: AuthApi; device: UserDevice; timeZone: string; onSignedOut: () => void }) => {
