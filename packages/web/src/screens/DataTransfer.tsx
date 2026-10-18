@@ -151,9 +151,9 @@ export const DataTransfer = ({ ledger, sync }: { ledger: Ledger; sync: Sync }) =
       event.currentTarget.value = ""
       if (file) void chooseFile(file)
     }} />
-    <p class="section-footer">Полная копия JSON или CSV для Excel. При импорте формат определится автоматически.</p>
+    <p class="section-footer">Сохраните данные в файл или загрузите ранее сохранённый файл.</p>
     {filename && <>
-      <p class="section-footer">{filename}{selection ? ` · ${selection.format === "json" ? "Полная копия JSON" : "CSV"}` : ""}</p>
+      <p class="section-footer">{filename}{selection ? ` · ${selection.format === "json" ? "Резервная копия" : "Таблица операций"}` : ""}</p>
       {selection?.format === "json" && <BackupDetails preview={selection.preview} busy={busy} onConfirm={() => void confirmImport()} />}
       {selection?.format === "csv" && <CsvImportDetails preview={selection.preview} busy={busy} onConfirm={() => void confirmImport()} />}
     </>}
@@ -165,13 +165,14 @@ export const DataTransfer = ({ ledger, sync }: { ledger: Ledger; sync: Sync }) =
         <div class="sheet-title">Экспорт</div>
         <div class="card-list">
           <button type="button" class="row row-button" disabled={busy} onClick={() => void exportFile("json")}>
-            <span class="row-main"><span class="row-title">Полная копия JSON</span><span class="row-sub">Все данные, без интернета</span></span>
+            <span class="row-main"><span class="row-title">Резервная копия</span><span class="row-sub">Для восстановления в приложении</span></span>
           </button>
           <button type="button" class="row row-button" disabled={busy} onClick={() => void exportFile("csv")}>
-            <span class="row-main"><span class="row-title">CSV для Excel</span><span class="row-sub">Таблица операций</span></span>
+            <span class="row-main"><span class="row-title">Таблица для Excel</span><span class="row-sub">Для просмотра и своих расчётов</span></span>
           </button>
         </div>
-        <p class="section-footer">JSON сохраняет все данные и настройки, включая неотправленные изменения. CSV не заменяет полную копию.</p>
+        <p class="section-footer">Резервная копия (JSON) сохраняет все ваши данные, включая категории, цели и настройки. Её можно загрузить обратно в приложение или перенести на другое устройство.</p>
+        <p class="section-footer">Таблица (CSV) содержит список операций для Excel. Она нужна для своих расчётов и не подходит для полного восстановления данных.</p>
         <button type="button" class="secondary-button" onClick={close}>Отмена</button>
       </div>}
     </Sheet>}
