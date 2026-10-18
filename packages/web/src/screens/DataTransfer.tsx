@@ -140,7 +140,7 @@ export const DataTransfer = ({ ledger, sync }: { ledger: Ledger; sync: Sync }) =
   return <section class="section">
     <div class="card-list">
       <button type="button" class="row row-button action-row" disabled={busy} onClick={() => setExportOpen(true)}>
-        <DownloadIcon /><span class="row-main">Экспорт</span><ForwardIcon size={16} />
+        <DownloadIcon rotate={180} /><span class="row-main">Экспорт</span><ForwardIcon size={16} />
       </button>
       <button type="button" class="row row-button action-row" disabled={busy} onClick={() => input.current?.click()}>
         <DownloadIcon /><span class="row-main">Импорт</span><ForwardIcon size={16} />

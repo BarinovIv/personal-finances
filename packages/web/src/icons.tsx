@@ -1,7 +1,7 @@
 import { SYMBOLS, type SymbolName } from "./symbols"
 
 /** Символ из набора `SYMBOLS` (сетка 56×56), закрашен текущим цветом текста. */
-export const SfSymbol = (props: { name: SymbolName; size?: number; label?: string; color?: string }) => {
+export const SfSymbol = (props: { name: SymbolName; size?: number; label?: string; color?: string; rotate?: number }) => {
   const shape: { d: string; evenodd?: boolean; transform?: string } = SYMBOLS[props.name]
   return (
     <svg
@@ -9,6 +9,7 @@ export const SfSymbol = (props: { name: SymbolName; size?: number; label?: strin
       height={props.size ?? 22}
       viewBox="0 0 56 56"
       fill={props.color ?? "currentColor"}
+      style={props.rotate ? { transform: `rotate(${props.rotate}deg)` } : undefined}
       {...(props.label ? { role: "img", "aria-label": props.label } : { "aria-hidden": "true" })}
     >
       <path d={shape.d} fill-rule={shape.evenodd ? "evenodd" : undefined} transform={shape.transform} />
@@ -78,7 +79,7 @@ export const GridIcon = ({ size = 18 }: { size?: number }) => <SfSymbol name="sq
 
 export const StarIcon = ({ size = 18 }: { size?: number }) => <SfSymbol name="star_fill" size={size} />
 
-export const DownloadIcon = ({ size = 18 }: { size?: number }) => <SfSymbol name="square_arrow_down" size={size} />
+export const DownloadIcon = ({ size = 18, rotate }: { size?: number; rotate?: number }) => <SfSymbol name="square_arrow_down" size={size} rotate={rotate} />
 
 export const DebtIcon = ({ size = 18 }: { size?: number }) => <SfSymbol name="money_rubl" size={size} />
 
