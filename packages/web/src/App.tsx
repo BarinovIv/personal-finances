@@ -140,7 +140,6 @@ export const App = () => {
             const safari = /Safari/.test(navigator.userAgent) && !/Chrome|CriOS|Android/.test(navigator.userAgent)
             setWelcome(registered && safari && !window.matchMedia("(display-mode: standalone)").matches)
             dashboardMemory.offset = 0
-            dashboardMemory.selected = null
             navigate("/")
           }}
         />

@@ -162,5 +162,5 @@ export const goBack = (fallback: string, { animate = true, skipGuard = false }: 
   else navigate(fallback)
 }
 
-/** Память вида дашборда на время сессии: страница выхода и входа операции не должна её сбрасывать. */
-export const dashboardMemory = { offset: 0, selected: null as string | null }
+/** Период дашборда на время сессии: переход в операцию и обратно не должен его сбрасывать. */
+export const dashboardMemory = { offset: 0 }

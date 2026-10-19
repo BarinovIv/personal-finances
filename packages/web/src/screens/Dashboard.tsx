@@ -9,6 +9,7 @@ import { signedAmount } from "../components/OperationRow"
 import { BackIcon, ForwardIcon, RepeatIcon } from "../icons"
 import { GoalsBlock } from "./Goals"
 import { dashboardMemory, useLedgerVersion } from "../state"
+import { useTabActive } from "../tabActivity"
 
 const MUTED_SECTOR = "var(--chart-muted)"
 const paletteVar = (color: string) => `var(--palette-${color})`
@@ -381,23 +382,22 @@ const Trend = memo(
 
 export const DashboardScreen = ({ ledger }: { ledger: Ledger }) => {
   const version = useLedgerVersion(ledger)
+  const active = useTabActive()
   const [mode, setMode] = useState<PeriodMode>(ledger.dashboardMode())
-  // офсет и выбранная категория живут в dashboardMemory на время сессии: открыв операцию и вернувшись
-  // назад, пользователь должен увидеть тот же период и ту же раскрытую категорию, а не сброс на дефолт.
+  // Период сохраняется на время сессии, а выбор категории сбрасывается при уходе с дашборда.
   const [offset, setOffsetState] = useState(dashboardMemory.offset)
-  const [selected, setSelectedState] = useState<string | null>(dashboardMemory.selected)
+  const [selected, setSelected] = useState<string | null>(null)
   const trendRef = useRef<HTMLElement>(null)
   const trendTopBeforeNavigation = useRef<number | null>(null)
   const setOffset = (next: number) => {
     dashboardMemory.offset = next
     setOffsetState(next)
   }
-  const setSelected = (next: string | null) => {
-    dashboardMemory.selected = next
-    setSelectedState(next)
-  }
+  useLayoutEffect(() => {
+    if (!active) setSelected(null)
+  }, [active])
   const today = ledger.today()
-  // сводка — самый дорогой расчёт экрана; выбор категории и жесты его не меняют
+  // сводка — самый дорогой расчёт экрана; выбор категории его не меняет
   const d = useMemo(() => ledger.dashboard({ mode, offset }), [ledger, version, today, mode, offset])
   const select = (id: string) => setSelected(selected === id ? null : id)
   const switchMode = (next: PeriodMode) => {
@@ -430,24 +430,8 @@ export const DashboardScreen = ({ ledger }: { ledger: Ledger }) => {
     if (scroller) scroller.scrollTop += trend.getBoundingClientRect().top - before
   }, [offset])
 
-  const touchRef = useRef<{ x: number; y: number } | null>(null)
-  const onTouchStart = (e: TouchEvent) => {
-    const t = e.touches[0]
-    touchRef.current = t ? { x: t.clientX, y: t.clientY } : null
-  }
-  const onTouchEnd = (e: TouchEvent) => {
-    const start = touchRef.current
-    touchRef.current = null
-    const t = e.changedTouches[0]
-    if (!start || !t) return
-    const dx = t.clientX - start.x
-    const dy = t.clientY - start.y
-    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.3) return
-    go(dx < 0 ? 1 : -1)
-  }
-
   return (
-    <LargeTitle title="Дашборд" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+    <LargeTitle title="Дашборд">
       <div class="segmented" role="group" aria-label="Вид периода">
         <button type="button" aria-pressed={mode === "pay"} onClick={() => switchMode("pay")}>
           Зарплатный период
