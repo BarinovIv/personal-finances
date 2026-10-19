@@ -2,8 +2,9 @@ import type { OperationData } from "@fin/domain"
 import { CATEGORY_PALETTE } from "../categories"
 import type { LedgerContext } from "../context"
 import { exportCsv } from "../csv"
+import { OPERATION_KIND_TEXT } from "../format"
 import { normalizeIcon } from "../icons"
-import type { CsvProblem, CsvRow, CsvChange } from "../types"
+import type { CsvProblem, CsvRow, CsvChange, CsvImportOptions } from "../types"
 
 /** Разобрать CSV без потери переводов строк внутри кавычек. */
 export const parseCsvRows = (text: string): string[][] | null => {
@@ -62,7 +63,7 @@ export const csvAmount = (value: string): number | null => {
 /** Отменить защитный апостроф, который добавляет наша выгрузка. */
 export const csvText = (value: string): string => /^'[=+\-@\t\r]/.test(value) ? value.slice(1) : value
 
-export const planCsv = (ctx: LedgerContext, text: string, commit = false) => {
+export const planCsv = (ctx: LedgerContext, text: string, options: CsvImportOptions = {}, commit = false) => {
   let sequence = 0
   const newId = () => commit ? ctx.newId() : `preview-${++sequence}`
   const stampOf = () => commit ? ctx.records.stamp() : sequence
@@ -70,6 +71,8 @@ export const planCsv = (ctx: LedgerContext, text: string, commit = false) => {
   const rows = parseCsvRows(text)
   const existing = parseCsvRows(exportCsv(ctx))!
   const problems: CsvProblem[] = []
+  const ignored: CsvProblem[] = []
+  const ignoredRows = new Set(options.ignoredRows)
   if (!rows || JSON.stringify(rows[0]) !== JSON.stringify(existing[0])) {
     return { ok: false, problems: [{ row: 1, message: "Не удалось прочитать CSV приложения: проверьте заголовок и кавычки." }] } as const
   }
@@ -85,25 +88,35 @@ export const planCsv = (ctx: LedgerContext, text: string, commit = false) => {
   let added = 0
   for (const [index, row] of rows.slice(1).entries()) {
     const rowNumber = index + 2
-    const fail = (message: string) => problems.push({ row: rowNumber, message })
+    const fail = (message: string, ignorable = false) => {
+      const problem: CsvProblem = ignorable ? { row: rowNumber, message, ignorable: true } : { row: rowNumber, message }
+      if (ignorable && ignoredRows.has(rowNumber)) ignored.push(problem)
+      else problems.push(problem)
+    }
     if (row.length !== 8) { fail("В строке должно быть 8 столбцов."); continue }
     const [rawDate = "", kind = "", rawDescription = "", rawCategory = "", rawAmount = "", recurring = "", original = "", rawPerson = ""] = row
     const date = csvDate(rawDate)
     const amount = csvAmount(rawAmount)
     if (!date || amount === null) { fail("Некорректная дата или сумма: нужна положительная сумма с двумя знаками после запятой."); continue }
+    if (!Object.values(OPERATION_KIND_TEXT).includes(kind)) { fail("Неизвестный вид операции."); continue }
     const key = signature(row)
     const count = available.get(key) ?? 0
     if (count > 0) { available.set(key, count - 1); duplicates++; continue }
-    if (recurring) { fail("У отсутствующей регулярной операции нельзя восстановить связь с шаблоном из CSV."); continue }
     const description = csvText(rawDescription)
     const categoryName = csvText(rawCategory)
     const person = csvText(rawPerson)
+    if ((kind === "расход" || kind === "доход") && (!description.trim() || !categoryName.trim() || original || person)) {
+      fail("У расхода и дохода нужны описание и категория; ссылка и человек должны быть пустыми."); continue
+    }
+    if ((kind === "одолжил" || kind === "занял") && (!person.trim() || categoryName || original)) {
+      fail("У долга нужен человек, без категории и исходной операции."); continue
+    }
+    if (recurring) {
+      fail("У отсутствующей регулярной операции нельзя восстановить связь с шаблоном из CSV.", kind === "расход" || kind === "доход"); continue
+    }
     let data: OperationData
     const stamp = stampOf()
     if (kind === "расход" || kind === "доход") {
-      if (!description.trim() || !categoryName.trim() || original || person) {
-        fail("У расхода и дохода нужны описание и категория; ссылка и человек должны быть пустыми."); continue
-      }
       const operationKind = kind === "расход" ? "expense" : "income"
       let category = categories.find((c) => c.kind === operationKind && c.name.toLocaleLowerCase("ru") === categoryName.toLocaleLowerCase("ru"))
       if (!category) {
@@ -113,14 +126,13 @@ export const planCsv = (ctx: LedgerContext, text: string, commit = false) => {
       }
       data = { kind: operationKind, amount, description, categoryId: category.id, date, createdAt: stamp, categorizedAt: stamp, refundOf: null, recurringId: null }
     } else if (kind === "одолжил" || kind === "занял") {
-      if (!person.trim() || categoryName || original) { fail("У долга нужен человек, без категории и исходной операции."); continue }
       data = { kind: kind === "одолжил" ? "lent" : "borrowed", amount, description, person, categoryId: "", date, createdAt: stamp, categorizedAt: stamp, refundOf: null, recurringId: null }
     } else {
-      fail("Этот вид операции нельзя однозначно восстановить из CSV: отсутствуют идентификаторы цели или исходной операции."); continue
+      fail("Этот вид операции нельзя однозначно восстановить из CSV: отсутствуют идентификаторы цели или исходной операции.", true); continue
     }
     changes.push({ collection: "operations", id: newId(), data })
     newRows.push({ row: rowNumber, date, kind, description, category: categoryName, amount })
     added++
   }
-  return problems.length ? { ok: false, problems } as const : { ok: true, total: rows.length - 1, duplicates, added, rows: newRows, changes } as const
+  return problems.length ? { ok: false, problems } as const : { ok: true, total: rows.length - 1, duplicates, added, rows: newRows, ignored, changes } as const
 }

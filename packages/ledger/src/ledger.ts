@@ -19,7 +19,7 @@ import { LedgerContext } from "./context"
 import { RECURRING_SEEN_PREFIX } from "./constants"
 import { exportCsv } from "./csv"
 import { importCsv, previewCsv } from "./csv-import"
-import type { CsvPreview, CsvImportResult } from "./types"
+import type { CsvPreview, CsvImportResult, CsvImportOptions } from "./types"
 import {
   addGoal,
   archiveGoal,
@@ -228,8 +228,8 @@ export interface Ledger {
   importBackup(text: string): Promise<BackupPreview>
   /** Все операции в CSV для Excel (UTF-8 с BOM, ";", десятичная запятая). */
   exportCsv(): string
-  previewCsv(text: string): CsvPreview
-  importCsv(text: string): Promise<CsvImportResult>
+  previewCsv(text: string, options?: CsvImportOptions): CsvPreview
+  importCsv(text: string, options?: CsvImportOptions): Promise<CsvImportResult>
   /** Изменения, которые ещё не ушли на сервер. */
   pendingChanges(): ReadonlyArray<SyncRecord>
   readonly sync: LedgerSyncPort
@@ -316,9 +316,9 @@ export const openLedger = async (options: LedgerOptions): Promise<Ledger> => {
       return importing
     },
     exportCsv: () => exportCsv(ctx),
-    previewCsv: (text) => previewCsv(ctx, text),
-    importCsv: (text) => {
-      const importing = importQueue.then(() => importCsv(ctx, text))
+    previewCsv: (text, options) => previewCsv(ctx, text, options),
+    importCsv: (text, options) => {
+      const importing = importQueue.then(() => importCsv(ctx, text, options))
       importQueue = importing.then(() => {}, () => {})
       return importing
     },

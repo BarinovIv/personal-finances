@@ -12,6 +12,11 @@ export type MakeRecurringResult =
 export interface CsvProblem {
   readonly row: number
   readonly message: string
+  readonly ignorable?: boolean
+}
+
+export interface CsvImportOptions {
+  readonly ignoredRows?: ReadonlyArray<number>
 }
 
 export interface CsvRow {
@@ -24,11 +29,11 @@ export interface CsvRow {
 }
 
 export type CsvPreview =
-  | { readonly ok: true; readonly total: number; readonly duplicates: number; readonly added: number; readonly rows: ReadonlyArray<CsvRow> }
+  | { readonly ok: true; readonly total: number; readonly duplicates: number; readonly added: number; readonly rows: ReadonlyArray<CsvRow>; readonly ignored: ReadonlyArray<CsvProblem> }
   | { readonly ok: false; readonly problems: ReadonlyArray<CsvProblem> }
 
 export type CsvImportResult =
-  | { readonly ok: true; readonly total: number; readonly duplicates: number; readonly added: number; readonly rows: ReadonlyArray<CsvRow>; readonly undo: Undo }
+  | { readonly ok: true; readonly total: number; readonly duplicates: number; readonly added: number; readonly rows: ReadonlyArray<CsvRow>; readonly ignored: ReadonlyArray<CsvProblem>; readonly undo: Undo }
   | { readonly ok: false; readonly problems: ReadonlyArray<CsvProblem> }
 
 export type CsvChange =

@@ -62,9 +62,93 @@ describe("восстановление CSV", () => {
   it("не угадывает отсутствующие цели, связи и регулярные шаблоны", async () => {
     const { ledger } = await makeLedger()
     for (const row of ["28.09.2026;отложено;;;1,00;;;", "28.09.2026;расход;кофе;Кафе;1,00;да;;", "28.09.2026;возврат;кофе;Кафе;1,00;;28.09.2026 кофе 250,00;"]) {
-      expect(await ledger.importCsv(header + row)).toMatchObject({ ok: false })
+      expect(await ledger.importCsv(header + row)).toMatchObject({ ok: false, problems: [{ row: 2, ignorable: true }] })
     }
     expect(ledger.exportCsv()).toBe("\uFEFF" + header)
+  })
+
+  it("пропускает выбранные неподдерживаемые строки, сохраняя число одинаковых покупок", async () => {
+    const { ledger } = await makeLedger()
+    await ledger.importCsv(header + coffee)
+    const csv = header + "28.09.2026;отложено;;;1,00;;;\r\n" + coffee
+      + "28.09.2026;расход;интернет;Связь;650,00;да;;\r\n" + coffee
+    const options = { ignoredRows: [2, 4] }
+    const preview = ledger.previewCsv(csv, options)
+    expect(preview).toMatchObject({
+      ok: true, total: 4, added: 1, duplicates: 1,
+      ignored: [{ row: 2, ignorable: true }, { row: 4, ignorable: true }],
+      rows: [{ row: 5, description: "кофе" }]
+    })
+    if (!preview.ok) throw new Error()
+    expect(preview.ignored.every((problem) => problem.message.length > 0)).toBe(true)
+    expect(await ledger.importCsv(csv, options)).toMatchObject({ ok: true, total: 4, added: 1, duplicates: 1, ignored: preview.ignored })
+    expect(await ledger.importCsv(csv, options)).toMatchObject({ ok: true, total: 4, added: 0, duplicates: 2, ignored: preview.ignored })
+    expect(ledger.exportCsv().split("кофе")).toHaveLength(3)
+    expect(ledger.previewCsv(csv)).toMatchObject({ ok: false, problems: [{ row: 2 }, { row: 4 }] })
+  })
+
+  it("не позволяет пропускать ошибки формата, даты, суммы и обязательных полей", async () => {
+    const { ledger } = await makeLedger()
+    const rows = [
+      "28.09.2026;расход;кофе;Кафе;1,00;да;",
+      "31.02.2026;отложено;;;1,00;;;",
+      "28.09.2026;отложено;;;0,00;;;",
+      "28.09.2026;расход;;Кафе;1,00;да;;",
+      "28.09.2026;одолжил;;;1,00;да;;"
+    ]
+    for (const row of rows) {
+      const csv = header + row
+      const options = { ignoredRows: [1, 2] }
+      const preview = ledger.previewCsv(csv, options)
+      expect(preview).toMatchObject({ ok: false, problems: [{ row: 2 }] })
+      if (preview.ok) throw new Error()
+      expect(preview.problems[0]?.ignorable).not.toBe(true)
+      expect(await ledger.importCsv(csv, options)).toEqual(preview)
+    }
+    expect(ledger.previewCsv("сломанный заголовок", { ignoredRows: [1] })).toMatchObject({ ok: false, problems: [{ row: 1 }] })
+    expect(ledger.exportCsv()).toBe("\uFEFF" + header)
+  })
+
+  it("считает выбранную неподдерживаемую строку совпадением, если операция уже есть", async () => {
+    const { ledger } = await makeLedger()
+    const operation = await add(ledger, "кофе 250", { categoryId: "cafe" })
+    expect(await ledger.addRefund(operation.id, { amount: 10000, date: "2026-09-28" })).toMatchObject({ ok: true })
+    const csv = ledger.exportCsv()
+    const options = { ignoredRows: [3] }
+    expect(ledger.previewCsv(csv, options)).toMatchObject({ ok: true, total: 2, added: 0, duplicates: 2, ignored: [] })
+    expect(await ledger.importCsv(csv, options)).toMatchObject({ ok: true, total: 2, added: 0, duplicates: 2, ignored: [] })
+    expect(ledger.exportCsv()).toBe(csv)
+  })
+
+  it("не позволяет пропустить неизвестный или пустой вид операции с регулярной пометкой или без неё", async () => {
+    const { ledger } = await makeLedger()
+    for (const kind of ["расхд", ""]) {
+      for (const recurring of ["", "да"]) {
+        const csv = header + `28.09.2026;${kind};кофе;Кафе;250,00;${recurring};;\r\n`
+        const options = { ignoredRows: [2] }
+        const preview = ledger.previewCsv(csv, options)
+        expect(preview).toEqual({ ok: false, problems: [{ row: 2, message: "Неизвестный вид операции." }] })
+        expect(await ledger.importCsv(csv, options)).toEqual(preview)
+      }
+    }
+    expect(ledger.exportCsv()).toBe("\uFEFF" + header)
+  })
+
+  it("с выбранным пропуском предпросмотр не пишет данные, а другая ошибка отменяет весь импорт", async () => {
+    const store = memoryStore()
+    let ids = 0
+    const ledger = await openLedger({ store, newId: () => `id-${++ids}` })
+    const before = await store.load()
+    const categories = ledger.categories("expense")
+    const csv = header + "28.09.2026;отложено;;;1,00;;;\r\n" + coffee.replace("Кафе", "Новая")
+    const options = { ignoredRows: [2, 3] }
+    expect(ledger.previewCsv(csv, options)).toMatchObject({ ok: true, added: 1, ignored: [{ row: 2 }] })
+    expect(ids).toBe(0)
+    expect(await store.load()).toEqual(before)
+    expect(await ledger.importCsv(csv + "31.02.2026;расход;ошибка;Новая;1,00;;;\r\n", options)).toMatchObject({ ok: false, problems: [{ row: 4 }] })
+    expect(await store.load()).toEqual(before)
+    expect(ledger.categories("expense")).toEqual(categories)
+    expect(ledger.days()).toEqual([])
   })
 
   it("поддерживает долги и общую отмену импорта", async () => {

@@ -67,7 +67,7 @@ export const DataTransfer = ({ ledger, sync }: { ledger: Ledger; sync: Sync }) =
           setNote("Для проверки дублей CSV нужна связь с сервером. Проверьте интернет и вход, затем выберите файл ещё раз.")
           return
         }
-        setSelection({ format: "csv", text, preview: ledger.previewCsv(text) })
+        setSelection({ format: "csv", text, preview: ledger.previewCsv(text), ignoredRows: [] })
       }
     } catch {
       setSelection(null)
@@ -111,21 +111,22 @@ export const DataTransfer = ({ ledger, sync }: { ledger: Ledger; sync: Sync }) =
           setNote("Не удалось свериться с сервером. Импорт не выполнен. Проверьте связь и выберите файл снова.")
           return
         }
-        const current = ledger.previewCsv(selection.text)
+        const options = { ignoredRows: selection.ignoredRows }
+        const current = ledger.previewCsv(selection.text, options)
         if (JSON.stringify(current) !== JSON.stringify(selection.preview)) {
           setSelection({ ...selection, preview: current })
           setNote("Данные изменились после проверки. Посмотрите обновлённый список перед импортом.")
           return
         }
         downloadText(await ledger.exportBackup(), `finances-before-import-${new Date().toISOString().replace(/[:.]/g, "-")}.json`, "application/json;charset=utf-8")
-        const result = await ledger.importCsv(selection.text)
+        const result = await ledger.importCsv(selection.text, options)
         if (!result.ok) {
           setSelection({ ...selection, preview: result })
           return
         }
         setSelection(null)
         const outcome = await sync.syncNow()
-        setNote(`Добавлено: ${result.added}. Пропущено дублей: ${result.duplicates}. ${outcome === "ok" ? "Изменения синхронизированы." : "Операции сохранены на устройстве и ждут синхронизации. Не выходите из приложения."}`)
+        setNote(`Добавлено: ${result.added}. Пропущено дублей: ${result.duplicates}. Игнорировано строк: ${result.ignored.length}. ${outcome === "ok" ? "Изменения синхронизированы." : "Операции сохранены на устройстве и ждут синхронизации. Не выходите из приложения."}`)
       }
     } catch {
       setSelection(null)
@@ -155,7 +156,13 @@ export const DataTransfer = ({ ledger, sync }: { ledger: Ledger; sync: Sync }) =
     {filename && <>
       <p class="section-footer">{filename}{selection ? ` · ${selection.format === "json" ? "Резервная копия" : "Таблица операций"}` : ""}</p>
       {selection?.format === "json" && <BackupDetails preview={selection.preview} busy={busy} onConfirm={() => void confirmImport()} />}
-      {selection?.format === "csv" && <CsvImportDetails preview={selection.preview} busy={busy} onConfirm={() => void confirmImport()} />}
+      {selection?.format === "csv" && <CsvImportDetails preview={selection.preview} busy={busy} ignoredRows={selection.ignoredRows} onConfirm={() => void confirmImport()} onIgnore={() => {
+        if (working.current || selection.preview.ok) return
+        const ignoredRows = [...new Set([...selection.ignoredRows, ...selection.preview.problems.filter((problem) => problem.ignorable).map((problem) => problem.row)])]
+        const preview = ledger.previewCsv(selection.text, { ignoredRows })
+        setSelection({ ...selection, ignoredRows, preview })
+        setNote(null)
+      }} />}
     </>}
     {busy && <p class="section-footer" role="status">Подготавливаю данные…</p>}
     {note && <p class="section-footer" role="status">{note}</p>}

@@ -56,6 +56,6 @@ export { memoryStore, LocalUserChanged, type LedgerStore, type StoreChange, type
 export type { Undo } from "./src/undo"
 export type { CategoryView, DayGroup, OperationView } from "./src/views"
 
-export type { CsvPreview, CsvImportResult, CsvProblem, CsvRow } from "./src/types"
+export type { CsvPreview, CsvImportResult, CsvImportOptions, CsvProblem, CsvRow } from "./src/types"
 
 export type { BackupPreview, BackupCounts, BackupData } from "./src/backup/types"
