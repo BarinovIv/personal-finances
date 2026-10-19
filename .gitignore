@@ -4,3 +4,12 @@ data/
 *.sqlite
 *.sqlite-*
 .DS_Store
+
+# Локальные секреты и артефакты разработки
+.env
+.env.*
+!.env.example
+!.env.*.example
+.claude/
+/tmp/
+/docs/prototype/

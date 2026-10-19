@@ -11,3 +11,7 @@ Issues и спеки — в GitHub Issues репозитория BarinovIv/perso
 ### Domain docs
 
 Single-context: `CONTEXT.md` + `docs/adr/` в корне. See `docs/agents/domain.md`.
+
+### Деплой и восстановление
+
+При работе с Amvera, доменами или восстановлением данных сначала прочитай [раздел "Деплой" в README](README.md#деплой): там порядок деплоя, восстановления и смены домена.
