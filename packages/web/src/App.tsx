@@ -112,6 +112,8 @@ export const App = () => {
   useEffect(() => {
     void getServices().then(async (next) => {
       setServices(next)
+      const local = next.device.state()
+      if (local.state === "offline") setSession(local)
       setSession(await next.device.checkSession())
     })
   }, [])

@@ -3,6 +3,41 @@ import { describe, expect, it } from "vitest"
 import { add, addGoal, makeLedger } from "./support"
 
 describe("выгрузка в CSV", () => {
+  it("выгружает только операции выбранного периода, включая обе граничные даты", async () => {
+    const { ledger } = await makeLedger()
+    await add(ledger, "август 100", { date: "2026-08-31", categoryId: "other" })
+    await add(ledger, "начало 200", { date: "2026-09-01", categoryId: "other" })
+    await add(ledger, "конец 300", { date: "2026-09-28", categoryId: "other" })
+    await add(ledger, "после 400", { date: "2026-09-29", categoryId: "other" })
+
+    expect(ledger.exportCsv({ start: "2026-09-01", end: "2026-09-28" }).slice(1).split("\r\n")).toEqual([
+      "Дата;Вид;Описание;Категория;Сумма;Регулярная;Исходная операция;Человек",
+      "01.09.2026;расход;начало;Прочее;200,00;;;",
+      "28.09.2026;расход;конец;Прочее;300,00;;;",
+      ""
+    ])
+  })
+
+  it("сохраняет исходную операцию у возврата и погашения, когда она вне выбранного периода", async () => {
+    const { ledger } = await makeLedger()
+    const expense = await add(ledger, "джинсы 3990", { date: "2026-08-12" })
+    await ledger.addRefund(expense.id, { amount: 99050, date: "2026-09-02" })
+    const debt = await ledger.addMovement({ kind: "lent", person: "Петя", amount: 200000, date: "2026-08-20" })
+    if (!debt.ok) throw new Error()
+    await ledger.addMovement({ kind: "repaid-to-me", debtId: debt.operation.id, amount: 50000, date: "2026-09-04" })
+
+    expect(ledger.exportCsv({ start: "2026-09-01", end: "2026-09-28" }).slice(1).split("\r\n").slice(1, -1)).toEqual([
+      "02.09.2026;возврат;джинсы;Одежда;990,50;;12.08.2026 джинсы 3990,00;",
+      "04.09.2026;мне вернули;;;500,00;;20.08.2026 одолжил Петя 2000,00;Петя"
+    ])
+  })
+
+  it("пустой период выгружается с прежним заголовком", async () => {
+    const { ledger } = await makeLedger()
+    await add(ledger, "кофе 250", { date: "2026-08-31" })
+    expect(ledger.exportCsv({ start: "2026-09-01", end: "2026-09-28" })).toBe("\uFEFFДата;Вид;Описание;Категория;Сумма;Регулярная;Исходная операция;Человек\r\n")
+  })
+
   it("все операции, включая возвраты и регулярные; UTF-8 с BOM, «;», десятичная запятая", async () => {
     const { ledger } = await makeLedger()
     const jeans = await add(ledger, "джинсы 3990", { date: "2026-08-12" })

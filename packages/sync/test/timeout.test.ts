@@ -1,4 +1,5 @@
-import { memoryStore, openLedger } from "@fin/ledger"
+import "fake-indexeddb/auto"
+import { indexedDbStore, memoryStore, openLedger } from "@fin/ledger"
 import { createAuthApi, createSync, createUserDevice, type DeviceState, type Sync, type Transport } from "@fin/sync"
 import { afterEach, expect, it, vi } from "vitest"
 import { inProcessServer, PASSWORD, testClock, type InProcessServer } from "./support"
@@ -19,10 +20,11 @@ const deferred = <A>() => {
   const promise = new Promise<A>((done) => { resolve = done })
   return { promise, resolve }
 }
-const client = async (fetch: Transport["fetch"]) => {
-  const ledger = await openLedger({ store: memoryStore() })
-  await ledger.device.adopt(owner.id)
-  await ledger.submit("сохранить 100", { categoryId: ledger.categories("expense")[0]!.id })
+const client = async (fetch: Transport["fetch"], store = memoryStore()) => {
+  const stored = await openLedger({ store })
+  await stored.device.adopt(owner.id)
+  await stored.submit("сохранить 100", { categoryId: stored.categories("expense")[0]!.id })
+  const ledger = await openLedger({ store })
   const transport = { baseUrl: "http://app.test", fetch }
   const auth = createAuthApi(transport)
   const sync = createSync({ ledger, transport })
@@ -30,25 +32,30 @@ const client = async (fetch: Transport["fetch"]) => {
   return { ledger, sync, device: createUserDevice({ ledger, auth, sync }) }
 }
 
-it("зависшая проверка открывает локальный журнал ровно через три секунды и прерывает запрос", async () => {
-  vi.useFakeTimers()
+it.each([
+  ["память", () => memoryStore()],
+  ["IndexedDB", () => indexedDbStore(`startup-${crypto.randomUUID()}`)]
+] as const)("%s: локальный журнал открыт во время проверки, зависший запрос прерывается через три секунды", async (_name, makeStore) => {
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] })
   let request: Request | undefined
   const phone = await client((next) => {
     if (new URL(next.url).pathname === "/api/me") request = next
     return new Promise(() => {})
-  })
+  }, makeStore())
   let result: DeviceState | undefined
   const checking = phone.device.checkSession().then((state) => { result = state })
+  const initial = phone.device.state()
+  expect((await phone.ledger.submit("ещё 200", { categoryId: phone.ledger.categories("expense")[0]!.id })).ok).toBe(true)
   await vi.advanceTimersByTimeAsync(2_999)
+  expect(phone.device.state()).toEqual({ state: "offline" })
+  expect(initial).toEqual({ state: "offline" })
   expect(result).toBeUndefined()
   expect(request?.signal.aborted).toBe(false)
   await vi.advanceTimersByTimeAsync(1)
   expect(result).toEqual({ state: "offline" })
   expect(request?.signal.aborted).toBe(true)
   await checking
-  expect(phone.ledger.days()[0]!.items[0]!.description).toBe("сохранить")
-  expect(phone.ledger.pendingChanges()).toHaveLength(1)
-  expect((await phone.ledger.submit("ещё 200", { categoryId: phone.ledger.categories("expense")[0]!.id })).ok).toBe(true)
+  expect(phone.ledger.days()[0]!.items.map((operation) => operation.description).sort()).toEqual(["ещё", "сохранить"])
   expect(phone.ledger.pendingChanges()).toHaveLength(2)
 })
 
@@ -97,16 +104,45 @@ it.each([
     return new Promise(() => {})
   })
   const checking = phone.device.checkSession()
-  await vi.advanceTimersByTimeAsync(3_000)
-  expect(await checking).toEqual({ state: "offline" })
-  // В фоне уже начался зависший обмен; он также не удерживает новый вход.
-  expect(await phone.device.login(owner.login, "пароль")).toEqual({ ok: true, user: owner })
+  await vi.advanceTimersByTimeAsync(0)
+  let signedIn = false
+  const signingIn = phone.device.login(owner.login, "пароль").then((result) => { signedIn = result.ok })
+  await vi.advanceTimersByTimeAsync(0)
+  const completedBeforeResponse = signedIn
   late.resolve(lateResponse())
   await vi.advanceTimersByTimeAsync(0)
+  await signingIn
+  await checking
+  expect(completedBeforeResponse).toBe(true)
   expect(phone.device.state()).toEqual({ state: "signed-in", user: owner })
   expect(phone.ledger.device.owner()).toBe(owner.id)
   expect(phone.ledger.days()[0]!.items[0]!.description).toBe("сохранить")
   expect(phone.ledger.pendingChanges()).toHaveLength(1)
+})
+
+it("выход завершается до ответа проверки, поздний успех не открывает очищенный журнал", async () => {
+  vi.useFakeTimers()
+  const late = deferred<Response>()
+  const phone = await client((request) => {
+    const path = new URL(request.url).pathname
+    if (path === "/api/me") return late.promise
+    if (path === "/api/logout") return Promise.resolve(Response.json({ ok: true }))
+    return new Promise(() => {})
+  })
+  const checking = phone.device.checkSession()
+  await vi.advanceTimersByTimeAsync(0)
+  const signingOut = phone.device.logout({ confirmDiscard: true })
+  await vi.advanceTimersByTimeAsync(0)
+  const ownerBeforeResponse = phone.ledger.device.owner()
+  late.resolve(Response.json({ ok: true, user: owner }))
+  await vi.advanceTimersByTimeAsync(0)
+  expect(await signingOut).toEqual({ ok: true })
+  await checking
+  expect(ownerBeforeResponse).toBeNull()
+  expect(phone.device.state()).toEqual({ state: "signed-out" })
+  expect(phone.ledger.device.owner()).toBeNull()
+  expect(phone.ledger.days()).toEqual([])
+  expect(phone.ledger.pendingChanges()).toEqual([])
 })
 
 it("зависший фоновый обмен прерывается, сохраняет очередь и возобновляется после восстановления связи", async () => {

@@ -1,4 +1,4 @@
-import { dateParts, formatDecimal, type IsoDate, type OperationData } from "@fin/domain"
+import { dateParts, formatDecimal, inPeriod, type IsoDate, type OperationData, type Period } from "@fin/domain"
 import type { LedgerContext } from "./context"
 import { OPERATION_KIND_TEXT } from "./format"
 
@@ -19,14 +19,14 @@ const field = (value: string) => {
 const describe = (data: OperationData) => data.description || `${OPERATION_KIND_TEXT[data.kind]} ${data.person ?? ""}`.trim()
 
 /**
- * Все живые операции в CSV для Excel: UTF-8 с BOM, разделитель «;», десятичная запятая.
+ * Живые операции выбранного периода (без периода — все) в CSV для Excel: UTF-8 с BOM, разделитель ";", десятичная запятая.
  * У возврата — ссылка на исходный расход, у погашения — на долг, у регулярных — пометка.
  * У операций вне расходов и доходов категории нет; у долгов и погашений — человек.
  */
-export const exportCsv = (ctx: LedgerContext): string => {
+export const exportCsv = (ctx: LedgerContext, period?: Period): string => {
   const rows = ctx
     .operations()
-    .filter((record) => !record.data.pending)
+    .filter((record) => !record.data.pending && (!period || inPeriod(period, record.data.date)))
     .sort((a, b) => (a.data.date === b.data.date ? a.data.createdAt - b.data.createdAt : a.data.date < b.data.date ? -1 : 1))
     .map((record) => {
       const op = ctx.toView(record)

@@ -521,6 +521,14 @@ a {
   transform: none;
 }
 
+.tab-nav-controls {
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  min-height: calc(56px + env(safe-area-inset-top));
+  padding-top: calc(8px + env(safe-area-inset-top));
+  margin-bottom: calc(-56px - env(safe-area-inset-top));
+  pointer-events: auto;
+}
+
 .large-title-content {
   min-width: 0;
   container-type: inline-size;

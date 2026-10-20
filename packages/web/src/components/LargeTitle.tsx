@@ -12,11 +12,13 @@ export const LargeTitle = ({
   title,
   heading,
   actions,
+  collapsedHeader,
   children
 }: {
   title: string
   heading?: ComponentChildren
   actions?: ComponentChildren
+  collapsedHeader?: ComponentChildren
   children: ComponentChildren
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -60,11 +62,13 @@ export const LargeTitle = ({
 
   return (
     <div class="screen tab-screen" ref={scrollRef}>
-      <header class={`nav-bar tab-nav${scrolled ? " scrolled" : ""}${collapsed ? " collapsed" : ""}`}>
-        <span class={`nav-bar-title${collapsed ? " visible" : ""}`} aria-hidden={!collapsed}>
-          {title}
-        </span>
-        <div ref={actionsRef} class="nav-bar-side trailing">{actions}</div>
+      <header class={`nav-bar tab-nav${scrolled ? " scrolled" : ""}${collapsed ? " collapsed" : ""}${collapsed && collapsedHeader ? " tab-nav-controls" : ""}`}>
+        {collapsed && collapsedHeader ? collapsedHeader : <>
+          <span class={`nav-bar-title${collapsed ? " visible" : ""}`} aria-hidden={!collapsed}>
+            {title}
+          </span>
+          <div ref={actionsRef} class="nav-bar-side trailing">{actions}</div>
+        </>}
       </header>
       <div class={`large-title${collapsed ? " collapsed" : ""}`} aria-hidden={collapsed} inert={collapsed}>
         <div ref={headingRef} class="large-title-content">{heading ?? <h1>{title}</h1>}</div>

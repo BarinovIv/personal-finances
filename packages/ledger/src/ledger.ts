@@ -1,6 +1,6 @@
 import { exportBackup, previewBackup, importBackup } from "./backup"
 import type { BackupPreview } from "./backup/types"
-import { APP_TIME_ZONE, type CategoryKind, type IsoDate, type PeriodMode, type SyncRecord } from "@fin/domain"
+import { APP_TIME_ZONE, type CategoryKind, type IsoDate, type Period, type PeriodMode, type SyncRecord } from "@fin/domain"
 import {
   addCategory,
   categoryUsage,
@@ -226,8 +226,8 @@ export interface Ledger {
   exportBackup(): Promise<string>
   previewBackup(text: string): BackupPreview
   importBackup(text: string): Promise<BackupPreview>
-  /** Все операции в CSV для Excel (UTF-8 с BOM, ";", десятичная запятая). */
-  exportCsv(): string
+  /** Операции периода включительно; без периода — все. CSV для Excel (UTF-8 с BOM, ";", десятичная запятая). */
+  exportCsv(period?: Period): string
   previewCsv(text: string, options?: CsvImportOptions): CsvPreview
   importCsv(text: string, options?: CsvImportOptions): Promise<CsvImportResult>
   /** Изменения, которые ещё не ушли на сервер. */
@@ -315,7 +315,7 @@ export const openLedger = async (options: LedgerOptions): Promise<Ledger> => {
       importQueue = importing.then(() => {}, () => {})
       return importing
     },
-    exportCsv: () => exportCsv(ctx),
+    exportCsv: (period) => exportCsv(ctx, period),
     previewCsv: (text, options) => previewCsv(ctx, text, options),
     importCsv: (text, options) => {
       const importing = importQueue.then(() => importCsv(ctx, text, options))

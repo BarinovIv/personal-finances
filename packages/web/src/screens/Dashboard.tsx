@@ -431,7 +431,15 @@ export const DashboardScreen = ({ ledger }: { ledger: Ledger }) => {
   }, [offset])
 
   return (
-    <LargeTitle title="Дашборд">
+    <LargeTitle title="Дашборд" collapsedHeader={<>
+      <button type="button" class="glass-button" aria-label="Предыдущий период" onClick={() => go(-1)}>
+        <BackIcon size={20} />
+      </button>
+      <span class="nav-bar-title visible">{d.period.label}</span>
+      <button type="button" class="glass-button" aria-label="Следующий период" disabled={d.isCurrent} onClick={() => go(1)}>
+        <ForwardIcon size={20} />
+      </button>
+    </>}>
       <div class="segmented" role="group" aria-label="Вид периода">
         <button type="button" aria-pressed={mode === "pay"} onClick={() => switchMode("pay")}>
           Зарплатный период

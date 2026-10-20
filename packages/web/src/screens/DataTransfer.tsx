@@ -1,3 +1,4 @@
+import { periodAt, type Period } from "@fin/domain"
 import type { Ledger } from "@fin/ledger"
 import type { Sync } from "@fin/sync"
 import { useEffect, useRef, useState } from "preact/hooks"
@@ -8,14 +9,19 @@ import { DownloadIcon, ForwardIcon } from "../icons"
 import { setNavigationGuard } from "../state"
 import { BackupDetails } from "./Backup"
 import { CsvImportDetails } from "./CsvImport"
-import { importFormat } from "./helpers"
-import type { ImportSelection } from "./types"
+import { CSV_EXPORT_PRESETS } from "./constants"
+import { csvExportPeriod, importFormat } from "./helpers"
+import type { CsvExportPreset, ImportSelection } from "./types"
 
 export const DataTransfer = ({ ledger, sync }: { ledger: Ledger; sync: Sync }) => {
   const [busy, setBusy] = useState(false)
   const working = useRef(false)
   const input = useRef<HTMLInputElement>(null)
   const [exportOpen, setExportOpen] = useState(false)
+  const [csvOptionsOpen, setCsvOptionsOpen] = useState(false)
+  const [csvPreset, setCsvPreset] = useState<CsvExportPreset>("current-month")
+  const [csvCustom, setCsvCustom] = useState<Period>(() => periodAt("month", ledger.today(), []))
+  const [csvError, setCsvError] = useState<string | null>(null)
   const [selection, setSelection] = useState<ImportSelection | null>(null)
   const [filename, setFilename] = useState("")
   const [note, setNote] = useState<string | null>(null)
@@ -29,13 +35,22 @@ export const DataTransfer = ({ ledger, sync }: { ledger: Ledger; sync: Sync }) =
 
   const exportFile = async (format: "json" | "csv") => {
     if (working.current) return
+    let period: Period | undefined
+    if (format === "csv") {
+      const result = csvExportPeriod(csvPreset, ledger.today(), csvCustom)
+      if (!result.ok) {
+        setCsvError(result.problem)
+        return
+      }
+      period = result.period
+    }
     working.current = true
     setBusy(true)
     setExportOpen(false)
     setNote(null)
     try {
       if (format === "json") downloadText(await ledger.exportBackup(), `finances-backup-${ledger.today()}.json`, "application/json;charset=utf-8")
-      else downloadText(ledger.exportCsv(), `finances-${ledger.today()}.csv`, "text/csv;charset=utf-8")
+      else downloadText(ledger.exportCsv(period), period ? `finances-${period.start}_${period.end}.csv` : "finances-all-time.csv", "text/csv;charset=utf-8")
     } catch {
       setNote("Не получилось подготовить файл. Дождитесь сохранения изменений и попробуйте снова.")
     } finally {
@@ -140,7 +155,10 @@ export const DataTransfer = ({ ledger, sync }: { ledger: Ledger; sync: Sync }) =
 
   return <section class="section">
     <div class="card-list">
-      <button type="button" class="row row-button action-row" disabled={busy} onClick={() => setExportOpen(true)}>
+      <button type="button" class="row row-button action-row" disabled={busy} onClick={() => {
+        setCsvOptionsOpen(false)
+        setExportOpen(true)
+      }}>
         <DownloadIcon rotate={180} /><span class="row-main">Экспорт</span><ForwardIcon size={16} />
       </button>
       <button type="button" class="row row-button action-row" disabled={busy} onClick={() => input.current?.click()}>
@@ -167,14 +185,56 @@ export const DataTransfer = ({ ledger, sync }: { ledger: Ledger; sync: Sync }) =
     {busy && <p class="section-footer" role="status">Подготавливаю данные…</p>}
     {note && <p class="section-footer" role="status">{note}</p>}
     {filename && <button type="button" class="text-button" disabled={busy} onClick={reset}>{selection ? "Отмена" : "Закрыть"}</button>}
-    {exportOpen && <Sheet label="Экспорт" onClose={() => setExportOpen(false)}>
-      {(close) => <div class="sheet-form">
+    {exportOpen && <Sheet label={csvOptionsOpen ? "Таблица для Excel" : "Экспорт"} onClose={() => setExportOpen(false)}>
+      {(close) => csvOptionsOpen ? <form class="sheet-form" onSubmit={(event) => {
+        event.preventDefault()
+        void exportFile("csv")
+      }}>
+        <div class="sheet-title">Таблица для Excel</div>
+        <div class="card-list">
+          {CSV_EXPORT_PRESETS.map((preset) => <button type="button" class="row row-button" key={preset.value}
+            aria-pressed={csvPreset === preset.value} onClick={() => {
+              setCsvPreset(preset.value)
+              setCsvError(null)
+            }}>
+            <span class="row-main">{preset.label}</span>
+            {csvPreset === preset.value && <span aria-label="Выбран">✓</span>}
+          </button>)}
+        </div>
+        {csvPreset === "custom" && <div class="card-list">
+          <label class="row input-row">
+            <span class="row-label">С</span>
+            <input class="row-input" type="date" aria-label="Начало периода" value={csvCustom.start} onChange={(event) => {
+              setCsvCustom({ ...csvCustom, start: event.currentTarget.value })
+              setCsvError(null)
+            }} />
+          </label>
+          <label class="row input-row">
+            <span class="row-label">По</span>
+            <input class="row-input" type="date" aria-label="Окончание периода" value={csvCustom.end} onChange={(event) => {
+              setCsvCustom({ ...csvCustom, end: event.currentTarget.value })
+              setCsvError(null)
+            }} />
+          </label>
+        </div>}
+        <p class="section-footer">В таблицу попадут подтверждённые операции за выбранный период. Обе даты включены.</p>
+        {csvError && <span class="hint error" role="alert">{csvError}</span>}
+        <div class="actions-row">
+          <button type="button" class="secondary-button grow" onClick={close}>Отмена</button>
+          <button type="submit" class="accent-button grow" disabled={busy}>Скачать CSV</button>
+        </div>
+      </form> : <div class="sheet-form">
         <div class="sheet-title">Экспорт</div>
         <div class="card-list">
           <button type="button" class="row row-button" disabled={busy} onClick={() => void exportFile("json")}>
             <span class="row-main"><span class="row-title">Резервная копия</span><span class="row-sub">Для восстановления в приложении</span></span>
           </button>
-          <button type="button" class="row row-button" disabled={busy} onClick={() => void exportFile("csv")}>
+          <button type="button" class="row row-button" disabled={busy} onClick={() => {
+            setCsvPreset("current-month")
+            setCsvCustom(periodAt("month", ledger.today(), []))
+            setCsvError(null)
+            setCsvOptionsOpen(true)
+          }}>
             <span class="row-main"><span class="row-title">Таблица для Excel</span><span class="row-sub">Для просмотра и своих расчётов</span></span>
           </button>
         </div>
