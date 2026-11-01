@@ -1,4 +1,4 @@
-import { DEBT_OF_REPAYMENT, type IsoDate, type OperationData, type RepaymentKind } from "@fin/domain"
+import { isIsoDate, DEBT_OF_REPAYMENT, type IsoDate, type OperationData, type RepaymentKind } from "@fin/domain"
 import type { LedgerContext } from "./context"
 import { writeUndoable, type Undo } from "./undo"
 import type { OperationView } from "./views"
@@ -20,6 +20,7 @@ interface GoalMovementInput extends MovementBase {
 interface DebtInput extends MovementBase {
   readonly kind: "lent" | "borrowed"
   readonly person: string
+  readonly dueDate?: IsoDate
 }
 
 /** Погашение долга; по умолчанию — весь остаток. */
@@ -33,6 +34,7 @@ interface RepaymentInput extends Omit<MovementBase, "amount"> {
 export type MovementInput = GoalMovementInput | DebtInput | RepaymentInput
 
 export type MovementProblem =
+  | "bad-due-date"
   | "bad-amount"
   | "no-goal"
   | "no-person"
@@ -122,7 +124,7 @@ export const movementUpdateProblem = (
 
 /** Операция вне расходов и доходов: без категории, в расходы, доходы и категории не входит, но двигает свободные деньги. */
 export const addMovement = async (ctx: LedgerContext, input: MovementInput): Promise<MovementResult> => {
-  let refs: Pick<OperationData, "goalId" | "person" | "repaymentOf">
+  let refs: Pick<OperationData, "goalId" | "person" | "repaymentOf" | "dueDate">
   let amount = input.amount
   let limit = Infinity
   switch (input.kind) {
@@ -139,7 +141,8 @@ export const addMovement = async (ctx: LedgerContext, input: MovementInput): Pro
     case "borrowed": {
       const person = input.person.trim()
       if (!person) return { ok: false, problem: "no-person" }
-      refs = { person }
+      if (input.dueDate !== undefined && !isIsoDate(input.dueDate)) { return { ok: false, problem: "bad-due-date" } }
+      refs = { person, ...(input.dueDate !== undefined ? { dueDate: input.dueDate } : {}) }
       break
     }
     default: {

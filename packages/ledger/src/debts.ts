@@ -1,4 +1,4 @@
-import type { OperationData } from "@fin/domain"
+import type { IsoDate, Period, OperationData } from "@fin/domain"
 import type { LedgerContext } from "./context"
 import type { RecordOf } from "./records"
 import type { OperationView } from "./views"
@@ -83,4 +83,56 @@ export const debtsOverview = (ctx: LedgerContext): DebtsOverview => {
     people: [...people.values()].sort((a, b) => a.name.localeCompare(b.name, "ru")),
     closed
   }
+}
+
+export interface DashboardDebt {
+  readonly operation: OperationView
+  readonly remaining: number
+  readonly repaidInPeriod: number
+  readonly overdue: boolean
+}
+
+export interface DashboardDebtGroup {
+  readonly items: ReadonlyArray<DashboardDebt>
+  readonly remaining: number
+  readonly repaidInPeriod: number
+}
+
+export interface DashboardDebts {
+  readonly asOf: IsoDate
+  readonly borrowed: DashboardDebtGroup
+  readonly lent: DashboardDebtGroup
+  readonly reserve: number
+}
+
+/** Остатки по дату состояния и фактические погашения выбранного периода. */
+export const dashboardDebts = (ctx: LedgerContext, period: Period, asOf: IsoDate, isCurrent: boolean): DashboardDebts => {
+  const operations = ctx.operations().filter((record) => record.data.date <= asOf)
+  const items = (kind: "borrowed" | "lent"): DashboardDebtGroup => {
+    const debts = operations.filter((record) => record.data.kind === kind).map((record): DashboardDebt => {
+      const repayments = operations.filter((repayment) => repayment.data.repaymentOf === record.id)
+      const remaining = record.data.amount - repayments.reduce((sum, repayment) => sum + repayment.data.amount, 0)
+      return {
+        operation: ctx.toView(record), remaining,
+        repaidInPeriod: repayments.filter((repayment) => repayment.data.date >= period.start)
+          .reduce((sum, repayment) => sum + repayment.data.amount, 0),
+        overdue: remaining > 0 && record.data.dueDate !== undefined && record.data.dueDate < asOf
+      }
+    }).filter((debt) => debt.remaining > 0 || debt.repaidInPeriod > 0)
+    debts.sort((a, b) => {
+      if (a.overdue !== b.overdue) { return a.overdue ? -1 : 1 }
+      const aDue = a.operation.dueDate ?? "9999-99-99"
+      const bDue = b.operation.dueDate ?? "9999-99-99"
+      return aDue.localeCompare(bDue) || a.operation.date.localeCompare(b.operation.date) || a.operation.id.localeCompare(b.operation.id)
+    })
+    return {
+      items: debts,
+      remaining: debts.reduce((sum, debt) => sum + debt.remaining, 0),
+      repaidInPeriod: debts.reduce((sum, debt) => sum + debt.repaidInPeriod, 0)
+    }
+  }
+  const borrowed = items("borrowed")
+  const reserve = isCurrent ? borrowed.items.filter((debt) => debt.operation.dueDate && debt.operation.dueDate <= period.end)
+    .reduce((sum, debt) => sum + debt.remaining, 0) : 0
+  return { asOf, borrowed, lent: items("lent"), reserve }
 }

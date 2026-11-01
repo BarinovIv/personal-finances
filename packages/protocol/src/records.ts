@@ -7,7 +7,7 @@ import type {
   SyncRecord as SyncRecordType
 } from "@fin/domain"
 import { Schema } from "effect"
-import { isTimeZone } from "@fin/domain"
+import { isIsoDate, isTimeZone } from "@fin/domain"
 
 const IsoDate = Schema.String.pipe(Schema.pattern(/^\d{4}-\d{2}-\d{2}$/))
 const Kopecks = Schema.Int.pipe(Schema.positive())
@@ -40,9 +40,13 @@ export const OperationData = Schema.Struct({
   pending: Schema.optional(Schema.Boolean),
   goalId: Schema.optional(Schema.String),
   person: Schema.optional(Schema.String),
+  dueDate: Schema.optional(Schema.String.pipe(Schema.filter(isIsoDate))),
   repaymentOf: Schema.optional(Schema.String)
 }).pipe(
   Schema.filter((data) => {
+    if (data.dueDate !== undefined && data.kind !== "lent" && data.kind !== "borrowed") {
+      return "дата возврата есть только у долга"
+    }
     if (data.pending && (!data.recurringId || (data.kind !== "expense" && data.kind !== "income"))) {
       return "ожидать подтверждения может только регулярный расход или доход"
     }

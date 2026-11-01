@@ -139,6 +139,7 @@ export class LedgerContext {
       goalName: (data.goalId ? this.records.get("goals", data.goalId)?.data.name : undefined) ?? null,
       // у погашения человек его долга, даже если долг потом поправили
       person: (debt ? debt.data.person : data.person) ?? null,
+      dueDate: data.dueDate ?? null,
       repaymentOf: data.repaymentOf ?? null,
       recurringId: data.recurringId,
       ...(data.pending !== undefined ? { pending: data.pending } : {}),

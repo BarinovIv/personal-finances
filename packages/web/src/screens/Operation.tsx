@@ -1,3 +1,4 @@
+import { DebtDueDateField } from "../components/DebtDueDateField"
 import { formatMoney, isMovement, parseMoney } from "@fin/domain"
 import { dayLabel, type Ledger, type OperationView, type RefundProblem, type RefundsInfo } from "@fin/ledger"
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks"
@@ -297,6 +298,12 @@ const ViewCard = ({ ledger, op, onEdit, editor }: { ledger: Ledger; op: Operatio
             <span class="row-label">Дата</span>
             <span class="row-value">{dayLabel(op.date, ledger.today())}</span>
           </div>}
+          {isDebtOperation(op) && (
+            <div class="row info-row">
+              <span class="row-label">Дата возврата</span>
+              <span class="row-value">{op.dueDate ? dayLabel(op.dueDate, ledger.today()) : "Без срока"}</span>
+            </div>
+          )}
           {isRefund && op.refundOf && (
             <a class="row row-button info-row" href={`#/op/${op.refundOf}`}>
               <span class="row-label">Исходный расход</span>
@@ -326,7 +333,7 @@ const ViewCard = ({ ledger, op, onEdit, editor }: { ledger: Ledger; op: Operatio
           )}
         </div>
         {editor?.error && <div class="hint error" role="alert">{editor.error}</div>}
-        {movement && <p class="section-footer">Не расход и не доход: в дашборд и категории не попадает, но меняет свободные деньги.</p>}
+        {movement && <p class="section-footer">Не расход и не доход: в итоги расходов, доходов и категорий не попадает, но меняет свободные деньги.</p>}
         {info && <RefundsList ledger={ledger} info={info} onOpenForm={() => setRefundOpen(true)} />}
         {isDebtOperation(op) && <DebtRepayments ledger={ledger} debt={op} />}
         <div class="card-list">
@@ -475,6 +482,7 @@ const EditForm = ({ ledger, op, onDone }: { ledger: Ledger; op: OperationView; o
   const [categoryId, setCategoryId] = useState(op.category?.id ?? "")
   const [person, setPerson] = useState(op.person ?? "")
   const [date, setDate] = useState(op.date)
+  const [dueDate, setDueDate] = useState(op.dueDate ?? "")
   const [error, setError] = useState<string | null>(null)
   const isRefund = op.kind === "refund"
   const movement = isMovement(op.kind)
@@ -491,7 +499,7 @@ const EditForm = ({ ledger, op, onDone }: { ledger: Ledger; op: OperationView; o
       isRefund
         ? { amount: kopecks, date }
         : movement
-          ? { amount: kopecks, description, date, ...(hasPerson ? { person } : {}) }
+          ? { amount: kopecks, description, date, ...(hasPerson ? { person, dueDate: dueDate || null } : {}) }
           : { amount: kopecks, description, categoryId, date }
     )
     if (!result.ok) return setError(problemText[result.problem])
@@ -565,6 +573,9 @@ const EditForm = ({ ledger, op, onDone }: { ledger: Ledger; op: OperationView; o
               onChange={(e) => e.currentTarget.value && setDate(e.currentTarget.value)}
             />
           </label>
+          {hasPerson && (
+            <DebtDueDateField id="op-due-date" value={dueDate} onChange={(value) => { setDueDate(value); setError(null) }} />
+          )}
         </div>
         {!isRefund && !movement && (
           <section class="section">

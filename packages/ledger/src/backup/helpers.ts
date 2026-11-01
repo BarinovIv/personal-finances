@@ -1,4 +1,4 @@
-import { isTimeZone, recordKey, SETTINGS_ID, STARTER_CATEGORIES, type CategoryData, type GoalData, type OperationData, type RecurringData, type SettingsData } from "@fin/domain"
+import { isIsoDate, isTimeZone, recordKey, SETTINGS_ID, STARTER_CATEGORIES, type CategoryData, type GoalData, type OperationData, type RecurringData, type SettingsData } from "@fin/domain"
 import { RECURRING_SEEN_PREFIX } from "../constants"
 import { BACKUP_FORMAT, BACKUP_MAX_TIMESTAMP, BACKUP_OPERATION_FIELDS, BACKUP_VERSION } from "./constants"
 import type { BackupData, BackupPlan, BackupRecord, BackupSnapshot } from "./types"
@@ -9,11 +9,8 @@ export const backupInteger = (value: unknown): value is number => typeof value =
 export const backupTimestamp = (value: unknown): value is number => backupInteger(value) && value <= BACKUP_MAX_TIMESTAMP
 export const backupMoney = (value: unknown): value is number => backupInteger(value) && value > 0
 export const backupString = (value: unknown): value is string => typeof value === "string" && value.length > 0
-export const backupDate = (value: unknown): value is string => {
-  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
-  const date = new Date(`${value}T00:00:00Z`)
-  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value
-}
+export const backupDate = isIsoDate
+
 export const optionalString = (value: unknown) => value === undefined || typeof value === "string"
 export const optionalPosition = (value: unknown) => value === undefined || backupInteger(value)
 export const categoryKind = (value: unknown) => value === "expense" || value === "income"
@@ -23,6 +20,7 @@ export const backupOperation = (value: unknown): value is OperationData => {
   if (!backupMoney(value.amount) || typeof value.description !== "string" || typeof value.categoryId !== "string" || !backupDate(value.date) || !backupTimestamp(value.createdAt) || !backupTimestamp(value.categorizedAt)) return false
   if (!(value.refundOf === null || backupString(value.refundOf)) || !(value.recurringId === null || backupString(value.recurringId))) return false
   if (!(value.pending === undefined || typeof value.pending === "boolean") || !optionalString(value.goalId) || !optionalString(value.person) || !optionalString(value.repaymentOf)) return false
+  if (value.dueDate !== undefined && (!backupDate(value.dueDate) || (value.kind !== "lent" && value.kind !== "borrowed"))) return false
   if (value.pending && (!value.recurringId || !categoryKind(value.kind))) return false
   if (value.recurringId && !categoryKind(value.kind)) return false
   switch (value.kind) {

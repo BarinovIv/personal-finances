@@ -1,4 +1,4 @@
-import { isMovement, parentOperation, type IsoDate, type OperationData } from "@fin/domain"
+import { isIsoDate, isMovement, parentOperation, type IsoDate, type OperationData } from "@fin/domain"
 import type { LedgerContext } from "./context"
 import { limitWarnings, type LimitWarning } from "./limits"
 import { movementUpdateProblem } from "./movements"
@@ -13,11 +13,14 @@ export interface OperationPatch {
   readonly date?: IsoDate
   /** Только у «Одолжил» и «Занял». */
   readonly person?: string
+  /** Только у долга; null очищает дату возврата. */
+  readonly dueDate?: IsoDate | null
 }
 
 export type UpdateProblem =
   | "not-found"
   | "not-recurring"
+  | "bad-due-date"
   | "bad-amount"
   | "no-description"
   | "bad-category"
@@ -72,8 +75,15 @@ export const updateOperation = async (ctx: LedgerContext, id: string, patch: Ope
   const record = ctx.records.get("operations", id)
   if (!record || record.deleted) return { ok: false, problem: "not-found" }
   const current = record.data
+  if (patch.dueDate !== undefined &&
+    ((current.kind !== "lent" && current.kind !== "borrowed") || (patch.dueDate !== null && !isIsoDate(patch.dueDate)))) {
+    return { ok: false, problem: "bad-due-date" }
+  }
+  const { dueDate: currentDueDate, ...withoutDueDate } = current
+  const dueDate = patch.dueDate === undefined ? currentDueDate : patch.dueDate
   const next: OperationData = {
-    ...current,
+    ...withoutDueDate,
+    ...(dueDate ? { dueDate } : {}),
     ...(patch.amount !== undefined ? { amount: patch.amount, ...(current.pending ? { pending: false } : {}) } : {}),
     ...(patch.description !== undefined ? { description: patch.description.trim() } : {}),
     ...(patch.categoryId !== undefined ? { categoryId: patch.categoryId } : {}),

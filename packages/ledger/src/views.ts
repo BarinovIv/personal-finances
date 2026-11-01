@@ -28,6 +28,7 @@ export interface OperationView {
   /** Для «Одолжил» и «Занял» — человек; у погашения — человек его долга. */
   readonly person: string | null
   /** Для погашения — долг («Одолжил» или «Занял»). */
+  readonly dueDate: IsoDate | null
   readonly repaymentOf: string | null
   readonly recurringId: string | null
   /** Отсутствующее поле означает подтверждённую операцию. */

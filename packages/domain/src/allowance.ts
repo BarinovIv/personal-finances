@@ -28,16 +28,16 @@ export type DailyAllowance =
 
 /**
  * Свободные деньги периода: доходы − расходы (за вычетом возвратов) ± операции вне расходов и доходов
- * + предстоящие регулярные доходы − предстоящие списания. Остаток прошлого периода не переносится.
+ * + предстоящие регулярные доходы − предстоящие списания − резерв на погашение. Остаток прошлого периода не переносится.
  * Всё, что меняет свободные деньги, учитывается здесь.
  */
-export const freeMoney = (totals: PeriodTotals, upcoming: number, upcomingIncome = 0): number =>
-  totals.income - totals.expenses + totals.movements + upcomingIncome - upcoming
+export const freeMoney = (totals: PeriodTotals, upcoming: number, upcomingIncome = 0, debtReserve = 0): number =>
+  totals.income - totals.expenses + totals.movements + upcomingIncome - upcoming - debtReserve
 
 /**
  * Можно тратить в день и сегодня осталось; для периода, в котором нет `today`, — null.
  * `operations` — все живые операции (см. `liveOperations`), `upcoming` — сумма предстоящих списаний периода
- * (см. `upcomingCharges`), `upcomingIncome` — предстоящие регулярные доходы, копейки.
+ * (см. `upcomingCharges`), `upcomingIncome` — предстоящие регулярные доходы, `debtReserve` — резерв на погашение, копейки.
  * Доход, пришедший сегодня, сразу увеличивает сумму на день, а сегодняшний возврат —
  * «сегодня осталось»; сегодняшние операции вне расходов и доходов сразу меняют сумму на день — это не траты за сегодня.
  * Перерасход — по свободным деньгам вместе с сегодняшними тратами: если их не осталось, суммы на день нет.
@@ -47,10 +47,11 @@ export const dailyAllowance = (
   period: Period,
   today: IsoDate,
   upcoming: number,
-  upcomingIncome = 0
+  upcomingIncome = 0,
+  debtReserve = 0
 ): DailyAllowance | null => {
   if (!inPeriod(period, today)) return null
-  const free = freeMoney(periodTotals(operations, period), upcoming, upcomingIncome)
+  const free = freeMoney(periodTotals(operations, period), upcoming, upcomingIncome, debtReserve)
   const daysLeft = daysBetween(today, period.end) + 1
   if (free <= 0) return { kind: "overspent", free, daysLeft, overspent: Math.max(0, -free) }
   const spentToday = periodTotals(operations, { start: today, end: today }).expenses

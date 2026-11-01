@@ -57,6 +57,8 @@ export interface OperationData {
   readonly goalId?: string
   /** Для «Одолжил» и «Занял» — человек, свободный текст. */
   readonly person?: string
+  /** Необязательная дата возврата долга «Одолжил» или «Занял». */
+  readonly dueDate?: IsoDate
   /** Для погашения («Мне вернули», «Я вернул») — его долг: операция «Одолжил» или «Занял». */
   readonly repaymentOf?: string
 }

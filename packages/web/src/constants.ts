@@ -17,6 +17,7 @@ export const updateProblemText: Record<UpdateProblem, string> = {
   "not-found": "Операция уже удалена.",
   "not-recurring": "Эта операция не создана по регулярной операции.",
   "bad-amount": "Проверьте сумму.",
+  "bad-due-date": "Проверьте дату возврата.",
   "no-description": "Добавьте описание.",
   "bad-category": "Выберите категорию.",
   "below-refunds": "Сумма меньше уже оформленных возвратов.",

@@ -3377,3 +3377,68 @@ html.vt-backward::view-transition-new(root) {
   text-align: right;
   color: var(--muted);
 }
+
+.dashboard-debts-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 4px;
+}
+
+.dashboard-debts-head + .dashboard-debt-group {
+  margin-top: 12px;
+}
+
+.dashboard-debts-head h2 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.dashboard-debt-group + .dashboard-debt-group {
+  margin-top: 20px;
+}
+
+.dashboard-debt-group h3 {
+  margin: 0 16px;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.dashboard-debt-group h3 + .card-list {
+  margin-top: 8px;
+}
+
+.dashboard-debt-row .row-main {
+  gap: 4px;
+}
+
+.dashboard-debt-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+
+.dashboard-debt-line .row-title {
+  flex: 1 1 80px;
+}
+
+.dashboard-debt-line .num {
+  overflow-wrap: anywhere;
+}
+
+.dashboard-debt-repaid {
+  white-space: normal;
+}
+
+.dashboard-debt-overdue {
+  color: var(--danger);
+}
+
+.dashboard-debt-totals {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}

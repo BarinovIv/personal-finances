@@ -15,6 +15,7 @@ import {
   type Period,
   type PeriodMode
 } from "@fin/domain"
+import { dashboardDebts, type DashboardDebts } from "./debts"
 import type { LedgerContext } from "./context"
 import { periodLabel, rangeLabel, trendLabel } from "./periods"
 import { upcomingIn, type Upcoming } from "./recurring"
@@ -64,6 +65,7 @@ export interface TrendBar {
 }
 
 export interface Dashboard {
+  readonly debts: DashboardDebts
   readonly mode: PeriodMode
   readonly period: Period & { readonly label: string }
   /** Период содержит сегодняшний день. */
@@ -77,7 +79,7 @@ export interface Dashboard {
   readonly balance: number
   /**
    * Свободные деньги периода: доходы − расходы ± операции вне расходов и доходов
-   * + предстоящие регулярные доходы − предстоящие списания (ожидания есть только у текущего периода).
+   * + предстоящие регулярные доходы − предстоящие списания − резерв на погашение (только у текущего периода).
    * Меньше нуля — перерасход.
    */
   readonly free: number
@@ -157,6 +159,7 @@ export const buildDashboard = (ctx: LedgerContext, query: DashboardQuery): Dashb
     }
   }
 
+  const debts = dashboardDebts(ctx, period, isCurrent ? today : period.end, isCurrent)
   const upcoming = upcomingIn(ctx, period)
   const upcomingIncome = upcomingIn(ctx, period, "income").total
 
@@ -175,6 +178,7 @@ export const buildDashboard = (ctx: LedgerContext, query: DashboardQuery): Dashb
   }
 
   return {
+    debts,
     mode,
     period: { ...period, label: periodLabel(mode, period, today) },
     isCurrent,
@@ -182,7 +186,7 @@ export const buildDashboard = (ctx: LedgerContext, query: DashboardQuery): Dashb
     expenses,
     income,
     balance: income - expenses,
-    free: freeMoney(totals, upcoming.total, upcomingIncome),
+    free: freeMoney(totals, upcoming.total, upcomingIncome, debts.reserve),
     categories,
     comparison: {
       current,
@@ -192,6 +196,6 @@ export const buildDashboard = (ctx: LedgerContext, query: DashboardQuery): Dashb
     },
     trend,
     upcoming,
-    allowance: dailyAllowance(ops, period, today, upcoming.total, upcomingIncome)
+    allowance: dailyAllowance(ops, period, today, upcoming.total, upcomingIncome, debts.reserve)
   }
 }

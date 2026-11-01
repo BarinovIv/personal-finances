@@ -1,9 +1,10 @@
 import { formatMoney } from "@fin/domain"
-import { dayMonth, type Dashboard, type DashboardCategory, type Ledger, type PeriodMode } from "@fin/ledger"
+import { dayMonth, type Dashboard, type DashboardCategory, type DashboardDebtGroup, type Ledger, type PeriodMode } from "@fin/ledger"
 import { memo } from "preact/compat"
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks"
 import { useAnimatedNumber } from "../animatedNumber"
 import { CategoryBadge } from "../components/CategoryBadge"
+import { OperationBadge } from "../components/OperationBadge"
 import { LargeTitle } from "../components/LargeTitle"
 import { signedAmount } from "../components/OperationRow"
 import { BackIcon, ForwardIcon, RepeatIcon } from "../icons"
@@ -147,7 +148,7 @@ const Summary = memo(({ d }: { d: Dashboard }) => {
         <div class={`summary-cell summary-free${d.free < 0 ? " negative" : ""}`}>
           <SummaryCaption
             label="Свободные деньги"
-            help="Сколько можно отложить с учётом известных доходов и расходов этого периода. Ожидаемые регулярные доходы прибавляются, будущие регулярные расходы вычитаются. Например: зарплата 170 000 ₽ уже пришла, аренда 70 000 ₽ ожидается, ипотека 50 000 ₽ предстоит — свободно 190 000 ₽. Отложенные на цели и выданные в долг деньги тоже вычитаются. Остаток прошлого периода сюда не входит."
+            help="Сколько можно отложить с учётом известных доходов и расходов этого периода. Ожидаемые регулярные доходы прибавляются, будущие регулярные расходы вычитаются. Например: зарплата 170 000 ₽ уже пришла, аренда 70 000 ₽ ожидается, ипотека 50 000 ₽ предстоит — свободно 190 000 ₽. Отложенные на цели и выданные в долг деньги тоже вычитаются. В текущем периоде также вычитается резерв на погашение: остатки долгов, которые нужно вернуть до конца периода, включая просроченные. Долги без срока и со сроком позже резерва не создают. Ожидаемые погашения выданных долгов не прибавляются. Остаток прошлого периода сюда не входит."
           />
           <span class="summary-value num">{formatMoney(d.free)}</span>
         </div>
@@ -347,6 +348,58 @@ const UpcomingBlock = memo(({ d, today }: { d: Dashboard; today: string }) => {
   )
 })
 
+const DebtGroup = ({ group, title, repaymentLabel, today }: {
+  group: DashboardDebtGroup
+  title: string
+  repaymentLabel: string
+  today: string
+}) => (
+  <div class="dashboard-debt-group">
+    <h3>{title}</h3>
+    <div class="card-list">
+      {group.items.map((debt) => (
+        <a class="row row-button dashboard-debt-row" href={`#/op/${debt.operation.id}`} key={debt.operation.id}>
+          <OperationBadge op={debt.operation} size={32} />
+          <span class="row-main">
+            <span class="dashboard-debt-line">
+              <span class="row-title">{debt.operation.person}</span>
+              <span class="num">{formatMoney(debt.remaining)}</span>
+            </span>
+            {debt.operation.description && <span class="row-sub">{debt.operation.description}</span>}
+            <span class={`row-sub${debt.overdue ? " dashboard-debt-overdue" : ""}`}>
+              {debt.operation.dueDate ? `До ${dayMonth(debt.operation.dueDate, today)}` : "Без срока"}
+              {debt.overdue ? " · Просрочен" : ""}
+            </span>
+            <span class="row-sub dashboard-debt-repaid">{repaymentLabel}: <span class="num">{formatMoney(debt.repaidInPeriod)}</span></span>
+          </span>
+          <span class="row-chevron"><ForwardIcon size={16} /></span>
+        </a>
+      ))}
+      {group.items.length === 0 && <div class="row"><span class="row-sub">Долгов нет</span></div>}
+    </div>
+    <div class="section-footer dashboard-debt-totals">
+      <span>Остаток: <span class="num">{formatMoney(group.remaining)}</span></span>
+      <span>{repaymentLabel}: <span class="num">{formatMoney(group.repaidInPeriod)}</span></span>
+    </div>
+  </div>
+)
+
+const DebtsBlock = ({ d, today }: { d: Dashboard; today: string }) => {
+  if (d.debts.borrowed.items.length === 0 && d.debts.lent.items.length === 0) {
+    return null
+  }
+  return (
+    <section class="section dashboard-debts" aria-label="Долги">
+      <div class="dashboard-debts-head">
+        <h2>Долги</h2>
+        <span class="row-sub">{d.isCurrent ? "На сегодня" : `На ${dayMonth(d.debts.asOf, today)}`}</span>
+      </div>
+      <DebtGroup group={d.debts.borrowed} title="Я должен" repaymentLabel="Погашено за период" today={today} />
+      <DebtGroup group={d.debts.lent} title="Мне должны" repaymentLabel="Мне вернули за период" today={today} />
+    </section>
+  )
+}
+
 const Trend = memo(
   ({ d, onSelect, anchorRef }: { d: Dashboard; onSelect: (offset: number) => void; anchorRef: { current: HTMLElement | null } }) => {
     const max = Math.max(1, ...d.trend.map((t) => t.amount))
@@ -469,6 +522,7 @@ export const DashboardScreen = ({ ledger }: { ledger: Ledger }) => {
       <Donut d={d} selected={selected} onSelect={select} />
       <UpcomingBlock d={d} today={today} />
       <CategoryList d={d} selected={selected} onSelect={select} today={today} />
+      <DebtsBlock d={d} today={today} />
       <GoalsBlock ledger={ledger} />
       <Trend d={d} onSelect={goToTrend} anchorRef={trendRef} />
     </LargeTitle>

@@ -1,3 +1,4 @@
+import { DebtDueDateField } from "../components/DebtDueDateField"
 import { formatMoney, parseMoney } from "@fin/domain"
 import { dayLabel, type DebtView, type Ledger, type MovementProblem, type PersonDebts } from "@fin/ledger"
 import { useState } from "preact/hooks"
@@ -11,6 +12,7 @@ type DebtKind = "lent" | "borrowed"
 
 export const movementProblemText: Record<MovementProblem, string> = {
   "bad-amount": "Проверьте сумму.",
+  "bad-due-date": "Проверьте дату возврата.",
   "no-goal": "Выберите цель.",
   "no-person": "Укажите, кто.",
   "not-a-debt": "Долг уже удалён.",
@@ -72,6 +74,7 @@ const DebtForm = ({ ledger, initialKind, close }: { ledger: Ledger; initialKind:
   const [person, setPerson] = useState("")
   const [amount, setAmount] = useState("")
   const [date, setDate] = useState(today)
+  const [dueDate, setDueDate] = useState("")
   const [description, setDescription] = useState("")
   const [error, setError] = useState<string | null>(null)
   const typed = person.trim().toLowerCase()
@@ -82,7 +85,7 @@ const DebtForm = ({ ledger, initialKind, close }: { ledger: Ledger; initialKind:
     e.preventDefault()
     const kopecks = parseMoney(amount)
     if (kopecks === null) return setError(movementProblemText["bad-amount"])
-    const result = await ledger.addMovement({ kind, person, amount: kopecks, date, description })
+    const result = await ledger.addMovement({ kind, person, amount: kopecks, date, description, ...(dueDate ? { dueDate } : {}) })
     if (!result.ok) return setError(movementProblemText[result.problem])
     close()
     showToast({
@@ -143,6 +146,7 @@ const DebtForm = ({ ledger, initialKind, close }: { ledger: Ledger; initialKind:
             onChange={(e) => e.currentTarget.value && setDate(e.currentTarget.value)}
           />
         </label>
+        <DebtDueDateField id="debt-due-date" value={dueDate} onChange={(value) => { setDueDate(value); setError(null) }} />
         <label class="row input-row">
           <span class="row-label">Описание</span>
           <input
