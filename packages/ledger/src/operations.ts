@@ -1,4 +1,5 @@
 import { isIsoDate, isMovement, parentOperation, type IsoDate, type OperationData } from "@fin/domain"
+import { suggestCategory } from "./categorize"
 import type { LedgerContext } from "./context"
 import { limitWarnings, type LimitWarning } from "./limits"
 import { movementUpdateProblem } from "./movements"
@@ -75,6 +76,12 @@ export const updateOperation = async (ctx: LedgerContext, id: string, patch: Ope
   const record = ctx.records.get("operations", id)
   if (!record || record.deleted) return { ok: false, problem: "not-found" }
   const current = record.data
+  let categoryId = patch.categoryId
+  if (categoryId === undefined && patch.description !== undefined && patch.description.trim() !== current.description &&
+    (current.kind === "expense" || current.kind === "income")) {
+    const kind = current.kind
+    categoryId = suggestCategory(patch.description, kind, ctx.history(), (id) => ctx.allowed(id, kind))?.categoryId
+  }
   if (patch.dueDate !== undefined &&
     ((current.kind !== "lent" && current.kind !== "borrowed") || (patch.dueDate !== null && !isIsoDate(patch.dueDate)))) {
     return { ok: false, problem: "bad-due-date" }
@@ -86,8 +93,11 @@ export const updateOperation = async (ctx: LedgerContext, id: string, patch: Ope
     ...(dueDate ? { dueDate } : {}),
     ...(patch.amount !== undefined ? { amount: patch.amount, ...(current.pending ? { pending: false } : {}) } : {}),
     ...(patch.description !== undefined ? { description: patch.description.trim() } : {}),
-    ...(patch.categoryId !== undefined ? { categoryId: patch.categoryId } : {}),
-    ...(patch.date !== undefined ? { date: patch.date } : {}),
+    ...(categoryId !== undefined ? { categoryId } : {}),
+    ...(patch.date !== undefined ? {
+      date: patch.date,
+      ...(current.recurringId && patch.date !== current.date ? { recurringDate: current.recurringDate ?? current.date } : {})
+    } : {}),
     ...(patch.person !== undefined && (current.kind === "lent" || current.kind === "borrowed")
       ? { person: patch.person.trim() }
       : {})
@@ -194,4 +204,45 @@ export const addRefund = async (
   }
   const undo = await writeUndoable(ctx.records, [{ collection: "operations", id, data }], stamp)
   return { ok: true, operation: ctx.toView(ctx.records.get("operations", id)!), undo }
+}
+
+export type RepeatResult =
+  | {
+      readonly ok: true
+      readonly operation: OperationView
+      readonly undo: Undo
+      readonly warnings: ReadonlyArray<LimitWarning>
+    }
+  | { readonly ok: false; readonly problem: "not-repeatable" }
+
+/** Независимый подтверждённый расход или доход с прежними данными и сегодняшней датой пользователя. */
+export const repeatOperation = async (ctx: LedgerContext, id: string): Promise<RepeatResult> => {
+  const original = ctx.records.get("operations", id)
+  if (!original || original.deleted || original.data.pending ||
+    (original.data.kind !== "expense" && original.data.kind !== "income")) {
+    return { ok: false, problem: "not-repeatable" }
+  }
+  const current = original.data
+  const newId = ctx.newId()
+  const stamp = ctx.records.stamp()
+  const data: OperationData = {
+    kind: current.kind,
+    amount: current.amount,
+    description: current.description,
+    categoryId: current.categoryId,
+    date: ctx.today(),
+    createdAt: stamp,
+    categorizedAt: stamp,
+    recurringId: null,
+    refundOf: null,
+    pending: false
+  }
+  const before = ctx.operations()
+  const undo = await writeUndoable(ctx.records, [{ collection: "operations", id: newId, data }], stamp, true)
+  return {
+    ok: true,
+    operation: ctx.toView(ctx.records.get("operations", newId)!),
+    undo,
+    warnings: limitWarnings(ctx, before, [data.date])
+  }
 }

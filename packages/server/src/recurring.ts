@@ -15,8 +15,8 @@ import { allRecords, getRecord, putIfNewer } from "./records"
 
 /**
  * Создаёт операции по регулярным операциям за все наступившие даты (ADR-0002).
- * Догоняет пропущенное: идёт от начала шаблона. Идентификатор операции — шаблон + месяц,
- * поэтому повторный запуск ничего не задваивает, а удалённая пользователем операция не создаётся снова.
+ * Догоняет пропущенное от начала шаблона. Проверка шаблона и даты, включая удалённые операции,
+ * не даёт повторному запуску задвоить уже созданное.
  */
 export const generateRecurringFor = (userId: string) => Effect.gen(function* () {
   const db = yield* Db
@@ -25,22 +25,45 @@ export const generateRecurringFor = (userId: string) => Effect.gen(function* () 
     Effect.gen(function* () {
       const settings = yield* getRecord("settings", SETTINGS_ID, userId)
       const zone = settings && !settings.deleted ? (settings.data as SettingsData).timeZone : undefined
-      const today = todayIn(now, zone && isTimeZone(zone) ? zone : APP_TIME_ZONE)
+      const timeZone = zone && isTimeZone(zone) ? zone : APP_TIME_ZONE
+      const today = todayIn(now, timeZone)
       const templates = (yield* allRecords("recurring", userId)).filter(
         (r) => !r.deleted && (r.data as RecurringData).status === "active"
       )
+      const operations = yield* allRecords("operations", userId)
+      const dates = new Set(operations.flatMap((record) => {
+        const data = record.data as OperationData
+        return [`${data.recurringId}:${data.recurringDate ?? data.date}`, `${data.recurringId}:${data.date}`]
+      }))
       let created = 0
       for (const template of templates) {
         const t = template.data as RecurringData
         for (const occurrence of occurrencesBetween(t, t.startDate, today)) {
-          const id = recurringOperationId(template.id, occurrence.month)
-          if (yield* getRecord("operations", id, userId)) continue
+          const key = `${template.id}:${occurrence.date}`
+          if (dates.has(key)) {
+            continue
+          }
+          const monthlyId = recurringOperationId(template.id, occurrence.month)
+          const monthly = yield* getRecord("operations", monthlyId, userId)
+          // Старые правки сохраняли начало шаблона: новое расписание не переигрывает уже созданные месяцы.
+          if (monthly) {
+            const original = monthly.data as OperationData
+            const scheduleWasReset = t.startDate > (original.recurringDate ?? original.date)
+            if (!scheduleWasReset && occurrence.date < todayIn(template.updatedAt, timeZone)) {
+              continue
+            }
+          }
+          const id = monthly ? `rec:${template.id}:${occurrence.date}` : monthlyId
+          if (yield* getRecord("operations", id, userId)) {
+            continue
+          }
           const data: OperationData = {
             kind: t.kind,
             amount: t.amount,
             description: t.description,
             categoryId: t.categoryId,
             date: occurrence.date,
+            recurringDate: occurrence.date,
             createdAt: now,
             categorizedAt: now,
             refundOf: null,
@@ -48,6 +71,7 @@ export const generateRecurringFor = (userId: string) => Effect.gen(function* () 
             pending: true
           }
           yield* putIfNewer({ collection: "operations", id, updatedAt: now, deleted: false, data }, userId)
+          dates.add(key)
           created++
         }
       }

@@ -3,6 +3,7 @@ import {
   inPeriod,
   pendingOccurrences,
   upcomingOperations,
+  type HasOccurrence,
   type CategoryKind,
   type IsoDate,
   type Period,
@@ -59,14 +60,20 @@ export interface Upcoming {
 const STATUS_ORDER: Record<RecurringStatus, number> = { active: 0, paused: 1, ended: 2 }
 
 /** Есть ли уже операция, в том числе удалённая. */
-const hasOperation = (ctx: LedgerContext) => (id: string) => ctx.records.get("operations", id) !== undefined
+const hasOccurrence = (ctx: LedgerContext): HasOccurrence => {
+  const dates = new Set(ctx.records.all("operations").flatMap(({ data }) => [
+    `${data.recurringId}:${data.recurringDate ?? data.date}`,
+    `${data.recurringId}:${data.date}`
+  ]))
+  return (templateId, date) => dates.has(`${templateId}:${date}`)
+}
 
 const toView = (ctx: LedgerContext, record: RecordOf<"recurring">): RecurringView => {
   const { data } = record
   const today = ctx.today()
   const next =
     data.status === "active"
-      ? (pendingOccurrences(record.id, data, hasOperation(ctx), today, addDays(today, 366))[0]?.date ?? null)
+      ? (pendingOccurrences(record.id, data, hasOccurrence(ctx), today, addDays(today, 366))[0]?.date ?? null)
       : null
   return {
     id: record.id,
@@ -163,6 +170,7 @@ export const updateRecurring = (ctx: LedgerContext, id: string, patch: Partial<O
   change(ctx, id, (data) => ({
     ...data,
     ...patch,
+    ...(patch.dayOfMonth !== undefined && patch.dayOfMonth !== data.dayOfMonth ? { startDate: ctx.today() } : {}),
     ...(patch.description !== undefined ? { description: patch.description.trim() } : {})
   }))
 
@@ -198,7 +206,7 @@ export const reorderRecurring = async (ctx: LedgerContext, ids: ReadonlyArray<st
 /** Будущие регулярные операции выбранного вида и ожидающие подтверждения расходы текущего периода. */
 export const upcomingIn = (ctx: LedgerContext, period: Period, kind: CategoryKind = "expense"): Upcoming => {
   if (!inPeriod(period, ctx.today())) return { items: [], total: 0 }
-  const items = upcomingOperations(ctx.records.live("recurring"), hasOperation(ctx), period, ctx.today())
+  const items = upcomingOperations(ctx.records.live("recurring"), hasOccurrence(ctx), period, ctx.today())
     .filter(({ template }) => template.data.kind === kind)
     .map(({ template, date }): UpcomingItem => ({
       templateId: template.id,

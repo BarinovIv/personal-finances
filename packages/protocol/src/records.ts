@@ -37,6 +37,7 @@ export const OperationData = Schema.Struct({
   categorizedAt: Schema.Number,
   refundOf: Schema.NullOr(Schema.String),
   recurringId: Schema.NullOr(Schema.String),
+  recurringDate: Schema.optional(IsoDate),
   pending: Schema.optional(Schema.Boolean),
   goalId: Schema.optional(Schema.String),
   person: Schema.optional(Schema.String),

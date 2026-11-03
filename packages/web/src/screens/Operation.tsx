@@ -200,12 +200,38 @@ const ViewCard = ({ ledger, op, onEdit, editor }: { ledger: Ledger; op: Operatio
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [recurringOpen, setRecurringOpen] = useState(false)
   const [categoryOpen, setCategoryOpen] = useState(false)
+  const [repeating, setRepeating] = useState(false)
+  const repeatPending = useRef(false)
   const isRefund = op.kind === "refund"
   const movement = isMovement(op.kind)
   const info = op.kind === "expense" && !op.pending ? ledger.refunds(op.id) : undefined
   const confirm = async () => {
     const error = await confirmRecurringOperation(ledger, op)
     if (error) showToast({ text: error })
+  }
+  const repeat = async () => {
+    if (repeatPending.current || editor?.dirty || editor?.saving) {
+      return
+    }
+    repeatPending.current = true
+    setRepeating(true)
+    try {
+      const result = await ledger.repeatOperation(op.id)
+      if (!result.ok) {
+        showToast({ text: "Эту операцию нельзя повторить." })
+        return
+      }
+      showToast({
+        text: "Операция повторена сегодня",
+        notes: limitNotes(result.warnings),
+        action: { label: "Отменить", run: () => result.undo() }
+      })
+    } catch {
+      showToast({ text: "Не удалось повторить операцию. Попробуйте ещё раз." })
+    } finally {
+      repeatPending.current = false
+      setRepeating(false)
+    }
   }
   const category = editor ? ledger.categories(op.kind === "income" ? "income" : "expense").find((c) => c.id === editor.draft.categoryId) : op.category
 
@@ -337,6 +363,12 @@ const ViewCard = ({ ledger, op, onEdit, editor }: { ledger: Ledger; op: Operatio
         {info && <RefundsList ledger={ledger} info={info} onOpenForm={() => setRefundOpen(true)} />}
         {isDebtOperation(op) && <DebtRepayments ledger={ledger} debt={op} />}
         <div class="card-list">
+          {(op.kind === "expense" || op.kind === "income") && !op.pending && (
+            <button type="button" class="row row-button action-row" disabled={repeating || editor?.dirty || editor?.saving} onClick={() => void repeat()}>
+              <RepeatIcon size={18} />
+              <span>{repeating ? "Повторяем…" : "Повторить сегодня"}</span>
+            </button>
+          )}
           {(op.kind === "expense" || op.kind === "income") && !op.recurringId && (
             <button type="button" class="row row-button action-row" onClick={() => setRecurringOpen(true)}>
               <RepeatIcon size={18} />
@@ -410,6 +442,7 @@ const draftChanged = (draft: CardDraft, saved: CardDraft) =>
 const InlineCard = ({ ledger, op }: { ledger: Ledger; op: OperationView }) => {
   const [draft, setDraft] = useState(() => cardDraft(op))
   const baseline = useRef(cardDraft(op))
+  const categoryPicked = useRef(false)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const pending = useRef(false)
@@ -421,6 +454,7 @@ const InlineCard = ({ ledger, op }: { ledger: Ledger; op: OperationView }) => {
   useLayoutEffect(() => {
     if (currentDirty.current || pending.current) return
     baseline.current = cardDraft(op)
+    categoryPicked.current = false
     setDraft(baseline.current)
   }, [op.updatedAt, dirty])
 
@@ -445,13 +479,14 @@ const InlineCard = ({ ledger, op }: { ledger: Ledger; op: OperationView }) => {
     setSaving(true)
     setError(null)
     try {
-      const result = await ledger.updateOperation(op.id, { amount, description: draft.description, categoryId: draft.categoryId, date: draft.date })
+      const result = await ledger.updateOperation(op.id, { amount, description: draft.description, ...(categoryPicked.current ? { categoryId: draft.categoryId } : {}), date: draft.date })
       if (!result.ok) return setError(problemText[result.problem])
-      const learned = draft.categoryId !== op.category?.id
+      const learned = categoryPicked.current && draft.categoryId !== op.category?.id
       const category = ledger.categories(op.kind === "income" ? "income" : "expense").find((c) => c.id === draft.categoryId)
       const saved = ledger.operation(op.id)
       if (saved) {
         baseline.current = cardDraft(saved)
+        categoryPicked.current = false
         currentDirty.current = false
         setDraft(baseline.current)
       }
@@ -472,7 +507,24 @@ const InlineCard = ({ ledger, op }: { ledger: Ledger; op: OperationView }) => {
 
   return <ViewCard ledger={ledger} op={op} editor={{
     draft, dirty, saving, error: error ?? (deleted ? "Операция уже удалена. Несохранённые правки остались в карточке." : null), save: () => void save(),
-    change: (field, value) => { if (!pending.current) setDraft((previous) => ({ ...previous, [field]: value })) }
+    change: (field, value) => {
+      if (pending.current) {
+        return
+      }
+      if (field === "categoryId") {
+        categoryPicked.current = true
+      } else if (field === "description") {
+        categoryPicked.current = false
+      }
+      setDraft((previous) => {
+        const next = { ...previous, [field]: value }
+        if (field === "description" && !categoryPicked.current) {
+          const suggestion = value.trim() === baseline.current.description ? null : ledger.suggestCategory(value, op.kind === "income" ? "income" : "expense")
+          next.categoryId = suggestion?.categoryId ?? baseline.current.categoryId
+        }
+        return next
+      })
+    }
   }} />
 }
 

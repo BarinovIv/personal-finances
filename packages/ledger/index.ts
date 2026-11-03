@@ -1,4 +1,4 @@
-export type { CategorySource } from "./src/categorize"
+export type { CategorySource, Suggestion } from "./src/categorize"
 export type {
   CategoryLimitProblem,
   CategoryProblem,
@@ -33,6 +33,7 @@ export type {
   RefundProblem,
   RefundResult,
   RefundsInfo,
+  RepeatResult,
   UpdateProblem,
   UpdateResult
 } from "./src/operations"

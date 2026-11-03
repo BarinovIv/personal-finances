@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest"
 import {
   dailyAllowance,
-  recurringOperationId,
   upcomingCharges,
   type OperationData,
   type OperationRecord,
@@ -103,8 +102,8 @@ describe("предстоящие списания", () => {
       template("old", { dayOfMonth: 30 }, true),
       template("new", { dayOfMonth: 2, startDate: "2026-10-02" })
     ]
-    const created = new Set([recurringOperationId("gym", { year: 2026, month: 9 })])
-    const charges = upcomingCharges(templates, (id) => created.has(id), period, today)
+    const created = new Set(["gym:2026-09-29"])
+    const charges = upcomingCharges(templates, (id, date) => created.has(`${id}:${date}`), period, today)
     expect(charges.map((c) => [c.template.id, c.date])).toEqual([
       ["cinema", "2026-09-30"],
       ["internet", "2026-10-01"],

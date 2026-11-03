@@ -23,6 +23,7 @@ export const backupOperation = (value: unknown): value is OperationData => {
   if (value.dueDate !== undefined && (!backupDate(value.dueDate) || (value.kind !== "lent" && value.kind !== "borrowed"))) return false
   if (value.pending && (!value.recurringId || !categoryKind(value.kind))) return false
   if (value.recurringId && !categoryKind(value.kind)) return false
+  if (value.recurringDate !== undefined && (!backupDate(value.recurringDate) || !value.recurringId)) return false
   switch (value.kind) {
     case "expense":
     case "income": return backupString(value.categoryId) && value.refundOf === null && value.goalId === undefined && value.person === undefined && value.repaymentOf === undefined

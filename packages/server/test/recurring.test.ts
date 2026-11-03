@@ -95,6 +95,116 @@ describe("регулярные операции: сервер", () => {
       })
     }))
 
+  it.scoped("правка на сегодня создаёт ещё одну операцию месяца и сохраняет прежние даты", () =>
+    Effect.gen(function* () {
+      yield* TestClock.setTime(MSK("2026-09-28T12:00:00"))
+      const server = yield* testServer()
+      yield* login(server)
+      yield* server.post("/api/sync", { cursor: 0, changes: [template("net", {})] })
+      yield* server.post("/api/sync", { cursor: 0, changes: [template("net", { dayOfMonth: 28, startDate: "2026-09-28", amount: 99000 }, 2)] })
+      expect(yield* generated(server)).toEqual({
+        "rec:net:2026-07": "2026-07-10",
+        "rec:net:2026-08": "2026-08-10",
+        "rec:net:2026-09": "2026-09-10",
+        "rec:net:2026-09-28": "2026-09-28"
+      })
+      yield* server.post("/api/sync", { cursor: 0, changes: [template("net", { dayOfMonth: 28, startDate: "2026-09-28", amount: 100000 }, 3)] })
+      const response = yield* server.post("/api/sync", { cursor: 0, changes: [] })
+      expect(response.json.changes.filter((r: { collection: string }) => r.collection === "operations")).toHaveLength(4)
+      expect(response.json.changes.find((r: { id: string }) => r.id === "rec:net:2026-09-28")).toMatchObject({ data: { amount: 99000, pending: true } })
+    }))
+
+  it.scoped("старый изменённый шаблон не создаёт повторные операции прошлых месяцев", () =>
+    Effect.gen(function* () {
+      yield* TestClock.setTime(MSK("2026-09-28T12:00:00"))
+      const server = yield* testServer()
+      yield* login(server)
+      yield* server.post("/api/sync", { cursor: 0, changes: [template("net", {})] })
+      yield* server.post("/api/sync", { cursor: 0, changes: [template("net", { dayOfMonth: 28 }, MSK("2026-09-28T11:00:00"))] })
+      expect(yield* generated(server)).toEqual({
+        "rec:net:2026-07": "2026-07-10",
+        "rec:net:2026-08": "2026-08-10",
+        "rec:net:2026-09": "2026-09-10",
+        "rec:net:2026-09-28": "2026-09-28"
+      })
+    }))
+
+  it.scoped("поздняя правка суммы офлайн не отменяет наступившую дату нового расписания", () =>
+    Effect.gen(function* () {
+      yield* TestClock.setTime(MSK("2026-09-30T12:00:00"))
+      const server = yield* testServer()
+      yield* login(server)
+      yield* server.post("/api/sync", { cursor: 0, changes: [template("net", { startDate: "2026-09-01" })] })
+      yield* server.post("/api/sync", { cursor: 0, changes: [template("net", {
+        dayOfMonth: 28, startDate: "2026-09-28", amount: 99000
+      }, MSK("2026-09-29T12:00:00"))] })
+      const response = yield* server.post("/api/sync", { cursor: 0, changes: [] })
+      expect(response.json.changes.filter((r: { collection: string }) => r.collection === "operations")).toEqual([
+        expect.objectContaining({ id: "rec:net:2026-09", data: expect.objectContaining({ date: "2026-09-10", amount: 65000 }) }),
+        expect.objectContaining({ id: "rec:net:2026-09-28", data: expect.objectContaining({ date: "2026-09-28", amount: 99000, pending: true }) })
+      ])
+    }))
+
+  for (const [dayOfMonth, expected] of [[28, false], [29, true]] as const) {
+    it.scoped(`правка офлайн учитывает местную дату изменения: число ${dayOfMonth}`, () =>
+      Effect.gen(function* () {
+        yield* TestClock.setTime(MSK("2026-09-30T12:00:00"))
+        const server = yield* testServer()
+        yield* login(server)
+        yield* server.post("/api/sync", { cursor: 0, changes: [
+          { collection: "settings", id: "settings", updatedAt: 1, deleted: false, data: { paydays: [5, 20], timeZone: "Asia/Novosibirsk" } },
+          template("net", { startDate: "2026-09-01" })
+        ] })
+        // В Новосибирске правка уже сделана 29-го, хотя в Москве ещё 28-е.
+        yield* server.post("/api/sync", { cursor: 0, changes: [template("net", { dayOfMonth, startDate: "2026-09-01" }, MSK("2026-09-28T22:00:00"))] })
+        const operations = yield* generated(server)
+        expect(operations["rec:net:2026-09"]).toBe("2026-09-10")
+        expect(operations[`rec:net:2026-09-${dayOfMonth}`]).toBe(expected ? "2026-09-29" : undefined)
+        expect(Object.keys(operations)).toHaveLength(expected ? 2 : 1)
+      }))
+  }
+
+  it.scoped("перенесённая подтверждённая операция сохраняет занятой исходную дату расписания", () =>
+    Effect.gen(function* () {
+      yield* TestClock.setTime(MSK("2026-09-29T12:00:00"))
+      const server = yield* testServer()
+      yield* login(server)
+      yield* server.post("/api/sync", { cursor: 0, changes: [template("net", { dayOfMonth: 28, startDate: "2026-09-28" })] })
+      const response = yield* server.post("/api/sync", { cursor: 0, changes: [] })
+      const operation = response.json.changes.find((r: { id: string }) => r.id === "rec:net:2026-09")
+      expect(operation.data.recurringDate).toBe("2026-09-28")
+      expect((yield* server.post("/api/sync", { cursor: 0, changes: [{
+        ...operation, updatedAt: operation.updatedAt + 1,
+        data: { ...operation.data, date: "2026-09-29", pending: false }
+      }] })).status).toBe(200)
+      yield* server.post("/api/sync", { cursor: 0, changes: [template("net", { dayOfMonth: 28, startDate: "2026-09-28", amount: 99000 }, 2)] })
+      const after = yield* server.post("/api/sync", { cursor: 0, changes: [] })
+      expect(after.json.changes.filter((r: { collection: string }) => r.collection === "operations")).toEqual([
+        expect.objectContaining({ id: "rec:net:2026-09", data: expect.objectContaining({ date: "2026-09-29", recurringDate: "2026-09-28", amount: 65000, pending: false }) })
+      ])
+      yield* server.post("/api/sync", { cursor: 0, changes: [template("net", { dayOfMonth: 29, startDate: "2026-09-29" }, 3)] })
+      const movedDay = yield* server.post("/api/sync", { cursor: 0, changes: [] })
+      expect(movedDay.json.changes.filter((r: { collection: string }) => r.collection === "operations")).toHaveLength(1)
+    }))
+
+  for (const deleted of [false, true]) {
+    it.scoped(`операция на ту же дату защищена от повторной генерации: deleted=${deleted}`, () =>
+      Effect.gen(function* () {
+        yield* TestClock.setTime(MSK("2026-09-28T12:00:00"))
+        const server = yield* testServer()
+        yield* login(server)
+        yield* server.post("/api/sync", { cursor: 0, changes: [template("net", { dayOfMonth: 28, startDate: "2026-09-28" })] })
+        const response = yield* server.post("/api/sync", { cursor: 0, changes: [] })
+        const operation = response.json.changes.find((r: { id: string }) => r.id === "rec:net:2026-09")
+        yield* server.post("/api/sync", { cursor: 0, changes: [{ ...operation, updatedAt: operation.updatedAt + 1, deleted, data: { ...operation.data, pending: false } }] })
+        yield* server.post("/api/sync", { cursor: 0, changes: [template("net", { dayOfMonth: 28, startDate: "2026-09-28", amount: 99000 }, 2)] })
+        const after = yield* server.post("/api/sync", { cursor: 0, changes: [] })
+        expect(after.json.changes.filter((r: { collection: string }) => r.collection === "operations")).toEqual([
+          expect.objectContaining({ id: "rec:net:2026-09", deleted, data: expect.objectContaining({ amount: 65000, pending: false }) })
+        ])
+      }))
+  }
+
   it.scoped("место в списке доходит до других устройств", () =>
     Effect.gen(function* () {
       yield* TestClock.setTime(MSK("2026-09-28T12:00:00"))
@@ -123,6 +233,7 @@ describe("регулярные операции: сервер", () => {
           description: "Интернет",
           categoryId: "subscriptions",
           date: "2026-09-10",
+          recurringDate: "2026-09-10",
           createdAt: MSK("2026-09-28T12:00:00"),
           categorizedAt: MSK("2026-09-28T12:00:00"),
           refundOf: null,

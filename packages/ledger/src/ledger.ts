@@ -15,6 +15,7 @@ import {
   type CategoryStyle,
   type DeleteCategoryResult
 } from "./category-admin"
+import { suggestCategory, type Suggestion } from "./categorize"
 import { LedgerContext } from "./context"
 import { RECURRING_SEEN_PREFIX } from "./constants"
 import { exportCsv } from "./csv"
@@ -53,10 +54,12 @@ import {
   confirmRecurringOperation,
   deleteOperation,
   refundsOf,
+  repeatOperation,
   updateOperation,
   type OperationPatch,
   type RefundResult,
   type RefundsInfo,
+  type RepeatResult,
   type UpdateResult
 } from "./operations"
 import {
@@ -160,6 +163,10 @@ export interface Ledger {
   operation(id: string): OperationView | undefined
   /** Правка из карточки операции; `undo` в результате возвращает прежнее. */
   updateOperation(id: string, patch: OperationPatch): Promise<UpdateResult>
+  /** Категория по свободному описанию: история, затем словарь. Строка ввода не разбирается. */
+  suggestCategory(description: string, kind: CategoryKind): Suggestion | null
+  /** Повторить подтверждённый расход или доход сегодня; результат содержит отмену и предупреждения о лимитах. */
+  repeatOperation(id: string): Promise<RepeatResult>
   /** Подтвердить регулярный расход или доход, при необходимости изменив только его сумму. */
   confirmRecurringOperation(id: string, amount?: number): Promise<UpdateResult>
   /** Просмотр операции хранится только на этом устройстве. */
@@ -275,6 +282,8 @@ export const openLedger = async (options: LedgerOptions): Promise<Ledger> => {
       return record && !record.deleted ? ctx.toView(record) : undefined
     },
     updateOperation: (id, patch) => updateOperation(ctx, id, patch),
+    suggestCategory: (description, kind) => suggestCategory(description, kind, ctx.history(), (categoryId) => ctx.allowed(categoryId, kind)),
+    repeatOperation: (id) => repeatOperation(ctx, id),
     confirmRecurringOperation: (id, amount) => confirmRecurringOperation(ctx, id, amount),
     hasSeenRecurringOperation: (id) => records.getMeta<boolean>(RECURRING_SEEN_PREFIX + id) === true,
     markRecurringOperationSeen: (id) => records.saveMeta({ [RECURRING_SEEN_PREFIX + id]: true }),

@@ -1,10 +1,10 @@
 import type { IsoDate } from "./dates"
 import { inPeriod, type Period } from "./periods"
 import type { RecurringData, RecurringRecord } from "./records"
-import { occurrencesBetween, recurringOperationId, type Occurrence } from "./recurring"
+import { occurrencesBetween, type Occurrence } from "./recurring"
 
-/** Есть ли уже операция (в том числе удалённая) с таким идентификатором. */
-export type HasOperation = (operationId: string) => boolean
+/** Есть ли уже операция (в том числе удалённая) шаблона на эту дату. */
+export type HasOccurrence = (templateId: string, date: IsoDate) => boolean
 
 export interface UpcomingOperation {
   readonly template: RecurringRecord
@@ -14,17 +14,17 @@ export interface UpcomingOperation {
 export type UpcomingCharge = UpcomingOperation
 
 /**
- * Ещё не созданные операции шаблона в отрезке [from, to]: за месяц, где операция уже есть, ничего не предстоит.
+ * Ещё не созданные операции шаблона в отрезке [from, to]: за дату, где операция уже есть, ничего не предстоит.
  * Удалённая пользователем операция тоже считается созданной — сервер её не пересоздаст (ADR-0002).
  */
 export const pendingOccurrences = (
   templateId: string,
   template: Pick<RecurringData, "dayOfMonth" | "startDate">,
-  hasOperation: HasOperation,
+  hasOccurrence: HasOccurrence,
   from: IsoDate,
   to: IsoDate
 ): Array<Occurrence> =>
-  occurrencesBetween(template, from, to).filter((o) => !hasOperation(recurringOperationId(templateId, o.month)))
+  occurrencesBetween(template, from, to).filter((o) => !hasOccurrence(templateId, o.date))
 
 /**
  * Предстоящие операции: действующие регулярные расходы и доходы, которые ещё появятся с сегодняшнего дня
@@ -33,7 +33,7 @@ export const pendingOccurrences = (
  */
 export const upcomingOperations = (
   templates: ReadonlyArray<RecurringRecord>,
-  hasOperation: HasOperation,
+  hasOccurrence: HasOccurrence,
   period: Period,
   today: IsoDate
 ): Array<UpcomingOperation> => {
@@ -41,7 +41,7 @@ export const upcomingOperations = (
   const out: Array<UpcomingOperation> = []
   for (const template of templates) {
     if (template.deleted || template.data.status !== "active") continue
-    for (const o of pendingOccurrences(template.id, template.data, hasOperation, today, period.end)) {
+    for (const o of pendingOccurrences(template.id, template.data, hasOccurrence, today, period.end)) {
       out.push({ template, date: o.date })
     }
   }
@@ -51,8 +51,8 @@ export const upcomingOperations = (
 /** Предстоящие списания; регулярные доходы в список расходов не входят. */
 export const upcomingCharges = (
   templates: ReadonlyArray<RecurringRecord>,
-  hasOperation: HasOperation,
+  hasOccurrence: HasOccurrence,
   period: Period,
   today: IsoDate
 ): Array<UpcomingCharge> =>
-  upcomingOperations(templates, hasOperation, period, today).filter((o) => o.template.data.kind === "expense")
+  upcomingOperations(templates, hasOccurrence, period, today).filter((o) => o.template.data.kind === "expense")

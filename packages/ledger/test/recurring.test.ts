@@ -37,6 +37,32 @@ describe("регулярные операции на устройстве", () =
     expect(ledger.sync.pending()).toEqual([expect.objectContaining({ collection: "recurring", id })])
   })
 
+  it("перенос на сегодня сохраняет прошлую операцию месяца и резервирует новую дату один раз", async () => {
+    const { ledger } = await makeLedger()
+    const id = await addTemplate(ledger, { description: "Интернет", amount: 65000, dayOfMonth: 10 })
+    const data = { kind: "expense" as const, amount: 65000, description: "Интернет", categoryId: "subscriptions", date: "2026-09-10", createdAt: 1, categorizedAt: 1, refundOf: null, recurringId: id }
+    await ledger.sync.receive([{ collection: "operations", id: `rec:${id}:2026-09`, updatedAt: 1, deleted: false, data }], 1)
+    await ledger.updateRecurring(id, { dayOfMonth: 28, amount: 99000 })
+    expect(ledger.dashboard({ mode: "month", offset: 0 }).upcoming.total).toBe(99000)
+    expect(ledger.recurring()[0]?.nextDate).toBe("2026-09-28")
+    await ledger.sync.receive([{ collection: "operations", id: `rec:${id}:2026-09-28`, updatedAt: 2, deleted: false, data: { ...data, date: "2026-09-28", amount: 99000, pending: true } }], 2)
+    expect(ledger.dashboard({ mode: "month", offset: 0 }).upcoming.total).toBe(99000)
+    expect(ledger.recurring()[0]?.nextDate).toBe("2026-10-28")
+  })
+
+  it("новое число действует с даты правки, остальные правки сохраняют начало шаблона", async () => {
+    const { ledger } = await makeLedger()
+    await ledger.sync.receive([{
+      collection: "recurring", id: "old", updatedAt: 1, deleted: false,
+      data: { kind: "expense", amount: 65000, description: "Интернет", categoryId: "subscriptions", dayOfMonth: 10, startDate: "2026-07-01", status: "active" }
+    }], 1)
+    await ledger.updateRecurring("old", { amount: 99000, dayOfMonth: 10 })
+    expect(ledger.recurring()[0]?.startDate).toBe("2026-07-01")
+    await ledger.updateRecurring("old", { dayOfMonth: 28 })
+    expect(ledger.recurring()[0]).toMatchObject({ startDate: "2026-09-28", nextDate: "2026-09-28" })
+    expect(ledger.sync.pending()).toEqual([expect.objectContaining({ collection: "recurring", data: expect.objectContaining({ startDate: "2026-09-28", dayOfMonth: 28 }) })])
+  })
+
   it("неверные шаблоны не сохраняются", async () => {
     const { ledger } = await makeLedger()
     const base = { kind: "expense" as const, description: "Интернет", amount: 65000, categoryId: "subscriptions", dayOfMonth: 1 }

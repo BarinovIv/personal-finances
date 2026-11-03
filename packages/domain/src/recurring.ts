@@ -9,8 +9,8 @@ import {
 import type { RecurringData } from "./records"
 
 /**
- * Идентификатор операции, созданной по регулярной операции: шаблон + месяц (ADR-0002).
- * Повторная генерация даёт тот же id и ничего не задваивает.
+ * Прежний месячный идентификатор: сохраняется для первой операции шаблона в месяце.
+ * При переносе на другую дату того же месяца сервер использует шаблон + дату.
  */
 export const recurringOperationId = (templateId: string, month: YearMonth) => `rec:${templateId}:${monthKey(month)}`
 

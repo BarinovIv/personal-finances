@@ -48,6 +48,8 @@ export interface OperationData {
   readonly refundOf: string | null
   /** Для операции, созданной по регулярной операции, — её шаблон. */
   readonly recurringId: string | null
+  /** Исходная дата появления по шаблону; сохраняется при правке фактической даты. У старых операций — date. */
+  readonly recurringDate?: IsoDate
   /** Ожидает подтверждения; у старых операций без поля факт уже подтверждён. */
   readonly pending?: boolean
   /**
