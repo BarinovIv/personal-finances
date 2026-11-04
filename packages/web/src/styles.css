@@ -3379,15 +3379,7 @@ html.vt-backward::view-transition-new(root) {
 }
 
 .dashboard-debts-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  margin: 0 4px;
-}
-
-.dashboard-debts-head + .dashboard-debt-group {
-  margin-top: 12px;
+  margin: 4px 4px 2px;
 }
 
 .dashboard-debts-head h2 {
@@ -3395,50 +3387,67 @@ html.vt-backward::view-transition-new(root) {
   font-size: 22px;
 }
 
-.dashboard-debt-group + .dashboard-debt-group {
-  margin-top: 20px;
-}
-
-.dashboard-debt-group h3 {
-  margin: 0 16px;
-  font-size: 17px;
-  font-weight: 600;
-}
-
-.dashboard-debt-group h3 + .card-list {
-  margin-top: 8px;
-}
-
-.dashboard-debt-row .row-main {
-  gap: 4px;
-}
-
-.dashboard-debt-line {
+.dashboard-debts-legend {
   display: flex;
   flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+  font-size: 12px;
+  text-align: right;
+}
+
+.dashboard-debt-group .cat-row-line {
+  gap: 8px;
+}
+
+.dashboard-debt-content {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
   align-items: baseline;
-  justify-content: space-between;
-  gap: 4px 12px;
+  gap: 4px 8px;
+  min-width: 0;
 }
 
-.dashboard-debt-line .row-title {
-  flex: 1 1 80px;
+.dashboard-debt-content .cat-name,
+.dashboard-debt-content .cat-op-desc {
+  flex: 1 1 70px;
+  min-width: 0;
 }
 
-.dashboard-debt-line .num {
-  overflow-wrap: anywhere;
+.dashboard-debt-content .cat-name {
+  font-size: 16px;
 }
 
-.dashboard-debt-repaid {
-  white-space: normal;
+.dashboard-debt-amounts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 2px 10px;
+  margin-left: auto;
+  font-size: 15px;
 }
 
-.dashboard-debt-overdue {
+.dashboard-debt-amounts > span {
+  white-space: nowrap;
+}
+
+.dashboard-debt-remaining {
   color: var(--danger);
 }
 
-.dashboard-debt-totals {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+.dashboard-debt-repaid {
+  color: var(--accent);
+}
+
+.dashboard-debt-group .cat-op {
+  padding: 6px 0;
+}
+
+.dashboard-debt-group .cat-op .dashboard-debt-amounts {
+  font-size: 14px;
+}
+
+.dashboard-debt-separator {
+  color: var(--muted);
 }

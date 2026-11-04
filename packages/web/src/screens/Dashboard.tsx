@@ -353,36 +353,54 @@ const DebtGroup = ({ group, title, repaymentLabel, today }: {
   title: string
   repaymentLabel: string
   today: string
-}) => (
-  <div class="dashboard-debt-group">
-    <h3>{title}</h3>
-    <div class="card-list">
-      {group.items.map((debt) => (
-        <a class="row row-button dashboard-debt-row" href={`#/op/${debt.operation.id}`} key={debt.operation.id}>
-          <OperationBadge op={debt.operation} size={32} />
-          <span class="row-main">
-            <span class="dashboard-debt-line">
-              <span class="row-title">{debt.operation.person}</span>
-              <span class="num">{formatMoney(debt.remaining)}</span>
+}) => {
+  const [open, setOpen] = useState(false)
+  const id = useId()
+  if (group.items.length === 0) {
+    return null
+  }
+  return (
+    <div class={`cat-block dashboard-debt-group${open ? " selected" : ""}`} style="--cat-highlight: var(--palette-gray)">
+      <button type="button" class="cat-row" aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>
+        <span class="cat-row-line">
+          <OperationBadge op={group.items[0]!.operation} />
+          <span class="dashboard-debt-content">
+            <span class="cat-name">{title}</span>
+            <span class="dashboard-debt-amounts num">
+              <span class="dashboard-debt-remaining" aria-label={`Остаток: ${formatMoney(group.remaining)}`}>{formatMoney(group.remaining)}</span>
+              <span class="dashboard-debt-separator" aria-hidden="true">/</span>
+              <span class="dashboard-debt-repaid" aria-label={`${repaymentLabel}: ${formatMoney(group.repaidInPeriod)}`}>{formatMoney(group.repaidInPeriod)}</span>
             </span>
-            {debt.operation.description && <span class="row-sub">{debt.operation.description}</span>}
-            <span class={`row-sub${debt.overdue ? " dashboard-debt-overdue" : ""}`}>
-              {debt.operation.dueDate ? `До ${dayMonth(debt.operation.dueDate, today)}` : "Без срока"}
-              {debt.overdue ? " · Просрочен" : ""}
-            </span>
-            <span class="row-sub dashboard-debt-repaid">{repaymentLabel}: <span class="num">{formatMoney(debt.repaidInPeriod)}</span></span>
           </span>
-          <span class="row-chevron"><ForwardIcon size={16} /></span>
-        </a>
-      ))}
-      {group.items.length === 0 && <div class="row"><span class="row-sub">Долгов нет</span></div>}
+          <span class="chevron" aria-hidden="true" style={{ transform: open ? "rotate(90deg)" : "none" }}>
+            <ForwardIcon size={16} />
+          </span>
+        </span>
+      </button>
+      <div id={id} hidden={!open}>
+        {open && (
+          <div class="cat-ops">
+            {group.items.map((debt) => (
+              <a class="cat-op" href={`#/op/${debt.operation.id}`} key={debt.operation.id}>
+                <span class="dashboard-debt-content">
+                  <span class="cat-op-desc">
+                    {debt.operation.person}{debt.operation.description ? ` · ${debt.operation.description}` : ""}
+                  </span>
+                  <span class="row-sub">{dayMonth(debt.operation.date, today)}</span>
+                  <span class="dashboard-debt-amounts num">
+                    <span class="dashboard-debt-remaining" aria-label={`Остаток: ${formatMoney(debt.remaining)}`}>{formatMoney(debt.remaining)}</span>
+                    <span class="dashboard-debt-separator" aria-hidden="true">/</span>
+                    <span class="dashboard-debt-repaid" aria-label={`${repaymentLabel}: ${formatMoney(debt.repaidInPeriod)}`}>{formatMoney(debt.repaidInPeriod)}</span>
+                  </span>
+                </span>
+              </a>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
-    <div class="section-footer dashboard-debt-totals">
-      <span>Остаток: <span class="num">{formatMoney(group.remaining)}</span></span>
-      <span>{repaymentLabel}: <span class="num">{formatMoney(group.repaidInPeriod)}</span></span>
-    </div>
-  </div>
-)
+  )
+}
 
 const DebtsBlock = ({ d, today }: { d: Dashboard; today: string }) => {
   if (d.debts.borrowed.items.length === 0 && d.debts.lent.items.length === 0) {
@@ -390,12 +408,18 @@ const DebtsBlock = ({ d, today }: { d: Dashboard; today: string }) => {
   }
   return (
     <section class="section dashboard-debts" aria-label="Долги">
-      <div class="dashboard-debts-head">
+      <div class="section-header-row dashboard-debts-head">
         <h2>Долги</h2>
-        <span class="row-sub">{d.isCurrent ? "На сегодня" : `На ${dayMonth(d.debts.asOf, today)}`}</span>
+        <div class="dashboard-debts-legend row-sub">
+          <span class="dashboard-debt-remaining">Остаток</span>
+          <span class="dashboard-debt-separator" aria-hidden="true">/</span>
+          <span class="dashboard-debt-repaid">Погашено за период</span>
+        </div>
       </div>
-      <DebtGroup group={d.debts.borrowed} title="Я должен" repaymentLabel="Погашено за период" today={today} />
-      <DebtGroup group={d.debts.lent} title="Мне должны" repaymentLabel="Мне вернули за период" today={today} />
+      <div class="card-list">
+        <DebtGroup group={d.debts.borrowed} title="Я должен" repaymentLabel="Погашено за период" today={today} />
+        <DebtGroup group={d.debts.lent} title="Мне должны" repaymentLabel="Мне вернули за период" today={today} />
+      </div>
     </section>
   )
 }
@@ -522,7 +546,7 @@ export const DashboardScreen = ({ ledger }: { ledger: Ledger }) => {
       <Donut d={d} selected={selected} onSelect={select} />
       <UpcomingBlock d={d} today={today} />
       <CategoryList d={d} selected={selected} onSelect={select} today={today} />
-      <DebtsBlock d={d} today={today} />
+      <DebtsBlock key={`${mode}:${d.period.start}`} d={d} today={today} />
       <GoalsBlock ledger={ledger} />
       <Trend d={d} onSelect={goToTrend} anchorRef={trendRef} />
     </LargeTitle>
