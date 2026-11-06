@@ -2554,18 +2554,10 @@ select.text-input {
   margin-top: 4px;
 }
 
-.upcoming-group-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+.upcoming-group-total {
+  align-self: flex-end;
   font-size: 15px;
   font-weight: 600;
-}
-
-.upcoming-group-head h3 {
-  margin: 0;
-  font: inherit;
 }
 
 .upcoming-amount {

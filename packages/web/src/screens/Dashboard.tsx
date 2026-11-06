@@ -328,8 +328,8 @@ const CategoryList = (props: { d: Dashboard; selected: string | null; onSelect: 
 
 const UpcomingBlock = memo(({ d, today }: { d: Dashboard; today: string }) => {
   const groups = [
-    { title: "Расходы", upcoming: d.upcoming, sign: "−", kind: "expense" },
-    { title: "Доходы", upcoming: d.upcomingIncome, sign: "+", kind: "income" }
+    { upcoming: d.upcoming, sign: "−", kind: "expense" },
+    { upcoming: d.upcomingIncome, sign: "+", kind: "income" }
   ] as const
   if (!d.isCurrent || groups.every(({ upcoming }) => upcoming.items.length === 0)) {
     return null
@@ -340,12 +340,9 @@ const UpcomingBlock = memo(({ d, today }: { d: Dashboard; today: string }) => {
         <h2>Предстоящие операции</h2>
         <ForwardIcon size={16} />
       </a>
-      {groups.filter(({ upcoming }) => upcoming.items.length > 0).map(({ title, upcoming, sign, kind }) => (
+      {groups.filter(({ upcoming }) => upcoming.items.length > 0).map(({ upcoming, sign, kind }) => (
         <div class="upcoming-group" key={kind}>
-          <div class="upcoming-group-head">
-            <h3>{title}</h3>
-            <span class={`num upcoming-amount ${kind}`}>{formatMoney(upcoming.total, { sign })}</span>
-          </div>
+          <span class={`num upcoming-group-total upcoming-amount ${kind}`}>{formatMoney(upcoming.total, { sign })}</span>
           {upcoming.items.map((u) => (
             <div class="upcoming-row" key={`${u.templateId}:${u.date}`}>
               <RepeatIcon />
