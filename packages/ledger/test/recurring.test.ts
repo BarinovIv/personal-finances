@@ -378,8 +378,13 @@ describe("регулярные операции на устройстве", () =
       await addTemplate(ledger, { kind: "income", category: "Зарплата", description: "Аренда", amount: 7000000, dayOfMonth: 1 })
       await addTemplate(ledger, { kind: "income", category: "Зарплата", description: "Следующая зарплата", amount: 17000000, dayOfMonth: 5 })
 
-      expect(ledger.dashboard({ mode: "month", offset: 0 }).free).toBe(17000000)
-      expect(ledger.dashboard({ mode: "pay", offset: 0 }).free).toBe(24000000)
+      expect(ledger.dashboard({ mode: "month", offset: 0 })).toMatchObject({
+        free: 17000000, upcomingIncome: { items: [], total: 0 }
+      })
+      expect(ledger.dashboard({ mode: "pay", offset: 0 })).toMatchObject({
+        free: 24000000,
+        upcomingIncome: { total: 7000000, items: [{ description: "Аренда", date: "2026-10-01" }] }
+      })
     })
 
     it.each([
@@ -418,6 +423,52 @@ describe("регулярные операции на устройстве", () =
       expect(ledger.dashboard({ mode: "pay", offset: -1 })).toMatchObject({ free: 7000000, income: 7000000 })
       expect(ledger.dashboard({ mode: "month", offset: 0 })).toMatchObject({ free: 9000000, income: 0 })
     })
+  })
+
+  it("будущие регулярные доходы показаны отдельно от предстоящих расходов", async () => {
+    const { ledger } = await makeLedger()
+    await addTemplate(ledger, { kind: "income", category: "Зарплата", description: "Зарплата", amount: 10000000, dayOfMonth: 30 })
+    await addTemplate(ledger, { description: "Интернет", amount: 65000, dayOfMonth: 29 })
+    expect(ledger.dashboard({ mode: "month", offset: 0 })).toMatchObject({
+      upcoming: { total: 65000, items: [{ description: "Интернет" }] },
+      upcomingIncome: { total: 10000000, items: [{ description: "Зарплата", date: "2026-09-30", amount: 10000000 }] },
+      free: 9935000,
+      allowance: { free: 9935000 }
+    })
+    expect(ledger.dashboard({ mode: "month", offset: -1 })).toMatchObject({ upcomingIncome: { items: [], total: 0 } })
+  })
+
+  it("ожидающий подтверждения доход виден с сохранённой суммой, но не увеличивает свободные деньги и сумму на день", async () => {
+    const { ledger } = await makeLedger()
+    await add(ledger, "+зарплата 9000")
+    const id = await addTemplate(ledger, { kind: "income", category: "Зарплата", description: "Подработка", amount: 100000, dayOfMonth: 28 })
+    await ledger.sync.receive([{
+      collection: "operations", id: `rec:${id}:2026-09-28`, updatedAt: 1, deleted: false,
+      data: {
+        kind: "income", amount: 80000, description: "Подработка за сентябрь", categoryId: categoryId(ledger, "Зарплата"),
+        date: "2026-09-28", createdAt: 1, categorizedAt: 1, refundOf: null, recurringId: id, pending: true
+      }
+    }], 1)
+    await ledger.updateRecurring(id, { amount: 200000 })
+    await ledger.pauseRecurring(id)
+    const dashboard = () => ledger.dashboard({ mode: "month", offset: 0 })
+    expect(dashboard()).toMatchObject({
+      upcomingIncome: { total: 80000, items: [{ templateId: id, description: "Подработка за сентябрь", amount: 80000, date: "2026-09-28" }] },
+      free: 900000, income: 900000, allowance: { free: 900000, perDay: 300000 }
+    })
+    const undoSkip = await ledger.deleteOperation(`rec:${id}:2026-09-28`)
+    expect(dashboard()).toMatchObject({
+      upcomingIncome: { items: [], total: 0 }, free: 900000, income: 900000
+    })
+    expect((await undoSkip()).ok).toBe(true)
+    expect(dashboard().upcomingIncome.total).toBe(80000)
+    expect((await ledger.confirmRecurringOperation(`rec:${id}:2026-09-28`)).ok).toBe(true)
+    expect(dashboard()).toMatchObject({
+      upcomingIncome: { items: [], total: 0 },
+      free: 980000, income: 980000, allowance: { free: 980000, perDay: 326600 }
+    })
+    expect((await ledger.confirmRecurringOperation(`rec:${id}:2026-09-28`)).ok).toBe(true)
+    expect(dashboard()).toMatchObject({ free: 980000, income: 980000 })
   })
 
   describe("предстоящие списания", () => {

@@ -88,8 +88,10 @@ export interface Dashboard {
   readonly comparison: Comparison
   /** Шесть последовательных периодов, включая выбранный и, когда возможно, более новые. */
   readonly trend: ReadonlyArray<TrendBar>
-  /** Регулярные расходы, которые ещё появятся до конца текущего периода; для других периодов пусто. */
+  /** Предстоящие регулярные расходы текущего периода, включая ожидающие подтверждения; для других периодов пусто. */
   readonly upcoming: Upcoming
+  /** Предстоящие регулярные доходы текущего периода, включая ожидающие подтверждения. */
+  readonly upcomingIncome: Upcoming
   /** Можно тратить в день и сегодня осталось — только для текущего периода. */
   readonly allowance: DailyAllowance | null
 }
@@ -196,6 +198,7 @@ export const buildDashboard = (ctx: LedgerContext, query: DashboardQuery): Dashb
     },
     trend,
     upcoming,
+    upcomingIncome: upcomingIn(ctx, period, "income", true),
     allowance: dailyAllowance(ops, period, today, upcoming.total, upcomingIncome, debts.reserve)
   }
 }

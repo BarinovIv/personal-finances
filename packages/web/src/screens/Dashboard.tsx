@@ -148,7 +148,7 @@ const Summary = memo(({ d }: { d: Dashboard }) => {
         <div class={`summary-cell summary-free${d.free < 0 ? " negative" : ""}`}>
           <SummaryCaption
             label="Свободные деньги"
-            help="Сколько можно отложить с учётом известных доходов и расходов этого периода. Ожидаемые регулярные доходы прибавляются, будущие регулярные расходы вычитаются. Например: зарплата 170 000 ₽ уже пришла, аренда 70 000 ₽ ожидается, ипотека 50 000 ₽ предстоит — свободно 190 000 ₽. Отложенные на цели и выданные в долг деньги тоже вычитаются. В текущем периоде также вычитается резерв на погашение: остатки долгов, которые нужно вернуть до конца периода, включая просроченные. Долги без срока и со сроком позже резерва не создают. Ожидаемые погашения выданных долгов не прибавляются. Остаток прошлого периода сюда не входит."
+            help="Сколько можно отложить за этот период. Учитываем доходы, расходы, отложенные деньги, долги и предстоящие регулярные операции. Доходы, ожидающие подтверждения, пока не прибавляем. Остаток прошлого периода не переносится."
           />
           <span class="summary-value num">{formatMoney(d.free)}</span>
         </div>
@@ -327,21 +327,34 @@ const CategoryList = (props: { d: Dashboard; selected: string | null; onSelect: 
 }
 
 const UpcomingBlock = memo(({ d, today }: { d: Dashboard; today: string }) => {
-  if (!d.isCurrent || d.upcoming.items.length === 0) return null
+  const groups = [
+    { title: "Расходы", upcoming: d.upcoming, sign: "−", kind: "expense" },
+    { title: "Доходы", upcoming: d.upcomingIncome, sign: "+", kind: "income" }
+  ] as const
+  if (!d.isCurrent || groups.every(({ upcoming }) => upcoming.items.length === 0)) {
+    return null
+  }
   return (
     <section class="upcoming">
-      <a href="#/settings" class="upcoming-head">
-        <h2>Предстоящие списания</h2>
-        <span class="num upcoming-total">{formatMoney(d.upcoming.total)}</span>
+      <a href="#/settings/recurring" class="upcoming-head">
+        <h2>Предстоящие операции</h2>
         <ForwardIcon size={16} />
       </a>
-      {d.upcoming.items.map((u) => (
-        <div class="upcoming-row" key={`${u.templateId}:${u.date}`}>
-          <RepeatIcon />
-          <span class="grow-text">
-            {u.description} · {dayMonth(u.date, today)}
-          </span>
-          <span class="num">{formatMoney(u.amount)}</span>
+      {groups.filter(({ upcoming }) => upcoming.items.length > 0).map(({ title, upcoming, sign, kind }) => (
+        <div class="upcoming-group" key={kind}>
+          <div class="upcoming-group-head">
+            <h3>{title}</h3>
+            <span class={`num upcoming-amount ${kind}`}>{formatMoney(upcoming.total, { sign })}</span>
+          </div>
+          {upcoming.items.map((u) => (
+            <div class="upcoming-row" key={`${u.templateId}:${u.date}`}>
+              <RepeatIcon />
+              <span class="grow-text">
+                {u.description} · {dayMonth(u.date, today)}
+              </span>
+              <span class={`num upcoming-amount ${kind}`}>{formatMoney(u.amount, { sign })}</span>
+            </div>
+          ))}
         </div>
       ))}
     </section>

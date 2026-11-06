@@ -203,8 +203,13 @@ export const reorderRecurring = async (ctx: LedgerContext, ids: ReadonlyArray<st
   if (changes.length > 0) await ctx.records.write(changes)
 }
 
-/** Будущие регулярные операции выбранного вида и ожидающие подтверждения расходы текущего периода. */
-export const upcomingIn = (ctx: LedgerContext, period: Period, kind: CategoryKind = "expense"): Upcoming => {
+/** Будущие регулярные операции текущего периода; ожидающие подтверждения доходы — только для отображения. */
+export const upcomingIn = (
+  ctx: LedgerContext,
+  period: Period,
+  kind: CategoryKind = "expense",
+  includePending = kind === "expense"
+): Upcoming => {
   if (!inPeriod(period, ctx.today())) return { items: [], total: 0 }
   const items = upcomingOperations(ctx.records.live("recurring"), hasOccurrence(ctx), period, ctx.today())
     .filter(({ template }) => template.data.kind === kind)
@@ -217,13 +222,15 @@ export const upcomingIn = (ctx: LedgerContext, period: Period, kind: CategoryKin
     }))
   for (const record of ctx.operations()) {
     const { data } = record
-    if (kind !== "expense" || !data.pending || data.kind !== "expense" || !data.recurringId || !inPeriod(period, data.date)) continue
+    if (!includePending || !data.pending || data.kind !== kind || !data.recurringId || !inPeriod(period, data.date)) {
+      continue
+    }
     items.push({
       templateId: data.recurringId,
       description: data.description,
       date: data.date,
       amount: data.amount,
-      category: ctx.categoryOf(data.categoryId, "expense")
+      category: ctx.categoryOf(data.categoryId, kind)
     })
   }
   items.sort((a, b) => a.date.localeCompare(b.date))

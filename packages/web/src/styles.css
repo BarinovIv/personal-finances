@@ -2544,9 +2544,40 @@ select.text-input {
   color: var(--faint);
 }
 
-.upcoming-total {
-  font-size: 17px;
+.upcoming-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.upcoming-group + .upcoming-group {
+  margin-top: 4px;
+}
+
+.upcoming-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 15px;
   font-weight: 600;
+}
+
+.upcoming-group-head h3 {
+  margin: 0;
+  font: inherit;
+}
+
+.upcoming-amount {
+  white-space: nowrap;
+}
+
+.upcoming-amount.expense {
+  color: var(--danger);
+}
+
+.upcoming-amount.income {
+  color: var(--accent);
 }
 
 .upcoming-row {
