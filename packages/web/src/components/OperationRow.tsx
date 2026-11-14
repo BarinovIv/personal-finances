@@ -34,7 +34,7 @@ const OperationRowView = (props: OperationRowProps) => {
             href={`#/op/${op.id}`}
             {...swipe.handlers}
             onClick={(event) => {
-              if (op.recurringId && onEditAmount && !event.defaultPrevented) {
+              if (pending && onEditAmount && !event.defaultPrevented) {
                 event.preventDefault()
                 onEditAmount(op)
               }
@@ -49,9 +49,9 @@ const OperationRowView = (props: OperationRowProps) => {
               </span>
               <span class="op-sub">{pending ? "Ожидает подтверждения · " : ""}{sub ?? operationSubtitle(op)}</span>
             </span>
-            {!(op.recurringId && onEditAmount) && <span class={`op-amount num ${op.kind}`}>{signedAmount(op)}</span>}
+            {!(pending && onEditAmount) && <span class={`op-amount num ${op.kind}`}>{signedAmount(op)}</span>}
           </a>
-          {op.recurringId && onEditAmount && (
+          {pending && onEditAmount && (
             <div class="op-recurring-side">
               <span class={`op-amount num ${op.kind}`}>{signedAmount(op)}</span>
               <div class="op-recurring-actions">

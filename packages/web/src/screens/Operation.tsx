@@ -661,7 +661,7 @@ export const OperationScreen = ({ ledger, id }: { ledger: Ledger; id: string }) 
   if (live) retained.current = live
   // Удаление при обмене не стирает открытый черновик: сохранение объяснит, что записи уже нет.
   const previous = retained.current
-  const op = live ?? (previous?.id === id && !previous.recurringId && (previous.kind === "expense" || previous.kind === "income") ? previous : null)
+  const op = live ?? (previous?.id === id && !previous.pending && (previous.kind === "expense" || previous.kind === "income") ? previous : null)
 
   if (!op) {
     return (
@@ -675,14 +675,14 @@ export const OperationScreen = ({ ledger, id }: { ledger: Ledger; id: string }) 
   return (
     <SwipeBack canGoBack={canNavigate} onBack={(options) => goBack("/", { ...options, skipGuard: true })}>
       <div class="screen column">
-        {!op.recurringId && (op.kind === "expense" || op.kind === "income") ? (
+        {!op.pending && (op.kind === "expense" || op.kind === "income") ? (
           <InlineCard key={op.id} ledger={ledger} op={op} />
         ) : mode === "view" || op.recurringId ? (
           <ViewCard ledger={ledger} op={op} onEdit={() => setMode("edit")} />
         ) : (
           <EditForm key={`${op.id}:${op.updatedAt}`} ledger={ledger} op={op} onDone={() => setMode("view")} />
         )}
-        {mode === "edit" && op.recurringId && (
+        {mode === "edit" && op.recurringId && op.pending && (
           <RecurringAmountSheet key={op.id} ledger={ledger} op={op} onClose={() => setMode("view")} />
         )}
       </div>
