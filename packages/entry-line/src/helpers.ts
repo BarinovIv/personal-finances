@@ -27,17 +27,48 @@ export const amountValue = (token: string, fractional = false): Rational | null 
 
 export const isDateWord = (token: string) => DATE_WORDS.has(token.replace(/^\+/, "").toLowerCase())
 
-/** Знаки внутри названий и часы работы остаются текстом описания. */
-export const tokenize = (line: string): Array<string> => line.split(/\s+/).filter(Boolean).flatMap((token, index, tokens) => {
-  if (token === "24/7" && /\p{L}/u.test(tokens[index - 1] ?? "") && !AMOUNT.test(tokens[index - 1]!)) return [token]
+const splitIncomeMarker = (token: string, nextToken: string): Array<string> => {
   const parts = token.split(/([+*/()-])/).filter(Boolean)
-  if (!parts.every((part) => /^[+*/()-]$/.test(part) || AMOUNT.test(part) || CURRENCY.test(part))) return [token]
-  return parts.flatMap((part, partIndex) => {
-    const previous = parts[partIndex - 1] ?? ""
-    const missing = (part === "(" && (AMOUNT.test(previous) || previous === ")")) || (AMOUNT.test(part) && previous === ")")
-    return missing ? [MISSING_OPERATOR, part] : [part]
+  const words: Array<string> = []
+  let start = 0
+  for (const [index, part] of parts.entries()) {
+    if (part !== "+") { continue }
+    const left = parts[index - 1] ?? ""
+    const right = parts[index + 1] ?? nextToken.split(/[+*/()-]/, 1)[0] ?? ""
+    const leftIsText = /\p{L}/u.test(left) && !AMOUNT.test(left)
+    const rightIsText = /\p{L}/u.test(right) && !AMOUNT.test(right) && !CURRENCY.test(right)
+    if (
+      (parts[index + 1] && rightIsText && (AMOUNT.test(left) || left === ")"))
+      || (leftIsText && (AMOUNT.test(right) || right.startsWith("(")))
+      || (index === 0 && parts[index + 1] && rightIsText && !isDateWord(token))
+    ) {
+      if (start < index) { words.push(parts.slice(start, index).join("")) }
+      words.push("+")
+      start = index + 1
+    }
+  }
+  if (start < parts.length) { words.push(parts.slice(start).join("")) }
+  return words
+}
+
+/** Знаки внутри названий и часы работы остаются текстом описания. */
+export const tokenize = (line: string): Array<string> => line.split(/\s+/).filter(Boolean)
+  .flatMap((token, index, tokens) => splitIncomeMarker(token, tokens[index + 1] ?? ""))
+  .flatMap((token, index, tokens) => {
+    if (token === "24/7" && /\p{L}/u.test(tokens[index - 1] ?? "") && !AMOUNT.test(tokens[index - 1]!)) {
+      return [token]
+    }
+    const parts = token.split(/([+*/()-])/).filter(Boolean)
+    if (!parts.every((part) => /^[+*/()-]$/.test(part) || AMOUNT.test(part) || CURRENCY.test(part))) {
+      return [token]
+    }
+    return parts.flatMap((part, partIndex) => {
+      const previous = parts[partIndex - 1] ?? ""
+      const missing = (part === "(" && (AMOUNT.test(previous) || previous === ")"))
+        || (AMOUNT.test(part) && previous === ")")
+      return missing ? [MISSING_OPERATOR, part] : [part]
+    })
   })
-})
 
 export const startsCalculation = (token: string) => AMOUNT.test(token) || /^[+*/()-]$/.test(token) || token === MISSING_OPERATOR
 
@@ -159,7 +190,9 @@ export const parseEntries = (chunks: ReadonlyArray<string>): ReadonlyArray<Parse
         index++
         continue
       }
-      if (token.startsWith("+") && (token.length > 1 || index === 0 || incomeMarker(tokens, index))) {
+      if (token.startsWith("+") && (
+        token.length > 1 || index === 0 || incomeMarker(tokens, index) || description.length > 0
+      )) {
         kind = "income"
         token = token.slice(1)
         if (!token) { index++; continue }
@@ -172,12 +205,18 @@ export const parseEntries = (chunks: ReadonlyArray<string>): ReadonlyArray<Parse
       const calculation = takeCalculation(tokens, index)
       index = calculation.end
       const following: Array<string> = []
-      let next = index
+      const markerBeforeDescription = entries.length === chunkEntryStart && description.length === 0
+        && incomeMarker(tokens, index) && !isDateWord(tokens[index + 1]!)
+      let next = index + (markerBeforeDescription ? 1 : 0)
       while (next < tokens.length && !startsCalculation(tokens[next]!) && !isDateWord(tokens[next]!) && !tokens[next]!.startsWith("+")) {
         following.push(tokens[next]!)
         next++
       }
-      if (description.length === 0 && following.length > 0) {
+      if (markerBeforeDescription && following.length > 0 && !startsCalculation(tokens[next] ?? "")) {
+        kind = "income"
+        description = following
+        index = next
+      } else if (!markerBeforeDescription && description.length === 0 && following.length > 0) {
         if (entries.length === chunkEntryStart && !calculation.arithmetic && /^\d+$/.test(token) && following.length === 1 && startsCalculation(tokens[next] ?? "")) {
           description = [token, ...following]
           index = next

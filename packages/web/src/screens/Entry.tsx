@@ -229,7 +229,7 @@ const SpentHero = memo(({ ledger }: { ledger: Ledger }) => {
 
 /** Строка ввода с распознаванием; её состояние живёт здесь, чтобы набор текста не трогал остальной экран. */
 const Composer = memo(({ ledger, reveal, enabled }: { ledger: Ledger; reveal: boolean; enabled: boolean }) => {
-  useLedgerVersion(ledger)
+  const version = useLedgerVersion(ledger)
   const tabActive = useTabActive()
   const active = tabActive && enabled
   const [text, setText] = useState("")
@@ -242,12 +242,30 @@ const Composer = memo(({ ledger, reveal, enabled }: { ledger: Ledger; reveal: bo
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const submitting = useRef(false)
   const [inputFocused, setInputFocused] = useState(false)
+  const [caretAtEnd, setCaretAtEnd] = useState(true)
   const input = useRef<HTMLInputElement>(null)
   const pendingChoice = useRef<EntriesChoice | null>(null)
 
   const previews = ledger.previewEntries(text, choice)
   const first = previews[0]!
   const many = previews.length > 1
+  const expenseDescriptions = useMemo(() => ledger.days().flatMap(({ items }) => items
+    .filter(({ kind, pending }) => kind === "expense" && !pending)
+    .map(({ description }) => description)), [ledger, version])
+  const prefix = text.toLocaleLowerCase("ru")
+  const matchingDescription = active && inputFocused && caretAtEnd && prefix.trim() && !many
+    && first.kind === "expense" && first.amount === null && first.problems.includes("no-amount")
+    ? expenseDescriptions.find((description) => description.toLocaleLowerCase("ru").startsWith(prefix)
+      && /\S/.test(description.charAt(text.length)))
+    : undefined
+  const completion = matchingDescription?.slice(text.length).split(/\s/, 1)[0]
+
+  const acceptCompletion = () => {
+    if (!completion) { return }
+    setText(`${text}${completion} `)
+    setErrorMessage(null)
+    input.current?.focus()
+  }
   const has = text.trim() !== ""
   const blocked = blockingProblem(previews)
   const hasError = has && blocked !== null
@@ -387,37 +405,62 @@ const Composer = memo(({ ledger, reveal, enabled }: { ledger: Ledger; reveal: bo
   return (
     <div class={`composer${reveal ? " reveal" : ""}`}>
       <div class={`composer-field${has ? " filled" : ""}`}>
-        <input
-          ref={input}
-          id="line"
-          aria-label="Что потратил или получил?"
-          aria-invalid={hasError || undefined}
-          class="line-input"
-          type="text"
-          placeholder="футболка 1500"
-          autocomplete="off"
-          autocapitalize="off"
-          enterKeyHint="done"
-          value={text}
-          onFocus={() => setInputFocused(true)}
-          onBlur={() => setInputFocused(false)}
-          onInput={(e) => {
-            const value = e.currentTarget.value
-            setText(value)
-            setErrorMessage(null)
-            if (!value.trim()) {
-              setChoice({})
-              setPickerFor(null)
-            }
-          }}
-          onKeyDown={(e) => {
-            if (e.isComposing) return
-            if (e.key === "Enter") {
-              e.preventDefault()
-              void add()
-            }
-          }}
-        />
+        <div class="line-input-wrap">
+          <input
+            ref={input}
+            id="line"
+            aria-label="Что потратил или получил?"
+            aria-invalid={hasError || undefined}
+            class="line-input"
+            type="text"
+            placeholder="футболка 1500"
+            autocomplete="off"
+            autocapitalize="off"
+            enterKeyHint="done"
+            value={text}
+            onFocus={() => setInputFocused(true)}
+            onBlur={() => setInputFocused(false)}
+            onSelect={({ currentTarget }) => {
+              setCaretAtEnd(currentTarget.selectionStart === text.length && currentTarget.selectionEnd === text.length)
+            }}
+            onInput={(e) => {
+              const value = e.currentTarget.value
+              setText(value)
+              setCaretAtEnd(e.currentTarget.selectionStart === value.length)
+              setErrorMessage(null)
+              if (!value.trim()) {
+                setChoice({})
+                setPickerFor(null)
+              }
+            }}
+            onKeyDown={(e) => {
+              if (e.isComposing) return
+              if (e.key === "Tab" && !e.shiftKey && completion
+                && e.currentTarget.selectionStart === text.length && e.currentTarget.selectionEnd === text.length) {
+                e.preventDefault()
+                acceptCompletion()
+              }
+              if (e.key === "Enter") {
+                e.preventDefault()
+                void add()
+              }
+            }}
+          />
+          {completion && (
+            <div class="line-completion">
+              <span aria-hidden="true">{text}</span>
+              <button
+                type="button"
+                tabIndex={-1}
+                aria-label={text + completion}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={acceptCompletion}
+              >
+                {completion}
+              </button>
+            </div>
+          )}
+        </div>
         {!inputFocused && text === "" && (
           <button
             type="button"

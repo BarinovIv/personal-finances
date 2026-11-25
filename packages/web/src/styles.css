@@ -1420,8 +1420,15 @@ select.text-input {
     0 8px 24px rgba(0, 0, 0, 0.06);
 }
 
-.line-input {
+.line-input-wrap {
+  position: relative;
   flex: 1;
+  min-width: 0;
+}
+
+.line-input {
+  display: block;
+  width: 100%;
   min-width: 0;
   height: 56px;
   padding: 0;
@@ -1433,6 +1440,32 @@ select.text-input {
 
 .line-input::placeholder {
   color: var(--faint);
+}
+
+.line-completion {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  pointer-events: none;
+  white-space: pre;
+  font-size: 19px;
+}
+
+.line-completion > span {
+  visibility: hidden;
+  flex-shrink: 0;
+}
+
+.line-completion > button {
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  white-space: pre;
+  pointer-events: auto;
 }
 
 .entry-error-trigger {
